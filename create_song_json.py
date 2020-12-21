@@ -1,14 +1,16 @@
 import click
 import json
 from datetime import datetime
-from playsound import playsound
+import pygame.mixer as mixer
 
 @click.command()
 @click.option('--lyricsfile', type=click.File("r"), help = 'File containing lyrics text')
+@click.option('--songfile', help = 'File of song')
 @click.option('--outfile', type=click.Path(exists=False), help = 'File to write JSON out to')
-def run(lyricsfile, outfile):
+def run(lyricsfile, songfile, outfile):
     jsonout = {}
     screenlist = []
+    
     lyrics = lyricsfile.read()
     screens = lyrics.split('\n\n')
 
@@ -16,6 +18,9 @@ def run(lyricsfile, outfile):
     click.echo()
     click.echo("***")
 
+    mixer.init()
+    mixer.music.load(songfile)
+    mixer.music.play()
     starttime = datetime.now()
     
     for screen in screens:
