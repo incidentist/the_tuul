@@ -36,7 +36,7 @@ def get_screens(screen_list):
 def create_clip(screen_info):
     lines = "\n".join(screen_info["lines"])
     timestamp = screen_info.get("ts", "00:00:00")
-    return TextClip(txt=lines, color=TEXT_COLOR).set_start(timestamp)
+    return TextClip(txt=lines, color=TEXT_COLOR, size=VIDEO_SIZE).set_start(timestamp)
 
 
 def set_durations(lyric_clips, full_duration):
