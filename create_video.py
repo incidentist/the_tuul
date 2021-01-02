@@ -21,7 +21,7 @@ BACKGROUND_COLOR = (0, 0, 0)
 TEXT_COLOR = "salmon"
 TEXT_COLOR_AFTER = "green"
 TEXT_FONT = "fixed"
-FONT_SIZE = 40
+FONT_SIZE = 30
 
 
 class LyricsLine:
@@ -31,12 +31,8 @@ class LyricsLine:
         self.end_ts = convert_to_seconds(line_data.get("end_ts", 10.0))
 
     def get_clip(self):
-        return (
-            CompositeVideoClip(
-                size=self.clip_size, clips=[self.background_clip, self.foreground_clip]
-            )
-            .set_start(self.start_ts)
-            .set_end(self.end_ts)
+        return CompositeVideoClip(
+            size=self.clip_size, clips=[self.background_clip, self.foreground_clip]
         )
 
     @property
@@ -85,13 +81,27 @@ class LyricsScreen:
         self.next_screen = None
 
     def get_clip(self):
-        line_clips = [l.get_clip() for l in self.lines]
-        [lc.set_pos(0, self.get_line_y(i)) for i, lc in enumerate(line_clips)]
+        line_clips = [self.get_line_clip(i) for i in range(0, len(self.lines))]
         return (
-            CompositeVideoClip(line_clips, bg_color=BACKGROUND_COLOR)
+            CompositeVideoClip(
+                line_clips, size=self.clip_size, bg_color=BACKGROUND_COLOR
+            )
+            # .set_start(self.start_ts)
+            # .set_end(self.end_ts)
+            # .set_duration(self.end_ts - self.start_ts)
+        )
+
+    @property
+    def clip_size(self):
+        return VIDEO_SIZE
+
+    def get_line_clip(self, i):
+        line = self.lines[i]
+        return (
+            line.get_clip()
+            .set_pos((0, self.get_line_y(i)))
             .set_start(self.start_ts)
             .set_end(self.end_ts)
-            .set_duration(self.end_ts - self.start_ts)
         )
 
     def create_lines(self, line_data):
@@ -119,6 +129,7 @@ class LyricsScreen:
 
     @property
     def end_ts(self):
+        return 10.0
         if len(self.lines):
             return self.lines[-1].end_ts
         else:
