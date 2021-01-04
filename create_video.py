@@ -1,4 +1,5 @@
 import json
+from collections import deque
 
 import click
 from numpy.core.numeric import full
@@ -21,14 +22,14 @@ BACKGROUND_COLOR = (0, 0, 0)
 TEXT_COLOR = "salmon"
 TEXT_COLOR_AFTER = "green"
 TEXT_FONT = "fixed"
-FONT_SIZE = 30
+FONT_SIZE = 20
 
 
 class LyricsLine:
     def __init__(self, line_data):
         self.text = line_data["line"]
         self.start_ts = convert_to_seconds(line_data["ts"])
-        self.end_ts = convert_to_seconds(line_data.get("end_ts", 10.0))
+        self.end_ts = convert_to_seconds(line_data.get("end_ts", 0))
 
     def get_clip(self):
         return CompositeVideoClip(
@@ -73,19 +74,26 @@ class LyricsLine:
             size=self.clip_size, x=int(pct * self.clip_width), col1=1, col2=0
         )
 
+    def __str__(self):
+        return f"[{self.start_ts} - {self.end_ts}] {self.text}"
+
 
 class LyricsScreen:
     def __init__(self, screen_data):
+        self._start_ts = (
+            convert_to_seconds(screen_data.get("ts")) if "ts" in screen_data else None
+        )
+        self._end_ts = (
+            convert_to_seconds(screen_data.get("end_ts"))
+            if "end_ts" in screen_data
+            else None
+        )
         self.lines = self.create_lines(screen_data["lines"])
-        self.prev_screen = None
-        self.next_screen = None
 
     def get_clip(self):
         line_clips = [self.get_line_clip(i) for i in range(0, len(self.lines))]
         return (
-            CompositeVideoClip(
-                line_clips, size=self.clip_size, bg_color=BACKGROUND_COLOR
-            )
+            CompositeVideoClip(line_clips, size=self.clip_size)
             # .set_start(self.start_ts)
             # .set_end(self.end_ts)
             # .set_duration(self.end_ts - self.start_ts)
@@ -105,13 +113,17 @@ class LyricsScreen:
         )
 
     def create_lines(self, line_data):
-        # Create a layout manager
-        # layout manager creates LyricsLines
-        lines = []
-        for i, line in enumerate(line_data):
+        lines = deque()
+        # Create lines in reverse order so we can infer end timestamps
+        for line in reversed(line_data):
+            if not "end_ts" in line:
+                if len(lines) > 0:
+                    line["end_ts"] = lines[0].start_ts
+                else:
+                    line["end_ts"] = self.end_ts
             line = LyricsLine(line)
+            lines.appendleft(line)
 
-        lines = [LyricsLine(line) for i, line in enumerate(line_data)]
         return lines
 
     def get_line_y(self, line_num: int) -> int:
@@ -122,18 +134,67 @@ class LyricsScreen:
 
     @property
     def start_ts(self):
-        if self.prev_screen:
-            return self.prev_screen.end_ts
+        if self._start_ts is None:
+            return self.lines[0].start_ts
         else:
-            return 0.0
+            return self._start_ts
 
     @property
     def end_ts(self):
-        return 10.0
-        if len(self.lines):
+        if self._end_ts is None:
             return self.lines[-1].end_ts
         else:
-            return 5.0
+            return self._end_ts
+
+    def __str__(self):
+        lines = [f"{self.start_ts} - {self.end_ts}:"]
+        for line in self.lines:
+            lines.append(f"\t{line}")
+        return "\n".join(lines)
+
+
+class LyricVideo:
+    def __init__(self, video_data):
+        self.song_file = video_data["song_file"]
+        self.audio_clip = AudioFileClip(self.song_file)
+        self.screens = self.get_screens(video_data["screens"])
+
+    def get_screens(self, screen_data):
+        screens = deque()
+        for data in reversed(screen_data):
+            if not "end_ts" in data:
+                if len(screens) > 0:
+                    data["end_ts"] = screens[0].start_ts
+                else:
+                    data["end_ts"] = self.end_ts
+            screen = LyricsScreen(data)
+            screens.appendleft(screen)
+        return screens
+
+    def get_screen_clip(self, i):
+        return self.screens[i].get_clip()
+
+    def get_clip(self):
+        audio = self.audio_clip
+        screen_clips = [self.get_screen_clip(i) for i in range(0, len(self.screens))]
+        video = CompositeVideoClip(clips=screen_clips)
+        video.fps = 24
+        video.audio = audio
+        return video
+
+    @property
+    def start_ts(self):
+        return 0.0
+
+    @property
+    def end_ts(self):
+        return self.audio_clip.duration
+
+    def __str__(self):
+        lines = [f"Song File: {self.song_file}", f"Duration: {self.end_ts}"]
+        for screen in self.screens:
+            lines.append(str(screen))
+        return "\n".join(lines)
 
 
 @click.command()
@@ -141,10 +202,9 @@ class LyricsScreen:
 @click.option("--out_path", type=click.Path(exists=False))
 def run(song_data, out_path):
     song_json = json.load(song_data)
-    audio_path = song_json["song_file"]
-    audio_clip = AudioFileClip(audio_path)
-    lyric_clips = get_screens(song_json["screens"])
-    lyric_clips[0].get_clip().write_videofile(out_path)
+    video = LyricVideo(song_json)
+    print(video)
+    video.get_clip().write_videofile(out_path)
     return
     write_video(out_path, audio_clip, set_durations(lyric_clips, audio_clip.duration))
 
@@ -154,7 +214,7 @@ def get_screens(screen_list):
 
 
 def create_clip(screen_info):
-    return LyricsScreen(screen_info)
+    return LyricsScreen(screen_info, None)
     lines = "\n".join(screen_info["lines"])
     timestamp = screen_info.get("ts", "00:00:00")
     return TextClip(txt=lines, color=TEXT_COLOR, size=VIDEO_SIZE).set_start(timestamp)
