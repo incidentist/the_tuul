@@ -4,7 +4,9 @@ from collections import deque
 import click
 from numpy.core.numeric import full
 from moviepy.video.tools.drawing import color_split
-from moviepy.tools import cvsecs as convert_to_seconds
+from moviepy.tools import cvsecs as convert_to_seconds, subprocess_call
+
+import ass
 
 
 from moviepy.editor import (
@@ -77,6 +79,28 @@ class LyricsLine:
     def __str__(self):
         return f"[{self.start_ts} - {self.end_ts}] {self.text}"
 
+    def as_ass_event(self, screen_start, screen_end, style):
+        e = ass.ASS.Event()
+        e.type = "Dialogue"
+        e.Layer = 0
+        e.Style = style
+        e.Start = screen_start
+        e.End = screen_end
+        e.Text = self.decorate_ass_line(self.text, screen_start)
+        return e
+
+    def decorate_ass_line(self, text, screen_start_ts):
+        """Decorate line with karaoke tags"""
+        # Prefix the tag with centisecs prior to line in screen
+        start_time = (
+            convert_to_seconds(self.start_ts) - convert_to_seconds(screen_start_ts)
+        ) * 100
+        duration = (
+            convert_to_seconds(self.end_ts) - convert_to_seconds(self.start_ts)
+        ) * 100
+
+        return f"{{\k{start_time}}}{{\kf{duration}}}{text}"
+
 
 class LyricsScreen:
     def __init__(self, screen_data):
@@ -146,6 +170,13 @@ class LyricsScreen:
         else:
             return self._end_ts
 
+    def get_ass_lines(self, style):
+        events = []
+        for line in self.lines:
+            events.append(line.as_ass_event(self.start_ts, self.end_ts, style))
+
+        return events
+
     def __str__(self):
         lines = [f"{self.start_ts} - {self.end_ts}:"]
         for line in self.lines:
@@ -158,6 +189,10 @@ class LyricVideo:
         self.song_file = video_data["song_file"]
         self.audio_clip = AudioFileClip(self.song_file)
         self.screens = self.get_screens(video_data["screens"])
+
+    @property
+    def ass_filepath(self):
+        return "./out.ass"
 
     def get_screens(self, screen_data):
         screens = deque()
@@ -182,6 +217,43 @@ class LyricVideo:
         video.audio = audio
         return video
 
+    def write_ass_file(self):
+        outfile = self.ass_filepath
+        a = ass.ASS()
+        a.styles_format = [
+            "Name",
+            "Alignment",
+            "Fontname",
+            "Fontsize",
+            "PrimaryColour",
+            "SecondaryColour",
+            "Bold",
+            "ScaleX",
+            "ScaleY",
+            "Spacing",
+            "MarginL",
+            "MarginR",
+            "MarginV",
+            "Encoding",
+        ]
+        style = ass.ASS.Style()
+        style.type = "Style"
+        style.Name = "Default"
+        style.Fontname = "Arial Narrow"
+        style.Fontsize = 20
+        style.Bold = True
+        style.PrimaryColor = (255, 0, 255, 255)
+        style.SecondaryColor = (0, 255, 255, 255)
+        style.Alignment = ass.ASS.ALIGN_TOP_CENTER
+        style.MarginV = 20
+        a.add_style(style)
+
+        a.events_format = ["Layer", "Style", "Start", "End", "Text"]
+        for screen in self.screens:
+            [a.add(event) for event in screen.get_ass_lines(style)]
+        print(a.events)
+        a.write(outfile)
+
     @property
     def start_ts(self):
         return 0.0
@@ -204,7 +276,25 @@ def run(song_data, out_path):
     song_json = json.load(song_data)
     video = LyricVideo(song_json)
     print(video)
-    video.get_clip().write_videofile(out_path)
+    video.write_ass_file()
+    ffmpeg_cmd = [
+        "/usr/local/bin/ffmpeg",
+        "-f",
+        "lavfi",
+        "-i",
+        "color=c=black:s=1280x720:r=20",
+        "-i",
+        video.song_file,
+        "-c:a",
+        "libmp3lame",
+        "-vf",
+        "ass=" + video.ass_filepath,
+        "-shortest",
+        "-y",
+        "out.mp4",
+    ]
+    subprocess_call(ffmpeg_cmd)
+    # video.get_clip().write_videofile(out_path)
     return
     write_video(out_path, audio_clip, set_durations(lyric_clips, audio_clip.duration))
 
