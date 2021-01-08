@@ -37,9 +37,11 @@ def run(lyricsfile, songfile, outfile, instrumental_path=None):
     lyrics = lyricsfile.read()
     screens = lyrics.split("\n\n")
 
-    click.echo("Get ready to hit the spacebar when you hear the lyrics start!")
-    click.echo()
-    click.echo("***")
+    click.echo("This is the Karaoke Song Maker Thing!")
+    click.echo("The song will play, and lyrics will be shown line by line.")
+    click.echo("Press spacebar to mark the start of the displayed line.")
+    click.echo("Press Enter to mark the *end* of the *previous* line.")
+    click.pause()
 
     mixer.init()
     mixer.music.load(songfile)
@@ -51,6 +53,7 @@ def run(lyricsfile, songfile, outfile, instrumental_path=None):
         lines = screen.split("\n")
         screenobj = {}
         linelist = []
+        click.echo("\n")
         for line in lines:
             display_line(line)
             line_ts = get_line_timestamp(line, starttime, prev_line)
