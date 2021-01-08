@@ -1,8 +1,11 @@
-import click
+from typing import Tuple
+from pathlib import Path
 import json
 from datetime import datetime
+
+import click
+from spleeter.separator import Separator
 import pygame.mixer as mixer
-import ass
 
 END_LINE = "end_line"
 END_PREV_LINE = "end_prev_line"
@@ -10,13 +13,26 @@ END_PREV_LINE = "end_prev_line"
 
 @click.command()
 @click.option("--lyricsfile", type=click.File("r"), help="File containing lyrics text")
-@click.option("--songfile", help="File of song")
+@click.option(
+    "--songfile", type=click.Path(exists=True, dir_okay=False), help="File of song"
+)
 @click.option(
     "--outfile", type=click.Path(exists=False), help="File to write JSON out to"
 )
-def run(lyricsfile, songfile, outfile):
+@click.option(
+    "--instrumental_path", type=click.Path(exists=True, dir_okay=False), required=False
+)
+def run(lyricsfile, songfile, outfile, instrumental_path=None):
+    songpath = Path(songfile)
     jsonout = {}
     screenlist = []
+
+    if not instrumental_path:
+        click.echo("Creating instrumental track...")
+        (instrumental_path, vocal_path) = split_song(songpath)
+        print(instrumental_path, vocal_path)
+        click.echo(f"Wrote instrumental track to {instrumental_path}")
+    jsonout["song_file"] = str(instrumental_path)
 
     lyrics = lyricsfile.read()
     screens = lyrics.split("\n\n")
@@ -50,6 +66,15 @@ def run(lyricsfile, songfile, outfile):
         json.dump(jsonout, of)
 
 
+def split_song(songfile: Path) -> Tuple[Path, Path]:
+    """ Run spleeter to split song into instrumental and vocal tracks """
+    song_dir = songfile.resolve().with_suffix("")
+    print(song_dir)
+    separator = Separator("spleeter:2stems")
+    separator.separate_to_file(str(songfile), str(song_dir))
+    return song_dir.joinpath("accompaniment.wav"), song_dir.joinpath("vocals.wav")
+
+
 def display_line(line):
     line = line.strip()
     click.echo(line)
@@ -61,10 +86,6 @@ def get_line_timestamp(line, starttime, prev_line):
         prev_line["end_ts"] = str(ts)
         return get_line_timestamp(line, starttime, prev_line)
 
-    click.echo()
-    click.echo("***")
-    click.echo()
-
     data = {"line": line, "ts": str(ts)}
 
     return data
@@ -75,11 +96,6 @@ def get_screen_timestamp(screen, starttime):
     lines = screen.split("\n")
 
     ts = record_timestamp(screen, starttime)
-
-    click.echo()
-    click.echo("***")
-    click.echo()
-
     data = {"lines": lines, "ts": str(ts)}
 
     return data
@@ -92,7 +108,6 @@ def record_timestamp(item, starttime):
         event = END_LINE
     elif char in "\n\r":
         event = END_PREV_LINE
-    print(f"char: {ord(char)}")
     ts = datetime.now() - starttime
     return ts, event
 

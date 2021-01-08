@@ -1,3 +1,4 @@
 click
 moviepy
 spleeter
+pygame
