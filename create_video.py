@@ -64,7 +64,6 @@ class LyricsLine:
         )
 
     def mask_frame(self, t):
-        # print("t: " + str(t))
         normalized_t = min(max(self.start_ts, t), self.end_ts) - self.start_ts
         pct = (
             normalized_t
@@ -251,7 +250,6 @@ class LyricVideo:
         a.events_format = ["Layer", "Style", "Start", "End", "Text"]
         for screen in self.screens:
             [a.add(event) for event in screen.get_ass_lines(style)]
-        print(a.events)
         a.write(outfile)
 
     @property

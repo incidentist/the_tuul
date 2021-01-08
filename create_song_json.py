@@ -1,14 +1,18 @@
-from typing import Tuple
+from typing import Tuple, Optional
 from pathlib import Path
 import json
 from datetime import datetime
+import subprocess
+import atexit
 
 import click
-from spleeter.separator import Separator
-import pygame.mixer as mixer
+
+# import pygame.mixer as mixer
 
 END_LINE = "end_line"
 END_PREV_LINE = "end_prev_line"
+
+ffplay_process: Optional[subprocess.Popen] = None
 
 
 @click.command()
@@ -43,9 +47,8 @@ def run(lyricsfile, songfile, outfile, instrumental_path=None):
     click.echo("Press Enter to mark the *end* of the *previous* line.")
     click.pause()
 
-    mixer.init()
-    mixer.music.load(songfile)
-    mixer.music.play()
+    play_track(songfile)
+
     starttime = datetime.now()
 
     prev_line = None
@@ -63,14 +66,35 @@ def run(lyricsfile, songfile, outfile, instrumental_path=None):
         screenobj["lines"] = linelist
         screenlist.append(screenobj)
 
+    set_last_line_end(starttime, prev_line)
+
     jsonout["screens"] = screenlist
 
+    stop_track()
+
     with open(outfile, "w") as of:
-        json.dump(jsonout, of)
+        json.dump(jsonout, of, indent=2)
+
+
+def play_track(songfile, start_ts: str = "00:00"):
+    global ffplay_process
+    if ffplay_process is not None:
+        ffplay_process.kill()
+    cmd = ["ffplay", "-nodisp", "-autoexit", "-ss", start_ts, songfile]
+    ffplay_process = subprocess.Popen(
+        cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+    )
+
+
+def stop_track():
+    global ffplay_process
+    ffplay_process.kill()
 
 
 def split_song(songfile: Path) -> Tuple[Path, Path]:
     """ Run spleeter to split song into instrumental and vocal tracks """
+    from spleeter.separator import Separator
+
     song_dir = songfile.resolve().with_suffix("")
     print(song_dir)
     separator = Separator("spleeter:2stems")
@@ -84,7 +108,7 @@ def display_line(line):
 
 
 def get_line_timestamp(line, starttime, prev_line):
-    (ts, event) = record_timestamp(line, starttime)
+    (ts, event) = record_timestamp(starttime)
     if event == END_PREV_LINE:
         prev_line["end_ts"] = str(ts)
         return get_line_timestamp(line, starttime, prev_line)
@@ -104,15 +128,26 @@ def get_screen_timestamp(screen, starttime):
     return data
 
 
-def record_timestamp(item, starttime):
+def record_timestamp(starttime):
     char = click.getchar()
     event = None
     if char == " ":
         event = END_LINE
     elif char in "\n\r":
         event = END_PREV_LINE
+    else:
+        event = char
     ts = datetime.now() - starttime
     return ts, event
+
+
+def set_last_line_end(starttime, prev_line):
+    click.echo("Press any key when the last line ends")
+    ts, event = record_timestamp(starttime)
+    prev_line["end_ts"] = str(ts)
+
+
+atexit.register(stop_track)
 
 
 if __name__ == "__main__":
