@@ -98,7 +98,9 @@ def split_song(songfile: Path) -> Tuple[Path, Path]:
     song_dir = songfile.resolve().with_suffix("")
     print(song_dir)
     separator = Separator("spleeter:2stems")
-    separator.separate_to_file(str(songfile), str(song_dir))
+    separator.separate_to_file(
+        str(songfile), str(song_dir), filename_format="{instrument}.{codec}"
+    )
     return song_dir.joinpath("accompaniment.wav"), song_dir.joinpath("vocals.wav")
 
 
