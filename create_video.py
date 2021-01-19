@@ -169,10 +169,17 @@ class LyricsScreen:
         else:
             return self._end_ts
 
-    def get_ass_lines(self, style):
+    def get_ass_lines(self, style, prev_screen=None):
+        start_ts = 0.0
+        # Attempt to start displaying this screen when the last screen ends
+        if prev_screen:
+            start_ts = min(prev_screen.end_ts + 0.1, self.start_ts)
+            print(f"End prv screen: {prev_screen.end_ts}")
+
+        print(f"Start for screen: {start_ts}")
         events = []
         for line in self.lines:
-            events.append(line.as_ass_event(self.start_ts, self.end_ts, style))
+            events.append(line.as_ass_event(start_ts, self.end_ts, style))
 
         return events
 
@@ -196,7 +203,7 @@ class LyricVideo:
     def get_screens(self, screen_data):
         screens = deque()
         for data in reversed(screen_data):
-            if not "end_ts" in data:
+            if not "end_ts" in data and "end_ts" not in data["lines"][-1]:
                 if len(screens) > 0:
                     data["end_ts"] = screens[0].start_ts
                 else:
@@ -248,8 +255,10 @@ class LyricVideo:
         a.add_style(style)
 
         a.events_format = ["Layer", "Style", "Start", "End", "Text"]
+        prev_screen = None
         for screen in self.screens:
-            [a.add(event) for event in screen.get_ass_lines(style)]
+            [a.add(event) for event in screen.get_ass_lines(style, prev_screen)]
+            prev_screen = screen
         a.write(outfile)
 
     @property
