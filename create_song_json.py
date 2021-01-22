@@ -1,18 +1,17 @@
-from typing import Tuple, Optional
+from datetime import timedelta
+from typing import Tuple, List
 from pathlib import Path
 import json
 from datetime import datetime
-import subprocess
-import atexit
 
 import click
+
+import timing_data
 
 # import pygame.mixer as mixer
 
 END_LINE = "end_line"
 END_PREV_LINE = "end_prev_line"
-
-ffplay_process: Optional[subprocess.Popen] = None
 
 
 @click.command()
@@ -39,17 +38,8 @@ def run(lyricsfile, songfile, outfile, instrumental_path=None):
     jsonout["song_file"] = str(instrumental_path)
 
     lyrics = lyricsfile.read()
-    screens = lyrics.split("\n\n")
-
-    click.echo("This is the Karaoke Song Maker Thing!")
-    click.echo("The song will play, and lyrics will be shown line by line.")
-    click.echo("Press spacebar to mark the start of the displayed line.")
-    click.echo("Press Enter to mark the *end* of the *previous* line.")
-    click.pause()
-
-    play_track(songfile)
-
-    starttime = datetime.now()
+    lyric_events = timing_data.gather_timing_data(lyrics, songpath)
+    compile_lyric_timings(lyrics, lyric_events)
 
     prev_line = None
     for screen in screens:
@@ -76,19 +66,19 @@ def run(lyricsfile, songfile, outfile, instrumental_path=None):
         json.dump(jsonout, of, indent=2)
 
 
-def play_track(songfile, start_ts: str = "00:00"):
-    global ffplay_process
-    if ffplay_process is not None:
-        ffplay_process.kill()
-    cmd = ["ffplay", "-nodisp", "-autoexit", "-ss", start_ts, songfile]
-    ffplay_process = subprocess.Popen(
-        cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-    )
-
-
-def stop_track():
-    global ffplay_process
-    ffplay_process.kill()
+def compile_lyric_timings(
+    lyrics: str, events: List[Tuple[timedelta, timing_data.LyricMarker]]
+):
+    lines = iter(lyrics.split("\n"))
+    screens = []
+    prev_line = None
+    screen = []
+    events = iter(events)
+    line = None
+    while True:
+        if line is None:
+            line = next(lines)
+        event = next(events)
 
 
 def split_song(songfile: Path) -> Tuple[Path, Path]:
@@ -147,9 +137,6 @@ def set_last_line_end(starttime, prev_line):
     click.echo("Press any key when the last line ends")
     ts, event = record_timestamp(starttime)
     prev_line["end_ts"] = str(ts)
-
-
-atexit.register(stop_track)
 
 
 if __name__ == "__main__":
