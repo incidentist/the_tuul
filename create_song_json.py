@@ -1,17 +1,15 @@
 from datetime import timedelta
-from typing import Tuple, List, Dict, Union, Any, Optional
+from typing import Tuple, List, Union, Optional
 from pathlib import Path
 import json
 from datetime import datetime
 
+import ass
 import click
+from moviepy.tools import subprocess_call
 
 import timing_data
-
-# import pygame.mixer as mixer
-
-END_LINE = "end_line"
-END_PREV_LINE = "end_prev_line"
+from subtitles import LyricsLine, LyricsScreen, create_subtitles
 
 
 @click.command()
@@ -37,8 +35,44 @@ def run(lyricsfile, songfile, outfile: str, instrumental_path: str = None):
     lyrics = lyricsfile.read()
     lyric_events = timing_data.gather_timing_data(lyrics, songpath)
     screens = compile_lyric_timings(lyrics, lyric_events)
+    screens = set_last_line_end_times(screens)
+    screens = set_screen_start_times(screens)
 
-    write_outfile(outfile, instrumental_path, screens)
+    lyric_subtitles = create_subtitles(
+        screens,
+        {
+            "FontName": "Arial Narrow",
+            "FontSize": 20,
+            "PrimaryColor": (255, 0, 255, 255),
+            "SecondaryColor": (0, 255, 255, 255),
+        },
+    )
+    create_video(instrumental_path, lyric_subtitles)
+
+
+def set_last_line_end_times(screens: List[LyricsScreen]) -> List[LyricsScreen]:
+    """
+    Infer end times of last lines for screens where they are not already set.
+    """
+    for i, screen in enumerate(screens):
+        if not screen.lines[-1].end_ts and i < len(screens) - 1:
+            next_screen = screens[i + 1]
+            screen.lines[-1].end_ts = next_screen.lines[0].ts
+    return screens
+
+
+def set_screen_start_times(screens: List[LyricsScreen]) -> List[LyricsScreen]:
+    """
+    Set start times for screens to the end times of the previous screen.
+    """
+    prev_screen = None
+    for screen in screens:
+        if prev_screen is None:
+            screen.start_ts = timedelta()
+        else:
+            screen.start_ts = prev_screen.end_ts + timedelta(seconds=0.1)
+        prev_screen = screen
+    return screens
 
 
 class TimedeltaEncoder(json.JSONEncoder):
@@ -52,7 +86,7 @@ class TimedeltaEncoder(json.JSONEncoder):
 
 
 def write_outfile(
-    outfile: str, instrumental_path: Union[str, Path], screens: List[List[Dict]]
+    outfile: str, instrumental_path: Union[str, Path], screens: List[LyricsScreen]
 ):
     jsonout = {"song_file": str(instrumental_path), "screens": screens}
 
@@ -62,16 +96,16 @@ def write_outfile(
 
 def compile_lyric_timings(
     lyrics: str, events: List[Tuple[timedelta, timing_data.LyricMarker]]
-) -> List[List[Dict[str, Union[str, timedelta]]]]:
+) -> List[LyricsScreen]:
     """
     Read keyboard events in the order they were pressed and construct
     objects for screens and lines that include the given timing information.
     """
     lines = iter(lyrics.split("\n"))
     events = iter(events)
-    screens: List[List[Dict[str, Any]]] = []
-    prev_line_obj: Optional[Dict[str, Any]] = None
-    screen: List[Dict[str, Any]] = []
+    screens: List[LyricsScreen] = []
+    prev_line_obj: Optional[LyricsLine] = None
+    screen: LyricsScreen = LyricsScreen()
 
     for event in events:
         ts = event[0]
@@ -81,12 +115,12 @@ def compile_lyric_timings(
             if line == "":
                 screens, screen = advance_screen(screens, screen)
                 line = next(lines)
-            line_obj = {"text": line, "ts": ts}
-            screen.append(line_obj)
+            line_obj = LyricsLine(line, ts)
+            screen.lines.append(line_obj)
             prev_line_obj = line_obj
         elif marker == timing_data.LyricMarker.SEGMENT_END:
             if prev_line_obj is not None:
-                prev_line_obj["end_ts"] = ts
+                prev_line_obj.end_ts = ts
 
     return screens
 
@@ -94,7 +128,7 @@ def compile_lyric_timings(
 def advance_screen(screens, screen):
     """ Add screen to screens and return a new screen object """
     screens.append(screen)
-    return screens, []
+    return screens, LyricsScreen
 
 
 def split_song(songfile: Path) -> Tuple[Path, Path]:
@@ -108,6 +142,28 @@ def split_song(songfile: Path) -> Tuple[Path, Path]:
         str(songfile), str(song_dir), filename_format="{instrument}.{codec}"
     )
     return song_dir.joinpath("accompaniment.wav"), song_dir.joinpath("vocals.wav")
+
+
+def create_video(audio_path: str, subtitles: ass.ASS):
+    ass_filepath = "./out.ass"
+    subtitles.write(ass_filepath)
+    ffmpeg_cmd = [
+        "/usr/local/bin/ffmpeg",
+        "-f",
+        "lavfi",
+        "-i",
+        "color=c=black:s=1280x720:r=20",
+        "-i",
+        audio_path,
+        "-c:a",
+        "libmp3lame",
+        "-vf",
+        "ass=" + ass_filepath,
+        "-shortest",
+        "-y",
+        "out.mp4",
+    ]
+    subprocess_call(ffmpeg_cmd)
 
 
 if __name__ == "__main__":
