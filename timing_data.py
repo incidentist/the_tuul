@@ -40,6 +40,7 @@ def gather_timing_data(
         while marker != LyricMarker.SEGMENT_START:
             ts, marker = get_next_marker(start_ts)
             timing_data.append((ts, marker))
+    timing_data.append(get_last_line_end(start_ts))
 
     stop_track()
     return timing_data
@@ -80,3 +81,9 @@ def get_next_marker(start_ts: datetime) -> Tuple[timedelta, LyricMarker]:
     else:
         ts, event = get_next_marker(start_ts)
     return ts, event
+
+
+def get_last_line_end(start_ts):
+    click.echo("Press any key when the last line ends")
+    ts, event = get_next_marker(start_ts)
+    return ts, LyricMarker.SEGMENT_END
