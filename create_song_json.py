@@ -1,5 +1,5 @@
 from datetime import timedelta
-from typing import Tuple, List
+from typing import Tuple, List, Dict, Union, Any, Optional
 from pathlib import Path
 import json
 from datetime import datetime
@@ -25,60 +25,76 @@ END_PREV_LINE = "end_prev_line"
 @click.option(
     "--instrumental_path", type=click.Path(exists=True, dir_okay=False), required=False
 )
-def run(lyricsfile, songfile, outfile, instrumental_path=None):
+def run(lyricsfile, songfile, outfile: str, instrumental_path: str = None):
     songpath = Path(songfile)
-    jsonout = {}
-    screenlist = []
 
     if not instrumental_path:
         click.echo("Creating instrumental track...")
         (instrumental_path, vocal_path) = split_song(songpath)
         print(instrumental_path, vocal_path)
         click.echo(f"Wrote instrumental track to {instrumental_path}")
-    jsonout["song_file"] = str(instrumental_path)
 
     lyrics = lyricsfile.read()
     lyric_events = timing_data.gather_timing_data(lyrics, songpath)
-    compile_lyric_timings(lyrics, lyric_events)
+    screens = compile_lyric_timings(lyrics, lyric_events)
 
-    prev_line = None
-    for screen in screens:
-        lines = screen.split("\n")
-        screenobj = {}
-        linelist = []
-        click.echo("\n")
-        for line in lines:
-            display_line(line)
-            line_ts = get_line_timestamp(line, starttime, prev_line)
-            linelist.append(line_ts)
-            prev_line = line_ts
+    write_outfile(outfile, instrumental_path, screens)
 
-        screenobj["lines"] = linelist
-        screenlist.append(screenobj)
 
-    set_last_line_end(starttime, prev_line)
+class TimedeltaEncoder(json.JSONEncoder):
+    """Adds ability to encode timedeltas to JSON """
 
-    jsonout["screens"] = screenlist
+    def default(self, obj):
+        if isinstance(obj, timedelta):
+            return str(obj)
 
-    stop_track()
+        return super(TimedeltaEncoder, self).default(obj)
+
+
+def write_outfile(
+    outfile: str, instrumental_path: Union[str, Path], screens: List[List[Dict]]
+):
+    jsonout = {"song_file": str(instrumental_path), "screens": screens}
 
     with open(outfile, "w") as of:
-        json.dump(jsonout, of, indent=2)
+        json.dump(jsonout, of, indent=2, cls=TimedeltaEncoder)
 
 
 def compile_lyric_timings(
     lyrics: str, events: List[Tuple[timedelta, timing_data.LyricMarker]]
-):
+) -> List[List[Dict[str, Union[str, timedelta]]]]:
+    """
+    Read keyboard events in the order they were pressed and construct
+    objects for screens and lines that include the given timing information.
+    """
     lines = iter(lyrics.split("\n"))
-    screens = []
-    prev_line = None
-    screen = []
     events = iter(events)
-    line = None
-    while True:
-        if line is None:
+    screens: List[List[Dict[str, Any]]] = []
+    prev_line_obj: Optional[Dict[str, Any]] = None
+    screen: List[Dict[str, Any]] = []
+
+    for event in events:
+        ts = event[0]
+        marker = event[1]
+        if marker == timing_data.LyricMarker.SEGMENT_START:
             line = next(lines)
-        event = next(events)
+            if line == "":
+                screens, screen = advance_screen(screens, screen)
+                line = next(lines)
+            line_obj = {"text": line, "ts": ts}
+            screen.append(line_obj)
+            prev_line_obj = line_obj
+        elif marker == timing_data.LyricMarker.SEGMENT_END:
+            if prev_line_obj is not None:
+                prev_line_obj["end_ts"] = ts
+
+    return screens
+
+
+def advance_screen(screens, screen):
+    """ Add screen to screens and return a new screen object """
+    screens.append(screen)
+    return screens, []
 
 
 def split_song(songfile: Path) -> Tuple[Path, Path]:
@@ -92,51 +108,6 @@ def split_song(songfile: Path) -> Tuple[Path, Path]:
         str(songfile), str(song_dir), filename_format="{instrument}.{codec}"
     )
     return song_dir.joinpath("accompaniment.wav"), song_dir.joinpath("vocals.wav")
-
-
-def display_line(line):
-    line = line.strip()
-    click.echo(line)
-
-
-def get_line_timestamp(line, starttime, prev_line):
-    (ts, event) = record_timestamp(starttime)
-    if event == END_PREV_LINE:
-        prev_line["end_ts"] = str(ts)
-        return get_line_timestamp(line, starttime, prev_line)
-
-    data = {"line": line, "ts": str(ts)}
-
-    return data
-
-
-def get_screen_timestamp(screen, starttime):
-    screen = screen.strip()
-    lines = screen.split("\n")
-
-    ts = record_timestamp(screen, starttime)
-    data = {"lines": lines, "ts": str(ts)}
-
-    return data
-
-
-def record_timestamp(starttime):
-    char = click.getchar()
-    event = None
-    if char == " ":
-        event = END_LINE
-    elif char in "\n\r":
-        event = END_PREV_LINE
-    else:
-        event = char
-    ts = datetime.now() - starttime
-    return ts, event
-
-
-def set_last_line_end(starttime, prev_line):
-    click.echo("Press any key when the last line ends")
-    ts, event = record_timestamp(starttime)
-    prev_line["end_ts"] = str(ts)
 
 
 if __name__ == "__main__":
