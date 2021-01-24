@@ -8,7 +8,6 @@ Use [spleeter](https://github.com/deezer/spleeter) to separate vocals from instr
 ## Step 2
 Create a txt file with lyrics. Line breaks separate lines, two line breaks separate screens.
 
-Run create_song_json.py to create timings for lines. Give it the lyrics file and the original (with vocals) track. It'll play the song and you'll hit spacebar when a line begins. That outputs a json file.
-
 ## Step 3
-Run create_video.py with the json file you just created.
+
+Run make_karaoke_video.py to create the video. Give it the lyrics file and the original (with vocals) track. It'll play the song and you'll hit spacebar when a line begins. The video will be created from the timings of your keystrokes.

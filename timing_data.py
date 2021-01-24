@@ -84,6 +84,6 @@ def get_next_marker(start_ts: datetime) -> Tuple[timedelta, LyricMarker]:
 
 
 def get_last_line_end(start_ts):
-    click.echo("Press any key when the last line ends")
+    click.echo("Press space or enter when the last line ends")
     ts, event = get_next_marker(start_ts)
     return ts, LyricMarker.SEGMENT_END

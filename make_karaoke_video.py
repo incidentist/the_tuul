@@ -1,12 +1,13 @@
-from datetime import timedelta
-from typing import Tuple, List, Union, Optional
-from pathlib import Path
+import itertools
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
+from pathlib import Path
+from typing import List, Optional, Tuple, Union, Dict, Any
 
-import ass
 import click
+import pydub
 from moviepy.tools import subprocess_call
+import ass
 
 import timing_data
 from subtitles import LyricsLine, LyricsScreen, create_subtitles
@@ -18,12 +19,9 @@ from subtitles import LyricsLine, LyricsScreen, create_subtitles
     "--songfile", type=click.Path(exists=True, dir_okay=False), help="File of song"
 )
 @click.option(
-    "--outfile", type=click.Path(exists=False), help="File to write JSON out to"
-)
-@click.option(
     "--instrumental_path", type=click.Path(exists=True, dir_okay=False), required=False
 )
-def run(lyricsfile, songfile, outfile: str, instrumental_path: str = None):
+def run(lyricsfile, songfile, instrumental_path: str = None):
     songpath = Path(songfile)
 
     if not instrumental_path:
@@ -35,7 +33,7 @@ def run(lyricsfile, songfile, outfile: str, instrumental_path: str = None):
     lyrics = lyricsfile.read()
     lyric_events = timing_data.gather_timing_data(lyrics, songpath)
     screens = compile_lyric_timings(lyrics, lyric_events)
-    screens = set_last_line_end_times(screens)
+    screens = set_line_end_times(screens, instrumental_path)
     screens = set_screen_start_times(screens)
 
     lyric_subtitles = create_subtitles(
@@ -50,14 +48,21 @@ def run(lyricsfile, songfile, outfile: str, instrumental_path: str = None):
     create_video(instrumental_path, lyric_subtitles)
 
 
-def set_last_line_end_times(screens: List[LyricsScreen]) -> List[LyricsScreen]:
+def set_line_end_times(
+    screens: List[LyricsScreen], instrumental_path: str
+) -> List[LyricsScreen]:
     """
-    Infer end times of last lines for screens where they are not already set.
+    Infer end times of lines for screens where they are not already set.
     """
-    for i, screen in enumerate(screens):
-        if not screen.lines[-1].end_ts and i < len(screens) - 1:
-            next_screen = screens[i + 1]
-            screen.lines[-1].end_ts = next_screen.lines[0].ts
+    lines = list(itertools.chain.from_iterable([s.lines for s in screens]))
+    for i, line in enumerate(lines):
+        if not line.end_ts:
+            if i == len(lines) - 1:
+                audio = pydub.AudioSegment(instrumental_path)
+                duration = audio.duration_seconds
+                line.end_ts = timedelta(seconds=duration)
+            next_line = lines[i + 1]
+            line.end_ts = next_line.ts
     return screens
 
 
@@ -121,6 +126,7 @@ def compile_lyric_timings(
         elif marker == timing_data.LyricMarker.SEGMENT_END:
             if prev_line_obj is not None:
                 prev_line_obj.end_ts = ts
+    screens, _ = advance_screen(screens, screen)
 
     return screens
 
@@ -128,10 +134,10 @@ def compile_lyric_timings(
 def advance_screen(screens, screen):
     """ Add screen to screens and return a new screen object """
     screens.append(screen)
-    return screens, LyricsScreen
+    return screens, LyricsScreen()
 
 
-def split_song(songfile: Path) -> Tuple[Path, Path]:
+def split_song(songfile: Path) -> Tuple[str, str]:
     """ Run spleeter to split song into instrumental and vocal tracks """
     from spleeter.separator import Separator
 
@@ -141,7 +147,9 @@ def split_song(songfile: Path) -> Tuple[Path, Path]:
     separator.separate_to_file(
         str(songfile), str(song_dir), filename_format="{instrument}.{codec}"
     )
-    return song_dir.joinpath("accompaniment.wav"), song_dir.joinpath("vocals.wav")
+    return str(song_dir.joinpath("accompaniment.wav")), str(
+        song_dir.joinpath("vocals.wav")
+    )
 
 
 def create_video(audio_path: str, subtitles: ass.ASS):

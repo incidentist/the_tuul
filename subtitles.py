@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Dict, List, Optional
 
@@ -21,13 +21,15 @@ class LyricsLine:
     ts: timedelta
     end_ts: Optional[timedelta] = None
 
-    def as_ass_event(self, screen_start, screen_end, style):
+    def as_ass_event(
+        self, screen_start: timedelta, screen_end: timedelta, style: ass.ASS.Style
+    ):
         e = ass.ASS.Event()
         e.type = "Dialogue"
         e.Layer = 0
         e.Style = style
-        e.Start = screen_start
-        e.End = screen_end
+        e.Start = screen_start.total_seconds()
+        e.End = screen_end.total_seconds()
         e.Text = self.decorate_ass_line(self.text, screen_start)
         return e
 
@@ -35,19 +37,19 @@ class LyricsLine:
         """Decorate line with karaoke tags"""
         # Prefix the tag with centisecs prior to line in screen
 
-        start_time = self.ts - screen_start_ts
-        duration = self.end_ts - self.ts
+        start_time = (self.ts - screen_start_ts).total_seconds() * 100
+        duration = (self.end_ts - self.ts).total_seconds() * 100
 
-        return f"{{\k{start_time.seconds * 100}}}{{\kf{duration.seconds * 100}}}{text}"
+        return f"{{\k{start_time}}}{{\kf{duration}}}{text}"
 
 
 @dataclass
 class LyricsScreen:
-    lines: List[LyricsLine] = []
+    lines: List[LyricsLine] = field(default_factory=list)
     start_ts: Optional[timedelta] = None
 
     @property
-    def end_ts(self):
+    def end_ts(self) -> timedelta:
         return self.lines[-1].end_ts
 
     def get_line_y(self, line_num: int) -> int:
@@ -68,7 +70,7 @@ class LyricsScreen:
         return "\n".join(lines)
 
 
-def create_subtitles(lyric_screens, display_params: Dict) -> ass.Ass:
+def create_subtitles(lyric_screens, display_params: Dict) -> ass.ASS:
     a = ass.ASS()
     a.styles_format = [
         "Name",
@@ -101,3 +103,5 @@ def create_subtitles(lyric_screens, display_params: Dict) -> ass.Ass:
     a.events_format = ["Layer", "Style", "Start", "End", "Text"]
     for screen in lyric_screens:
         [a.add(event) for event in screen.as_ass_events(style)]
+
+    return a

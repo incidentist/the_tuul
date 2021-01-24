@@ -1,4 +1,4 @@
 click
 moviepy
 spleeter
-pygame
+pydub
