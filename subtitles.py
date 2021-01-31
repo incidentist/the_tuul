@@ -12,7 +12,7 @@ Functions for generating ASS subtitles from lyric data
 """
 
 VIDEO_SIZE = (400, 320)
-LINE_HEIGHT = 80
+LINE_HEIGHT = 30
 
 
 @dataclass
@@ -22,7 +22,11 @@ class LyricsLine:
     end_ts: Optional[timedelta] = None
 
     def as_ass_event(
-        self, screen_start: timedelta, screen_end: timedelta, style: ass.ASS.Style
+        self,
+        screen_start: timedelta,
+        screen_end: timedelta,
+        style: ass.ASS.Style,
+        top_margin: int,
     ):
         e = ass.ASS.Event()
         e.type = "Dialogue"
@@ -30,6 +34,7 @@ class LyricsLine:
         e.Style = style
         e.Start = screen_start.total_seconds()
         e.End = screen_end.total_seconds()
+        e.MarginV = top_margin
         e.Text = self.decorate_ass_line(self.text, screen_start)
         return e
 
@@ -60,7 +65,8 @@ class LyricsScreen:
 
     def as_ass_events(self, style: ass.ASS.Style) -> List[ass.ASS.Event]:
         return [
-            line.as_ass_event(self.start_ts, self.end_ts, style) for line in self.lines
+            line.as_ass_event(self.start_ts, self.end_ts, style, self.get_line_y(i))
+            for i, line in enumerate(self.lines)
         ]
 
     def __str__(self):
@@ -85,7 +91,6 @@ def create_subtitles(lyric_screens, display_params: Dict) -> ass.ASS:
         "Spacing",
         "MarginL",
         "MarginR",
-        "MarginV",
         "Encoding",
     ]
     style = ass.ASS.Style()
@@ -97,10 +102,9 @@ def create_subtitles(lyric_screens, display_params: Dict) -> ass.ASS:
     style.PrimaryColor = display_params["PrimaryColor"]
     style.SecondaryColor = display_params["SecondaryColor"]
     style.Alignment = ass.ASS.ALIGN_TOP_CENTER
-    style.MarginV = 20
     a.add_style(style)
 
-    a.events_format = ["Layer", "Style", "Start", "End", "Text"]
+    a.events_format = ["Layer", "Style", "Start", "End", "MarginV", "Text"]
     for screen in lyric_screens:
         [a.add(event) for event in screen.as_ass_events(style)]
 
