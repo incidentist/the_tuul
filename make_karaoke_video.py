@@ -111,7 +111,7 @@ def compile_lyric_timings(
     Read keyboard events in the order they were pressed and construct
     objects for screens and lines that include the given timing information.
     """
-    lines = iter(lyrics.split("\n"))
+    segments = iter(timing_data.LyricSegmentIterator(lyrics_txt=lyrics))
     events = iter(events)
     screens: List[LyricsScreen] = []
     prev_line_obj: Optional[LyricsLine] = None
@@ -121,10 +121,10 @@ def compile_lyric_timings(
         ts = event[0]
         marker = event[1]
         if marker == timing_data.LyricMarker.SEGMENT_START:
-            line = next(lines)
+            line = next(segments)
             if line == "":
                 screens, screen = advance_screen(screens, screen)
-                line = next(lines)
+                line = next(segments)
             line_obj = LyricsLine(line, ts)
             screen.lines.append(line_obj)
             prev_line_obj = line_obj

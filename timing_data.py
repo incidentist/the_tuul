@@ -16,6 +16,26 @@ class LyricMarker(Enum):
 ffplay_process: Optional[subprocess.Popen] = None
 
 
+class LyricSegmentIterator:
+    def __init__(self, lyrics_txt: str):
+        self._segments = lyrics_txt.split("\n")
+        self._current_segment = None
+
+    def __iter__(self):
+        self._current_segment = 0
+        return self
+
+    def __next__(self):
+        if self._current_segment >= len(self._segments):
+            raise StopIteration
+        val = self._segments[self._current_segment]
+        self._current_segment += 1
+        return val
+
+    def __len__(self):
+        return len(self._segments)
+
+
 def gather_timing_data(
     lyrics: str, song_path: Path
 ) -> List[Tuple[timedelta, LyricMarker]]:
@@ -30,7 +50,7 @@ def gather_timing_data(
     play_track(song_path)
 
     start_ts = datetime.now()
-    lyric_chunks = lyrics.split("\n")
+    lyric_chunks = LyricSegmentIterator(lyrics)
     timing_data = []
     for chunk in lyric_chunks:
         marker = None
