@@ -12,6 +12,8 @@ import ass
 import timing_data
 from subtitles import LyricsLine, LyricsScreen, create_subtitles
 
+SONG_ROOT_PATH = "songs/"
+
 
 @click.command()
 @click.option("--lyricsfile", type=click.File("r"), help="File containing lyrics text")
@@ -23,10 +25,13 @@ from subtitles import LyricsLine, LyricsScreen, create_subtitles
 )
 def run(lyricsfile, songfile, instrumental_path: str = None):
     songpath = Path(songfile)
+    song_name = songpath.stem
+    song_files_dir = Path(SONG_ROOT_PATH).joinpath(song_name).resolve()
+    song_files_dir.mkdir(parents=True, exist_ok=True)
 
     if not instrumental_path:
         click.echo("Creating instrumental track...")
-        (instrumental_path, vocal_path) = split_song(songpath)
+        (instrumental_path, vocal_path) = split_song(songpath, song_files_dir)
         print(instrumental_path, vocal_path)
         click.echo(f"Wrote instrumental track to {instrumental_path}")
 
@@ -45,7 +50,7 @@ def run(lyricsfile, songfile, instrumental_path: str = None):
             "SecondaryColor": (0, 255, 255, 255),
         },
     )
-    create_video(instrumental_path, lyric_subtitles)
+    create_video(instrumental_path, lyric_subtitles, output_dir=song_files_dir)
 
 
 def set_line_end_times(
@@ -137,12 +142,10 @@ def advance_screen(screens, screen):
     return screens, LyricsScreen()
 
 
-def split_song(songfile: Path) -> Tuple[str, str]:
+def split_song(songfile: Path, song_dir: Path) -> Tuple[str, str]:
     """ Run spleeter to split song into instrumental and vocal tracks """
     from spleeter.separator import Separator
 
-    song_dir = songfile.resolve().with_suffix("")
-    print(song_dir)
     separator = Separator("spleeter:2stems")
     separator.separate_to_file(
         str(songfile), str(song_dir), filename_format="{instrument}.{codec}"
@@ -152,9 +155,10 @@ def split_song(songfile: Path) -> Tuple[str, str]:
     )
 
 
-def create_video(audio_path: str, subtitles: ass.ASS):
-    ass_filepath = "./out.ass"
-    subtitles.write(ass_filepath)
+def create_video(audio_path: str, subtitles: ass.ASS, output_dir: Path):
+    ass_path = str(output_dir.joinpath("subtitles.ass"))
+    video_path = str(output_dir.joinpath("karoake.mp4"))
+    subtitles.write(ass_path)
     ffmpeg_cmd = [
         "/usr/local/bin/ffmpeg",
         "-f",
@@ -166,10 +170,10 @@ def create_video(audio_path: str, subtitles: ass.ASS):
         "-c:a",
         "libmp3lame",
         "-vf",
-        "ass=" + ass_filepath,
+        "ass=" + ass_path,
         "-shortest",
         "-y",
-        "out.mp4",
+        video_path,
     ]
     subprocess_call(ffmpeg_cmd)
 
