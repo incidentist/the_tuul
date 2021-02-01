@@ -6,6 +6,7 @@ from typing import List, Optional, Tuple, Union, Dict, Any
 
 import click
 import pydub
+
 from moviepy.tools import subprocess_call
 import ass
 
@@ -23,7 +24,21 @@ SONG_ROOT_PATH = "songs/"
 @click.option(
     "--instrumental_path", type=click.Path(exists=True, dir_okay=False), required=False
 )
-def run(lyricsfile, songfile, instrumental_path: str = None):
+@click.option(
+    "--disable-autocorrect",
+    type=click.BOOL,
+    required=False,
+    default=False,
+    help="Do not try to autocorrect lyric timings",
+)
+@click.option("--timings", type=click.Path(exists=True, dir_okay=False), required=False)
+def run(
+    lyricsfile,
+    songfile,
+    instrumental_path: str = None,
+    disable_autocorrect: bool = False,
+    timings: str = None,
+):
     songpath = Path(songfile)
     song_name = songpath.stem
     song_files_dir = Path(SONG_ROOT_PATH).joinpath(song_name).resolve()
@@ -36,8 +51,14 @@ def run(lyricsfile, songfile, instrumental_path: str = None):
         click.echo(f"Wrote instrumental track to {instrumental_path}")
 
     lyrics = lyricsfile.read()
-    lyric_events = timing_data.gather_timing_data(lyrics, songpath)
+    if timings is not None:
+        lyric_events = read_timings_file(timings)
+    else:
+        lyric_events = timing_data.gather_timing_data(lyrics, songpath)
+    write_timings_file(song_files_dir.joinpath("timings.json"), lyric_events)
     screens = compile_lyric_timings(lyrics, lyric_events)
+    if (not disable_autocorrect) and vocal_path:
+        screens = autocorrect_timings(screens, vocal_path)
     screens = set_line_end_times(screens, instrumental_path)
     screens = set_screen_start_times(screens)
 
@@ -51,6 +72,32 @@ def run(lyricsfile, songfile, instrumental_path: str = None):
         },
     )
     create_video(instrumental_path, lyric_subtitles, output_dir=song_files_dir)
+
+
+def autocorrect_timings(
+    screens: List[LyricsScreen], vocal_audio_path: str
+) -> List[LyricsScreen]:
+    """
+    Adjust timings by looking at the difference between the time of the first vocals in the song and the time of the first spacebar press. Adjust all song timings by that amount.
+    """
+    click.echo("Autocorrecting timings...")
+    first_vocal_ts: timedelta = find_first_vocal_time(vocal_audio_path)
+    click.echo(f"Found first vocal at {first_vocal_ts.total_seconds()}s")
+    first_segment_start: timedelta = screens[0].lines[0].ts
+    adjustment = first_vocal_ts - first_segment_start
+    click.echo(f"Adjusting timings by {adjustment.total_seconds()}s...")
+    return [s.adjust_timestamps(adjustment) for s in screens]
+
+
+def find_first_vocal_time(vocal_audio_path: str) -> timedelta:
+    audio = pydub.AudioSegment.from_wav(vocal_audio_path)
+    # Max decibels to consider silence
+    silence_threshold = -60
+    # silence tuples are in milliseconds
+    non_silences: List[Tuple[int, int]] = pydub.silence.detect_nonsilent(
+        audio, silence_thresh=silence_threshold
+    )
+    return timedelta(milliseconds=non_silences[0][0])
 
 
 def set_line_end_times(
@@ -85,23 +132,32 @@ def set_screen_start_times(screens: List[LyricsScreen]) -> List[LyricsScreen]:
     return screens
 
 
-class TimedeltaEncoder(json.JSONEncoder):
+class TimingsEncoder(json.JSONEncoder):
     """Adds ability to encode timedeltas to JSON """
 
     def default(self, obj):
         if isinstance(obj, timedelta):
-            return str(obj)
+            return obj.total_seconds()
 
-        return super(TimedeltaEncoder, self).default(obj)
+        return super().default(obj)
 
 
-def write_outfile(
-    outfile: str, instrumental_path: Union[str, Path], screens: List[LyricsScreen]
+def write_timings_file(
+    outfile: Path, timings: List[Tuple[timedelta, timing_data.LyricMarker]]
 ):
-    jsonout = {"song_file": str(instrumental_path), "screens": screens}
+    with outfile.open("w") as of:
+        json.dump(timings, of, indent=2, cls=TimingsEncoder)
 
-    with open(outfile, "w") as of:
-        json.dump(jsonout, of, indent=2, cls=TimedeltaEncoder)
+
+def parse_timing_float(t: str) -> timedelta:
+    return timedelta(seconds=float(t))
+
+
+def read_timings_file(
+    timings_path: str,
+) -> List[Tuple[timedelta, timing_data.LyricMarker]]:
+    with open(timings_path, "r") as f:
+        return json.load(f, parse_float=parse_timing_float)
 
 
 def compile_lyric_timings(
