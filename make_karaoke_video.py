@@ -22,9 +22,6 @@ SONG_ROOT_PATH = "songs/"
     "--songfile", type=click.Path(exists=True, dir_okay=False), help="File of song"
 )
 @click.option(
-    "--instrumental_path", type=click.Path(exists=True, dir_okay=False), required=False
-)
-@click.option(
     "--disable-autocorrect",
     type=click.BOOL,
     required=False,
@@ -35,7 +32,6 @@ SONG_ROOT_PATH = "songs/"
 def run(
     lyricsfile,
     songfile,
-    instrumental_path: str = None,
     disable_autocorrect: bool = False,
     timings: str = None,
 ):
@@ -43,11 +39,14 @@ def run(
     song_name = songpath.stem
     song_files_dir = Path(SONG_ROOT_PATH).joinpath(song_name).resolve()
     song_files_dir.mkdir(parents=True, exist_ok=True)
+    instrumental_path = song_files_dir.joinpath("accompaniment.wav")
+    vocal_path = song_files_dir.joinpath("vocals.wav")
 
-    if not instrumental_path:
-        click.echo("Creating instrumental track...")
-        (instrumental_path, vocal_path) = split_song(songpath, song_files_dir)
-        print(instrumental_path, vocal_path)
+    if instrumental_path.exists() and vocal_path.exists():
+        click.echo(f"Using existing instrumental track at {instrumental_path}")
+    else:
+        click.echo("Splitting song into instrumental and vocal tracks..")
+        split_song(songpath, song_files_dir)
         click.echo(f"Wrote instrumental track to {instrumental_path}")
 
     lyrics = lyricsfile.read()
@@ -75,7 +74,7 @@ def run(
 
 
 def autocorrect_timings(
-    screens: List[LyricsScreen], vocal_audio_path: str
+    screens: List[LyricsScreen], vocal_audio_path: Path
 ) -> List[LyricsScreen]:
     """
     Adjust timings by looking at the difference between the time of the first vocals in the song and the time of the first spacebar press. Adjust all song timings by that amount.
@@ -89,8 +88,8 @@ def autocorrect_timings(
     return [s.adjust_timestamps(adjustment) for s in screens]
 
 
-def find_first_vocal_time(vocal_audio_path: str) -> timedelta:
-    audio = pydub.AudioSegment.from_wav(vocal_audio_path)
+def find_first_vocal_time(vocal_audio_path: Path) -> timedelta:
+    audio = pydub.AudioSegment.from_wav(str(vocal_audio_path))
     # Max decibels to consider silence
     silence_threshold = -60
     # silence tuples are in milliseconds
@@ -101,7 +100,7 @@ def find_first_vocal_time(vocal_audio_path: str) -> timedelta:
 
 
 def set_line_end_times(
-    screens: List[LyricsScreen], instrumental_path: str
+    screens: List[LyricsScreen], instrumental_path: Path
 ) -> List[LyricsScreen]:
     """
     Infer end times of lines for screens where they are not already set.
@@ -110,7 +109,7 @@ def set_line_end_times(
     for i, line in enumerate(lines):
         if not line.end_ts:
             if i == len(lines) - 1:
-                audio = pydub.AudioSegment(instrumental_path)
+                audio = pydub.AudioSegment(str(instrumental_path))
                 duration = audio.duration_seconds
                 line.end_ts = timedelta(seconds=duration)
             next_line = lines[i + 1]
@@ -211,7 +210,7 @@ def split_song(songfile: Path, song_dir: Path) -> Tuple[str, str]:
     )
 
 
-def create_video(audio_path: str, subtitles: ass.ASS, output_dir: Path):
+def create_video(audio_path: Path, subtitles: ass.ASS, output_dir: Path):
     ass_path = str(output_dir.joinpath("subtitles.ass"))
     video_path = str(output_dir.joinpath("karoake.mp4"))
     subtitles.write(ass_path)
@@ -222,7 +221,7 @@ def create_video(audio_path: str, subtitles: ass.ASS, output_dir: Path):
         "-i",
         "color=c=black:s=1280x720:r=20",
         "-i",
-        audio_path,
+        str(audio_path),
         "-c:a",
         "libmp3lame",
         "-vf",
