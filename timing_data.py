@@ -1,14 +1,14 @@
 import atexit
 import subprocess
 from datetime import datetime, timedelta
-from enum import Enum
+from enum import IntEnum
 from pathlib import Path
 from typing import List, Optional, Tuple
 
 import click
 
 
-class LyricMarker(Enum):
+class LyricMarker(IntEnum):
     SEGMENT_START = 1
     SEGMENT_END = 2
 

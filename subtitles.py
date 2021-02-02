@@ -47,6 +47,11 @@ class LyricsLine:
 
         return f"{{\k{start_time}}}{{\kf{duration}}}{text}"
 
+    def adjust_timestamps(self, adjustment) -> "LyricsLine":
+        ts = self.ts + adjustment
+        end_ts = self.end_ts + adjustment if self.end_ts else None
+        return LyricsLine(self.text, ts, end_ts)
+
 
 @dataclass
 class LyricsScreen:
@@ -74,6 +79,11 @@ class LyricsScreen:
         for line in self.lines:
             lines.append(f"\t{line}")
         return "\n".join(lines)
+
+    def adjust_timestamps(self, adjustment: timedelta) -> "LyricsScreen":
+        new_lines = [l.adjust_timestamps(adjustment) for l in self.lines]
+        start_ts = self.start_ts + adjustment if self.start_ts else None
+        return LyricsScreen(new_lines, start_ts)
 
 
 def create_subtitles(lyric_screens, display_params: Dict) -> ass.ASS:
