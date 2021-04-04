@@ -22,17 +22,17 @@ SONG_ROOT_PATH = "songs/"
     "--songfile", type=click.Path(exists=True, dir_okay=False), help="File of song"
 )
 @click.option(
-    "--disable-autocorrect",
+    "--enable-autocorrect",
     type=click.BOOL,
     required=False,
     default=False,
-    help="Do not try to autocorrect lyric timings",
+    help="Try to autocorrect lyric timings",
 )
 @click.option("--timings", type=click.Path(exists=True, dir_okay=False), required=False)
 def run(
     lyricsfile,
     songfile,
-    disable_autocorrect: bool = False,
+    enable_autocorrect: bool = False,
     timings: str = None,
 ):
     songpath = Path(songfile)
@@ -56,7 +56,7 @@ def run(
         lyric_events = timing_data.gather_timing_data(lyrics, songpath)
     write_timings_file(song_files_dir.joinpath("timings.json"), lyric_events)
     screens = compile_lyric_timings(lyrics, lyric_events)
-    if (not disable_autocorrect) and vocal_path:
+    if (not enable_autocorrect) and vocal_path:
         screens = autocorrect_timings(screens, vocal_path)
     screens = set_line_end_times(screens, instrumental_path)
     screens = set_screen_start_times(screens)
