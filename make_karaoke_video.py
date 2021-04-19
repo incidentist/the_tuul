@@ -21,18 +21,10 @@ SONG_ROOT_PATH = "songs/"
 @click.option(
     "--songfile", type=click.Path(exists=True, dir_okay=False), help="File of song"
 )
-@click.option(
-    "--enable-autocorrect",
-    type=click.BOOL,
-    required=False,
-    default=False,
-    help="Try to autocorrect lyric timings",
-)
 @click.option("--timings", type=click.Path(exists=True, dir_okay=False), required=False)
 def run(
     lyricsfile,
     songfile,
-    enable_autocorrect: bool = False,
     timings: str = None,
 ):
     songpath = Path(songfile)
@@ -55,10 +47,8 @@ def run(
     else:
         lyric_events = timing_data.gather_timing_data(lyrics, songpath)
     write_timings_file(song_files_dir.joinpath("timings.json"), lyric_events)
-    screens = compile_lyric_timings(lyrics, lyric_events)
-    if (not enable_autocorrect) and vocal_path:
-        screens = autocorrect_timings(screens, vocal_path)
-    screens = set_line_end_times(screens, instrumental_path)
+    intial_screens = compile_lyric_timings(lyrics, lyric_events)
+    screens = set_line_end_times(intial_screens, instrumental_path)
     screens = set_screen_start_times(screens)
 
     lyric_subtitles = create_subtitles(
@@ -71,6 +61,29 @@ def run(
         },
     )
     create_video(instrumental_path, lyric_subtitles, output_dir=song_files_dir)
+
+    # Create the autocorrected video
+    click.echo("Writing autocorrected video...")
+    corrected_video_filename = "karaoke-corrected.mp4"
+    screens = autocorrect_timings(intial_screens, vocal_path)
+    screens = set_line_end_times(screens, instrumental_path)
+    screens = set_screen_start_times(screens)
+
+    lyric_subtitles = create_subtitles(
+        screens,
+        {
+            "FontName": "Arial Narrow",
+            "FontSize": 20,
+            "PrimaryColor": (255, 0, 255, 255),
+            "SecondaryColor": (0, 255, 255, 255),
+        },
+    )
+    create_video(
+        instrumental_path,
+        lyric_subtitles,
+        output_dir=song_files_dir,
+        filename=corrected_video_filename,
+    )
 
 
 def autocorrect_timings(
@@ -210,9 +223,14 @@ def split_song(songfile: Path, song_dir: Path) -> Tuple[str, str]:
     )
 
 
-def create_video(audio_path: Path, subtitles: ass.ASS, output_dir: Path):
+def create_video(
+    audio_path: Path,
+    subtitles: ass.ASS,
+    output_dir: Path,
+    filename: str = "karaoke.mp4",
+):
     ass_path = str(output_dir.joinpath("subtitles.ass"))
-    video_path = str(output_dir.joinpath("karoake.mp4"))
+    video_path = str(output_dir.joinpath(filename))
     subtitles.write(ass_path)
     ffmpeg_cmd = [
         "/usr/local/bin/ffmpeg",
