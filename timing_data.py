@@ -107,3 +107,74 @@ def get_last_line_end(start_ts):
     click.echo("Press space or enter when the last line ends")
     ts, event = get_next_marker(start_ts)
     return ts, LyricMarker.SEGMENT_END
+
+
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from socketserver import BaseRequestHandler
+import threading
+import time
+import webbrowser
+from pathlib import Path
+from typing import Callable, Tuple
+
+hostName = "localhost"
+serverPort = 8080
+
+
+def launch_timing_tool(host, port):
+    success = webbrowser.open_new_tab(f"http://{host}:{port}/index.html")
+
+
+class JsTimingCollector(BaseHTTPRequestHandler):
+    app_paths = {
+        "/": "index.html",
+        "/index.html": "index.html",
+        "/style.css": "style.css",
+        "/timings-ui.js": "timings-ui.js",
+    }
+
+    def do_GET(self):
+
+        self.send_response(200)
+        self.send_header("Content-type", "text/html")
+        self.end_headers()
+
+        if self.path == "/favicon.ico":
+            return
+
+        if self.path in self.app_paths:
+            self._send_app_file(self.app_paths.get(self.path))
+        else:
+            self._send_song_file(Path(self.path).name)
+
+    def do_POST(self):
+        threading.Thread(target=self.server.shutdown, daemon=True).start()
+
+    def _send_app_file(self, filename):
+        self.wfile.writelines(Path(f"www/{filename}").open("rb").readlines())
+
+    def _send_song_file(self, filename):
+        self.wfile.writelines(
+            self.server.song_dir.joinpath(filename).open("rb").readlines()
+        )
+
+
+class JsTimingCollectionServer(HTTPServer):
+    def __init__(self, song_dir: Path):
+        super().__init__((hostName, serverPort), JsTimingCollector)
+        self.song_dir = song_dir
+
+
+if __name__ == "__main__":
+    webServer = JsTimingCollectionServer(Path("songs/opposite_day"))
+    print("Server started http://%s:%s" % (hostName, serverPort))
+
+    try:
+
+        launch_timing_tool(webServer.server_address[0], webServer.server_address[1])
+        webServer.serve_forever()
+    except KeyboardInterrupt:
+        pass
+
+    webServer.server_close()
+    print("Server stopped.")
