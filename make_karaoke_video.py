@@ -46,7 +46,7 @@ def run(
         lyric_events = read_timings_file(timings)
     else:
         lyric_events = timing_data.gather_timing_data(lyrics, songpath)
-    write_timings_file(song_files_dir.joinpath("timings.json"), lyric_events)
+        write_timings_file(song_files_dir.joinpath("timings.json"), lyric_events)
     intial_screens = compile_lyric_timings(lyrics, lyric_events)
     screens = set_line_end_times(intial_screens, instrumental_path)
     screens = set_screen_start_times(screens)
@@ -93,15 +93,22 @@ def autocorrect_timings(
     Adjust timings by looking at the difference between the time of the first vocals in the song and the time of the first spacebar press. Adjust all song timings by that amount.
     """
     click.echo("Autocorrecting timings...")
-    first_vocal_ts: timedelta = find_first_vocal_time(vocal_audio_path)
-    click.echo(f"Found first vocal at {first_vocal_ts.total_seconds()}s")
     first_segment_start: timedelta = screens[0].lines[0].ts
+    first_vocal_ts: timedelta = find_first_vocal_time(
+        vocal_audio_path, first_segment_start
+    )
+    if first_vocal_ts is None:
+        click.echo("No vocals found. Proceeding without autocorrect...")
+        return screens
+    click.echo(f"Found first vocal at {first_vocal_ts.total_seconds()}s")
     adjustment = first_vocal_ts - first_segment_start
     click.echo(f"Adjusting timings by {adjustment.total_seconds()}s...")
     return [s.adjust_timestamps(adjustment) for s in screens]
 
 
-def find_first_vocal_time(vocal_audio_path: Path) -> timedelta:
+def find_first_vocal_time(
+    vocal_audio_path: Path, first_space_tap_time: timedelta
+) -> Optional[timedelta]:
     audio = pydub.AudioSegment.from_wav(str(vocal_audio_path))
     # Max decibels to consider silence
     silence_threshold = -60
@@ -109,7 +116,14 @@ def find_first_vocal_time(vocal_audio_path: Path) -> timedelta:
     non_silences: List[Tuple[int, int]] = pydub.silence.detect_nonsilent(
         audio, silence_thresh=silence_threshold
     )
-    return timedelta(milliseconds=non_silences[0][0])
+    closest_nonsilent_start = None
+    for nonsilent_span in non_silences:
+        span_start = timedelta(milliseconds=nonsilent_span[0])
+        if span_start > first_space_tap_time:
+            break
+        closest_nonsilent_start = span_start
+
+    return closest_nonsilent_start
 
 
 def set_line_end_times(
