@@ -5,20 +5,34 @@
     <meta charset="UTF-8">
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.3/css/bulma.min.css" />
     <style>
+        html,
+        body {
+            height: 100%;
+            overflow: hidden;
+        }
+
+        #app {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            overflow: hidden;
+        }
+
         .lyric-display {
             white-space: pre;
+            flex-shrink: 1;
+            overflow-y: scroll;
         }
 
         .completed-lyrics {
             color: gray;
-
         }
 
         .current-lyrics {
             color: magenta;
-
         }
 
         span.upcoming-lyrics {
@@ -29,11 +43,36 @@
 </head>
 
 <body>
-    <p>Loading...</p>
-    <div id="app">
-
+    <div class="box" id="app">
     </div>
-    <form method="POST"><input type="submit" value="submit" /></form>
+    <!-- App Template -->
+    <script type="text/x-template" id="app-template">
+    <audio ref="audio" controls @timeupdate="onAudioTimeUpdate"></audio>
+        <lyric-display :lyric-segments="lyricSegments" :current-segment="currentSegment" @keydown="onKeyDown">
+        </lyric-display>
+        <div class="buttons">
+            <button class="button is-primary" @click="playPause">
+                {{ isPlaying ? "Pause" : "Play" }}
+            </button>
+            <div class="control">
+                Playback speed: 
+                <label class="radio">
+                <input type="radio" @click="changeRate" name="playbackRate" value="1.5"/> 1.5</label>
+                <label class="radio">
+                <input type="radio" @click="changeRate" name="playbackRate" value="1.0"/> 1.0</label>
+            </div>
+
+        <button class="button" :loading="isSubmitting" @click="submitTimings" :disabled="!hasCompleteTimings && !isSubmitting">Submit</button>
+    </div>
+    </script>
+    <!-- Lyric display -->
+    <script type="text/x-template" id="lyric-display-template">
+        <div class="lyric-display box">
+            <span class="completed-lyrics">{{completedLyrics}}</span>
+            <span ref="currentLyrics" class="current-lyrics">{{currentLyrics}}</span>
+            <span class="upcoming-lyrics">{{upcomingLyrics}}</span>
+        </div>
+    </script>
     <script src="https://unpkg.com/vue@3.2.10/dist/vue.global.js"></script>
     <script src="/timings-ui.js"></script>
 </body>

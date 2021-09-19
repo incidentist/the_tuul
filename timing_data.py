@@ -1,19 +1,94 @@
 import atexit
-import subprocess
+import json
+import logging
+import threading
+import webbrowser
 from datetime import datetime, timedelta
 from enum import IntEnum
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from typing import List, Optional, Tuple
 
 import click
 
+logging.getLogger().setLevel(logging.DEBUG)
+
+
+class JsTimingCollector(BaseHTTPRequestHandler):
+    app_paths = {
+        "/": "index.html",
+        "/index.html": "index.html",
+        "/style.css": "style.css",
+        "/timings-ui.js": "timings-ui.js",
+    }
+
+    def do_GET(self):
+        if self.path == "/favicon.ico":
+            return
+
+        if self.path in self.app_paths:
+            self._send_app_file(self.app_paths.get(self.path))
+        else:
+            self._send_song_file(Path(self.path).name)
+        logging.info("GET done")
+
+    def do_POST(self):
+        data_string = self.rfile.read(int(self.headers["Content-Length"]))
+        logging.info(data_string)
+        self.send_response(200)
+        self.send_header("Content-type", "text/html")
+        self.end_headers()
+        self.wfile.flush()
+        timings = json.loads(data_string)
+        self.server.timings = timings
+        threading.Thread(target=self.server.shutdown, daemon=True).start()
+
+    def _send_app_file(self, filename):
+        self.send_response(200)
+        self.send_header("Content-type", "text/html")
+        self.end_headers()
+        self.wfile.writelines(Path(f"www/{filename}").open("rb").readlines())
+
+    def _send_song_file(self, filename):
+        logging.info(f"file: {filename}")
+        if filename == "song_file":
+            try:
+                self.send_response(200)
+                self.send_header("Content-type", "text/html")
+                self.end_headers()
+                self.wfile.write(self.server.song_path.read_bytes())
+            except Exception as e:
+                logging.error(e)
+                pass
+            return
+        elif filename == "lyrics.txt":
+            self.send_response(200)
+            self.send_header("Content-type", "text/plain")
+            self.end_headers()
+            self.wfile.write(self.server.lyrics.encode("utf-8"))
+        else:
+            self.send_response(404)
+            self.end_headers()
+
+
+class JsTimingCollectionServer(HTTPServer):
+
+    HOST_NAME = "localhost"
+    HOST_PORT = 8080
+
+    def __init__(self, lyrics: str, song_path: Path):
+        super().__init__((self.HOST_NAME, self.HOST_PORT), JsTimingCollector)
+        self.lyrics = lyrics
+        self.song_path = song_path
+        self.timings = None
+
+    def launch_timing_tool(self, host, port) -> bool:
+        return webbrowser.open_new_tab(f"http://{host}:{port}/index.html")
+
 
 class LyricMarker(IntEnum):
     SEGMENT_START = 1
     SEGMENT_END = 2
-
-
-ffplay_process: Optional[subprocess.Popen] = None
 
 
 class LyricSegmentIterator:
@@ -43,11 +118,30 @@ def gather_timing_data(
     Gather timestamp data for lyrics by displaying lines to the user and
     having them enter keystrokes to mark the data.
     """
-    print_preamble()
-    click.pause()
+    song_folder = Path("songs/opposite_day")
+    web_server = JsTimingCollectionServer(lyrics=lyrics, song_path=song_path)
+    print(
+        "Server started http://{}:{}".format(
+            JsTimingCollectionServer.HOST_NAME, JsTimingCollectionServer.HOST_PORT
+        )
+    )
 
-    atexit.register(stop_track)
-    play_track(song_path)
+    try:
+        web_server.launch_timing_tool(
+            web_server.server_address[0], web_server.server_address[1]
+        )
+        web_server.serve_forever()
+    except KeyboardInterrupt:
+        pass
+
+    web_server.server_close()
+    print("Server stopped.")
+    if web_server.timings is not None:
+        return [(timedelta(seconds=t[0]), t[1]) for t in web_server.timings]
+    else:
+        raise ValueError(
+            "It looks like timings collection didn't work. Please try again."
+        )
 
     start_ts = datetime.now()
     lyric_chunks = LyricSegmentIterator(lyrics)
@@ -62,31 +156,7 @@ def gather_timing_data(
             timing_data.append((ts, marker))
     timing_data.append(get_last_line_end(start_ts))
 
-    stop_track()
     return timing_data
-
-
-def print_preamble():
-    click.echo("This is the Karaoke Song Maker Thing!")
-    click.echo("The song will play, and lyrics will be shown line by line.")
-    click.echo("Press spacebar to mark the start of the displayed line.")
-    click.echo("Press Enter to mark the *end* of the *previous* line.")
-
-
-def play_track(song_path: Path, start_ts: str = "00:00"):
-    """ Play the song starting at start_ts seconds """
-    global ffplay_process
-    if ffplay_process is not None:
-        ffplay_process.kill()
-    cmd = ["ffplay", "-nodisp", "-autoexit", "-ss", start_ts, str(song_path.resolve())]
-    ffplay_process = subprocess.Popen(
-        cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-    )
-
-
-def stop_track():
-    global ffplay_process
-    ffplay_process.kill()
 
 
 def get_next_marker(start_ts: datetime) -> Tuple[timedelta, LyricMarker]:
@@ -109,65 +179,11 @@ def get_last_line_end(start_ts):
     return ts, LyricMarker.SEGMENT_END
 
 
-from http.server import BaseHTTPRequestHandler, HTTPServer
-from socketserver import BaseRequestHandler
-import threading
-import time
-import webbrowser
-from pathlib import Path
-from typing import Callable, Tuple
-
-hostName = "localhost"
-serverPort = 8080
-
-
-def launch_timing_tool(host, port):
-    success = webbrowser.open_new_tab(f"http://{host}:{port}/index.html")
-
-
-class JsTimingCollector(BaseHTTPRequestHandler):
-    app_paths = {
-        "/": "index.html",
-        "/index.html": "index.html",
-        "/style.css": "style.css",
-        "/timings-ui.js": "timings-ui.js",
-    }
-
-    def do_GET(self):
-
-        self.send_response(200)
-        self.send_header("Content-type", "text/html")
-        self.end_headers()
-
-        if self.path == "/favicon.ico":
-            return
-
-        if self.path in self.app_paths:
-            self._send_app_file(self.app_paths.get(self.path))
-        else:
-            self._send_song_file(Path(self.path).name)
-
-    def do_POST(self):
-        threading.Thread(target=self.server.shutdown, daemon=True).start()
-
-    def _send_app_file(self, filename):
-        self.wfile.writelines(Path(f"www/{filename}").open("rb").readlines())
-
-    def _send_song_file(self, filename):
-        self.wfile.writelines(
-            self.server.song_dir.joinpath(filename).open("rb").readlines()
-        )
-
-
-class JsTimingCollectionServer(HTTPServer):
-    def __init__(self, song_dir: Path):
-        super().__init__((hostName, serverPort), JsTimingCollector)
-        self.song_dir = song_dir
-
-
 if __name__ == "__main__":
-    webServer = JsTimingCollectionServer(Path("songs/opposite_day"))
-    print("Server started http://%s:%s" % (hostName, serverPort))
+    song_folder = Path("songs/opposite_day")
+    webServer = JsTimingCollectionServer(
+        Path("songs/opposite_day"), song_file=song_folder.joinpath("opposite_day.mp3")
+    )
 
     try:
 
