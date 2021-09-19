@@ -1,6 +1,7 @@
 import itertools
 import json
 from datetime import datetime, timedelta
+import logging
 from pathlib import Path
 from typing import List, Optional, Tuple, Union, Dict, Any
 
@@ -136,11 +137,12 @@ def set_line_end_times(
     for i, line in enumerate(lines):
         if not line.end_ts:
             if i == len(lines) - 1:
-                audio = pydub.AudioSegment(str(instrumental_path))
+                audio = pydub.AudioSegment.from_wav(str(instrumental_path))
                 duration = audio.duration_seconds
                 line.end_ts = timedelta(seconds=duration)
-            next_line = lines[i + 1]
-            line.end_ts = next_line.ts
+            else:
+                next_line = lines[i + 1]
+                line.end_ts = next_line.ts
     return screens
 
 
