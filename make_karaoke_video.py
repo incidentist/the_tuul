@@ -12,7 +12,7 @@ from moviepy.tools import subprocess_call
 import ass
 
 import timing_data
-from subtitles import LyricsLine, LyricsScreen, create_subtitles
+from subtitles import LyricSegment, LyricsLine, LyricsScreen, create_subtitles
 
 SONG_ROOT_PATH = "songs/"
 
@@ -49,7 +49,7 @@ def run(
         lyric_events = timing_data.gather_timing_data(lyrics, songpath)
         write_timings_file(song_files_dir.joinpath("timings.json"), lyric_events)
     intial_screens = compile_lyric_timings(lyrics, lyric_events)
-    screens = set_line_end_times(intial_screens, instrumental_path)
+    screens = set_segment_end_times(intial_screens, instrumental_path)
     screens = set_screen_start_times(screens)
 
     lyric_subtitles = create_subtitles(
@@ -67,7 +67,7 @@ def run(
     click.echo("Writing autocorrected video...")
     corrected_video_filename = "karaoke-corrected.mp4"
     screens = autocorrect_timings(intial_screens, vocal_path)
-    screens = set_line_end_times(screens, instrumental_path)
+    screens = set_segment_end_times(screens, instrumental_path)
     screens = set_screen_start_times(screens)
 
     lyric_subtitles = create_subtitles(
@@ -127,22 +127,24 @@ def find_first_vocal_time(
     return closest_nonsilent_start
 
 
-def set_line_end_times(
+def set_segment_end_times(
     screens: List[LyricsScreen], instrumental_path: Path
 ) -> List[LyricsScreen]:
     """
     Infer end times of lines for screens where they are not already set.
     """
-    lines = list(itertools.chain.from_iterable([s.lines for s in screens]))
-    for i, line in enumerate(lines):
-        if not line.end_ts:
-            if i == len(lines) - 1:
+    segments = list(
+        itertools.chain.from_iterable([l.segments for s in screens for l in s.lines])
+    )
+    for i, segment in enumerate(segments):
+        if not segment.end_ts:
+            if i == len(segments) - 1:
                 audio = pydub.AudioSegment.from_wav(str(instrumental_path))
                 duration = audio.duration_seconds
-                line.end_ts = timedelta(seconds=duration)
+                segment.end_ts = timedelta(seconds=duration)
             else:
-                next_line = lines[i + 1]
-                line.end_ts = next_line.ts
+                next_segment = segments[i + 1]
+                segment.end_ts = next_segment.ts
     return screens
 
 
@@ -198,23 +200,26 @@ def compile_lyric_timings(
     segments = iter(timing_data.LyricSegmentIterator(lyrics_txt=lyrics))
     events = iter(events)
     screens: List[LyricsScreen] = []
-    prev_line_obj: Optional[LyricsLine] = None
+    prev_segment: Optional[LyricSegment] = None
+    line: LyricsLine = LyricsLine()
     screen: LyricsScreen = LyricsScreen()
 
     for event in events:
         ts = event[0]
         marker = event[1]
         if marker == timing_data.LyricMarker.SEGMENT_START:
-            line = next(segments)
-            if line == "":
+            segment_text: str = next(segments)
+            segment = LyricSegment(segment_text, ts)
+            line.segments.append(segment)
+            if segment_text.endswith("\n"):
+                screen.lines.append(line)
+                line = LyricsLine()
+            if segment_text.endswith("\n\n"):
                 screens, screen = advance_screen(screens, screen)
-                line = next(segments)
-            line_obj = LyricsLine(line, ts)
-            screen.lines.append(line_obj)
-            prev_line_obj = line_obj
+            prev_segment = segment
         elif marker == timing_data.LyricMarker.SEGMENT_END:
-            if prev_line_obj is not None:
-                prev_line_obj.end_ts = ts
+            if prev_segment is not None:
+                prev_segment.end_ts = ts
     screens, _ = advance_screen(screens, screen)
 
     return screens

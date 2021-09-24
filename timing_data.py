@@ -93,7 +93,7 @@ class LyricMarker(IntEnum):
 
 class LyricSegmentIterator:
     def __init__(self, lyrics_txt: str):
-        self._segments = lyrics_txt.split("\n")
+        self._segments = self.parse_segments(lyrics_txt)
         self._current_segment = None
 
     def __iter__(self):
@@ -110,6 +110,27 @@ class LyricSegmentIterator:
     def __len__(self):
         return len(self._segments)
 
+    def parse_segments(self, lyrics: str) -> List[str]:
+        segments: List[str] = []
+        current_segment = ""
+        for char in lyrics:
+            finish_segment = False
+            if char in ["\n", "/", "_"]:
+                finish_segment = True
+                if char == "/":
+                    char = ""
+                elif char == "_":
+                    char = " "
+            if char == "\n" and current_segment == "":
+                segments[-1] += char
+                continue
+            current_segment += char
+            if finish_segment:
+                segments.append(current_segment)
+                current_segment = ""
+
+        return segments
+
 
 def gather_timing_data(
     lyrics: str, song_path: Path
@@ -118,7 +139,6 @@ def gather_timing_data(
     Gather timestamp data for lyrics by displaying lines to the user and
     having them enter keystrokes to mark the data.
     """
-    song_folder = Path("songs/opposite_day")
     web_server = JsTimingCollectionServer(lyrics=lyrics, song_path=song_path)
     print(
         "Server started http://{}:{}".format(
@@ -143,21 +163,6 @@ def gather_timing_data(
             "It looks like timings collection didn't work. Please try again."
         )
 
-    start_ts = datetime.now()
-    lyric_chunks = LyricSegmentIterator(lyrics)
-    timing_data = []
-    for chunk in lyric_chunks:
-        marker = None
-        click.echo(chunk)
-        if chunk == "":
-            continue
-        while marker != LyricMarker.SEGMENT_START:
-            ts, marker = get_next_marker(start_ts)
-            timing_data.append((ts, marker))
-    timing_data.append(get_last_line_end(start_ts))
-
-    return timing_data
-
 
 def get_next_marker(start_ts: datetime) -> Tuple[timedelta, LyricMarker]:
     """ Prompt the user for the next LyricMarker and timestamp """
@@ -177,20 +182,3 @@ def get_last_line_end(start_ts):
     click.echo("Press space or enter when the last line ends")
     ts, event = get_next_marker(start_ts)
     return ts, LyricMarker.SEGMENT_END
-
-
-if __name__ == "__main__":
-    song_folder = Path("songs/opposite_day")
-    webServer = JsTimingCollectionServer(
-        Path("songs/opposite_day"), song_file=song_folder.joinpath("opposite_day.mp3")
-    )
-
-    try:
-
-        launch_timing_tool(webServer.server_address[0], webServer.server_address[1])
-        webServer.serve_forever()
-    except KeyboardInterrupt:
-        pass
-
-    webServer.server_close()
-    print("Server stopped.")

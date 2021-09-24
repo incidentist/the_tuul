@@ -6,7 +6,7 @@ A script for making karaoke videos. Normally it takes a long time to make a dece
 Requires python 3 and ffmpeg. Install with `pip install -r requirements.txt`.
 
 ## Step 1
-Create a txt file with lyrics. Line breaks separate lines, two line breaks separate screens.
+Create a txt file with lyrics. Line breaks separate lines, two line breaks separate screens. If you want to time specific words, put an underscore between them instead of a space. If you want to time specific syllables, put a slash between the syl/lab/bles.
 
 ## Step 2
 

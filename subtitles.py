@@ -16,10 +16,44 @@ LINE_HEIGHT = 30
 
 
 @dataclass
-class LyricsLine:
+class LyricSegment:
     text: str
     ts: timedelta
     end_ts: Optional[timedelta] = None
+
+    def adjust_timestamps(self, adjustment) -> "LyricSegment":
+        ts = self.ts + adjustment
+        end_ts = self.end_ts + adjustment if self.end_ts else None
+        return LyricSegment(self.text, ts, end_ts)
+
+    def to_ass(self) -> str:
+        """Render this segment as part of an ASS event line"""
+        duration = (self.end_ts - self.ts).total_seconds() * 100
+        return f"{{\kf{duration}}}{self.text}"
+
+
+@dataclass
+class LyricsLine:
+    segments: List[LyricSegment] = field(default_factory=list)
+
+    @property
+    def ts(self) -> Optional[timedelta]:
+        return self.segments[0].ts if len(self.segments) else None
+
+    @property
+    def end_ts(self) -> Optional[timedelta]:
+        return self.segments[-1].end_ts
+
+    @ts.setter
+    def ts(self, value):
+        self.segments[0].ts = value
+
+    @end_ts.setter
+    def end_ts(self, value):
+        self.segments[-1].end_ts = value
+
+    def __str__(self):
+        return "".join([f"{{{s.text}}}" for s in self.segments])
 
     def as_ass_event(
         self,
@@ -35,22 +69,21 @@ class LyricsLine:
         e.Start = screen_start.total_seconds()
         e.End = screen_end.total_seconds()
         e.MarginV = top_margin
-        e.Text = self.decorate_ass_line(self.text, screen_start)
+        e.Text = self.decorate_ass_line(self.segments, screen_start)
         return e
 
-    def decorate_ass_line(self, text, screen_start_ts: timedelta):
+    def decorate_ass_line(self, segments, screen_start_ts: timedelta):
         """Decorate line with karaoke tags"""
         # Prefix the tag with centisecs prior to line in screen
-
         start_time = (self.ts - screen_start_ts).total_seconds() * 100
-        duration = (self.end_ts - self.ts).total_seconds() * 100
+        ass_segments = "".join([s.to_ass() for s in self.segments])
 
-        return f"{{\k{start_time}}}{{\kf{duration}}}{text}"
+        return f"{{\k{start_time}}}{ass_segments}"
 
     def adjust_timestamps(self, adjustment) -> "LyricsLine":
-        ts = self.ts + adjustment
-        end_ts = self.end_ts + adjustment if self.end_ts else None
-        return LyricsLine(self.text, ts, end_ts)
+        new_segments = [s.adjust_timestamps(adjustment) for s in self.segments]
+        start_ts = self.ts + adjustment if self.ts else None
+        return LyricsLine(new_segments)
 
 
 @dataclass
@@ -86,7 +119,9 @@ class LyricsScreen:
         return LyricsScreen(new_lines, start_ts)
 
 
-def create_subtitles(lyric_screens, display_params: Dict) -> ass.ASS:
+def create_subtitles(
+    lyric_screens: List[LyricsScreen], display_params: Dict
+) -> ass.ASS:
     a = ass.ASS()
     a.styles_format = [
         "Name",
