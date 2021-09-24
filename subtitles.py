@@ -2,8 +2,6 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from typing import Dict, List, Optional
 
-from moviepy.tools import cvsecs as convert_to_seconds, subprocess_call
-
 import ass
 
 
