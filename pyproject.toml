@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "the_tuul"
+version = "0.1.0"
+description = "Create a good-enough karaoke track for any song in about 10 minutes"
+authors = ["Dan Kurtz  <andfurthermore@gmail.com>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = ">=3.9,<3.10"
+spleeter = "^2.3.0"
+pydub = "^0.25.1"
+
+[tool.poetry.dev-dependencies]
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
