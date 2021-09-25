@@ -60,6 +60,8 @@
                 <input type="radio" @click="changeRate" name="playbackRate" value="1.5"/> 1.5</label>
                 <label class="radio">
                 <input type="radio" @click="changeRate" name="playbackRate" value="1.0"/> 1.0</label>
+                <input type="radio" @click="changeRate" name="playbackRate" value="0.9"/> 0.9</label>
+                <input type="radio" @click="changeRate" name="playbackRate" value="0.75"/> 0.75</label>
             </div>
 
         <button class="button" :loading="isSubmitting" @click="submitTimings" :disabled="!hasCompleteTimings && !isSubmitting">Submit</button>
