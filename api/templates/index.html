@@ -1,3 +1,5 @@
+{% load static %}
+{% verbatim %}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -47,7 +49,14 @@
     </div>
     <!-- App Template -->
     <script type="text/x-template" id="app-template">
-    <audio ref="audio" controls @timeupdate="onAudioTimeUpdate"></audio>
+    <audio ref="audio" @timeupdate="onAudioTimeUpdate"></audio>
+    <fieldset class="fieldset">
+        <div class="field">
+            <label for="songFile">Song file:</label>
+            <input type="file" id="songFile" />
+        </div>
+        <textarea id="lyrics-input" class="textarea"></textarea>
+    </fieldset>
         <lyric-display :lyric-segments="lyricSegments" :current-segment="currentSegment" @keydown="onKeyDown">
         </lyric-display>
         <div class="buttons">
@@ -76,7 +85,8 @@
         </div>
     </script>
     <script src="https://unpkg.com/vue@3.2.10/dist/vue.global.js"></script>
-    <script src="/timings-ui.js"></script>
+    {% endverbatim %}
+    <script src="{% static "timings-ui.js" %}"></script>
 </body>
 
 </html>
