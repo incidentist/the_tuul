@@ -71,8 +71,9 @@ const App = {
     },
     data() {
         return {
-            lyricText: "",
-            songFile: null,
+            lyricText: null,
+            lyricSegments: [],
+            songBlob: null,
             currentSegment: 0,
             isPlaying: false,
             isSubmitting: false,
@@ -83,6 +84,7 @@ const App = {
     mounted() {
         window.addEventListener('keydown', this.onKeyDown);
         this.loadSong();
+        this.loadLyrics();
     },
     computed: {
         songUrl() {
@@ -90,9 +92,6 @@ const App = {
         },
         hasCompleteTimings() {
             return this.currentSegment >= this.lyricSegments.length;
-        },
-        lyricSegments() {
-            return this.parseLyricSegments(this.lyricText)
         }
     },
     watch: {
@@ -102,28 +101,18 @@ const App = {
             } else {
                 this.$refs.audio.pause();
             }
-        },
-        async songFile(newVal) {
-            if (newVal) {
-                this.$refs.audio.src = URL.createObjectURL(newVal);
-            }
         }
     },
     methods: {
-        // async loadLyrics() {
-        //     const response = await fetch('/lyrics.txt');
-        //     console.log(response);
-        //     this.lyricSegments = this.parseLyricSegments(await response.text());
-        // },
-        async onSongFileChange(e) {
-            if (this.$refs.songFileInput.files.length == 1) {
-                this.songFile = this.$refs.songFileInput.files[0];
-            }
+        async loadLyrics() {
+            const response = await fetch('/lyrics.txt');
+            console.log(response);
+            this.lyricSegments = this.parseLyricSegments(await response.text());
         },
         async loadSong() {
-            // const response = await fetch(this.songUrl, {});
-            // this.songStream = await response.blob();
-            // this.$refs.audio.src = URL.createObjectURL(this.songStream);
+            const response = await fetch(this.songUrl, {});
+            this.songStream = await response.blob();
+            this.$refs.audio.src = URL.createObjectURL(this.songStream);
         },
         // Parse marked up lyrics into segments.
         // Line breaks separate segments.
@@ -186,33 +175,15 @@ const App = {
             const newRate = parseFloat(e.target.value);
             this.$refs.audio.playbackRate = newRate;
         },
-        async submitTimings() {
+        submitTimings() {
             this.isSubmitting = true;
-            const formData = new FormData();
-            formData.append("lyrics", this.lyricText);
-            formData.append("timings", this.timings.toJson());
-            formData.append("songFile", this.songFile);
-
-
-            const response = await fetch("/generate_video", {
-                method: "POST",
-                body: formData
-            });
-            await this.saveZipFile(response);
-
-        },
-        async saveZipFile(response) {
-            const filename = `${this.songFile.name}.zip`;
-            const blob = await response.blob()
-            const reader = new FileReader();
-            reader.onload = e => {
-                const anchor = document.createElement('a');
-                anchor.style.display = 'none';
-                anchor.href = URL.createObjectURL(blob);
-                anchor.download = filename;
-                anchor.click();
-            };
-            reader.readAsDataURL(blob);
+            const data =
+                fetch("/timings.json", {
+                    method: "POST",
+                    body: new Blob([this.timings.toJson()], {
+                        type: 'application/json'
+                    })
+                });
         }
     },
     template: "#app-template"

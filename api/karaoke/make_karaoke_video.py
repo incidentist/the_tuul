@@ -9,46 +9,36 @@ import click
 import pydub
 
 from moviepy.tools import subprocess_call
-import ass
+from . import ass, timing_data
 
-import timing_data
-from subtitles import LyricSegment, LyricsLine, LyricsScreen, create_subtitles
+from .subtitles import LyricSegment, LyricsLine, LyricsScreen, create_subtitles
 
 SONG_ROOT_PATH = "songs/"
 
 
-@click.command()
-@click.option("--lyricsfile", type=click.File("r"), help="File containing lyrics text")
-@click.option(
-    "--songfile", type=click.Path(exists=True, dir_okay=False), help="File of song"
-)
-@click.option("--timings", type=click.Path(exists=True, dir_okay=False), required=False)
 def run(
-    lyricsfile,
-    songfile,
-    timings: str = None,
+    lyricsfile: Path,
+    songfile: Path,
+    timingsfile: Path = None,
 ):
-    songpath = Path(songfile)
-    song_name = songpath.stem
-    song_files_dir = Path(SONG_ROOT_PATH).joinpath(song_name).resolve()
-    song_files_dir.mkdir(parents=True, exist_ok=True)
+    song_files_dir = songfile.parent
     instrumental_path = song_files_dir.joinpath("accompaniment.wav")
     vocal_path = song_files_dir.joinpath("vocals.wav")
+
+    lyrics = lyricsfile.read_text()
+    if timingsfile is not None:
+        lyric_events = read_timings_file(timingsfile)
+    else:
+        lyric_events = timing_data.gather_timing_data(lyrics, songfile)
+        write_timings_file(song_files_dir.joinpath("timings.json"), lyric_events)
+    intial_screens = compile_lyric_timings(lyrics, lyric_events)
 
     if instrumental_path.exists() and vocal_path.exists():
         click.echo(f"Using existing instrumental track at {instrumental_path}")
     else:
         click.echo("Splitting song into instrumental and vocal tracks..")
-        split_song(songpath, song_files_dir)
+        split_song(songfile, song_files_dir)
         click.echo(f"Wrote instrumental track to {instrumental_path}")
-
-    lyrics = lyricsfile.read()
-    if timings is not None:
-        lyric_events = read_timings_file(timings)
-    else:
-        lyric_events = timing_data.gather_timing_data(lyrics, songpath)
-        write_timings_file(song_files_dir.joinpath("timings.json"), lyric_events)
-    intial_screens = compile_lyric_timings(lyrics, lyric_events)
     screens = set_segment_end_times(intial_screens, instrumental_path)
     screens = set_screen_start_times(screens)
 
@@ -79,7 +69,7 @@ def run(
             "SecondaryColor": (0, 255, 255, 255),
         },
     )
-    create_video(
+    return create_video(
         instrumental_path,
         lyric_subtitles,
         output_dir=song_files_dir,
@@ -184,9 +174,9 @@ def parse_timing_float(t: str) -> timedelta:
 
 
 def read_timings_file(
-    timings_path: str,
+    timings_path: Path,
 ) -> List[Tuple[timedelta, timing_data.LyricMarker]]:
-    with open(timings_path, "r") as f:
+    with timings_path.open("r") as f:
         return json.load(f, parse_float=parse_timing_float)
 
 
@@ -204,24 +194,28 @@ def compile_lyric_timings(
     line: LyricsLine = LyricsLine()
     screen: LyricsScreen = LyricsScreen()
 
-    for event in events:
-        ts = event[0]
-        marker = event[1]
-        if marker == timing_data.LyricMarker.SEGMENT_START:
-            segment_text: str = next(segments)
-            segment = LyricSegment(segment_text, ts)
-            line.segments.append(segment)
-            if segment_text.endswith("\n"):
-                screen.lines.append(line)
-                line = LyricsLine()
-            if segment_text.endswith("\n\n"):
-                screens, screen = advance_screen(screens, screen)
-            prev_segment = segment
-        elif marker == timing_data.LyricMarker.SEGMENT_END:
-            if prev_segment is not None:
-                prev_segment.end_ts = ts
-    screens, _ = advance_screen(screens, screen)
-
+    try:
+        for event in events:
+            ts = event[0]
+            marker = event[1]
+            if marker == timing_data.LyricMarker.SEGMENT_START:
+                segment_text: str = next(segments)
+                segment = LyricSegment(segment_text, ts)
+                line.segments.append(segment)
+                if segment_text.endswith("\n"):
+                    screen.lines.append(line)
+                    line = LyricsLine()
+                if segment_text.endswith("\n\n"):
+                    screens, screen = advance_screen(screens, screen)
+                prev_segment = segment
+            elif marker == timing_data.LyricMarker.SEGMENT_END:
+                if prev_segment is not None:
+                    prev_segment.end_ts = ts
+        screens, _ = advance_screen(screens, screen)
+    except StopIteration as si:
+        logging.error(
+            f"Reached end of segments before end of events. Events: {list(events)}, lyrics: {list(segments)}"
+        )
     return screens
 
 
@@ -270,6 +264,7 @@ def create_video(
         video_path,
     ]
     subprocess_call(ffmpeg_cmd)
+    return True
 
 
 if __name__ == "__main__":
