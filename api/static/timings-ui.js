@@ -198,6 +198,7 @@ const App = {
                 method: "POST",
                 body: formData
             });
+            this.isSubmitting = false;
             await this.saveZipFile(response);
 
         },
@@ -219,5 +220,11 @@ const App = {
 };
 
 window.addEventListener('load', function () {
-    Vue.createApp(App).mount("#app");
+    var main = new Vue({
+        el: '#app',
+        components: {
+            App
+        },
+        template: '<App/>'
+    });
 });

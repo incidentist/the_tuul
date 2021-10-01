@@ -8,7 +8,8 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="data:,">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.3/css/bulma.min.css" />
+    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.2.0/css/all.css">
+    <link rel="stylesheet" href="https://unpkg.com/buefy/dist/buefy.min.css">
     <style>
         html,
         body {
@@ -16,7 +17,7 @@
             overflow: hidden;
         }
 
-        #app {
+        #app, .wrapper {
             display: flex;
             flex-direction: column;
             height: 100%;
@@ -45,7 +46,7 @@
 </head>
 
 <body>
-<div class="columns">
+<div class="columns" style="height: 100%;">
 <div class="column">
     <div class="box" id="app">
     </div>
@@ -62,6 +63,7 @@
     </div>
     <!-- App Template -->
     <script type="text/x-template" id="app-template">
+    <div class="wrapper">
     <audio ref="audio" @timeupdate="onAudioTimeUpdate"></audio>
     <fieldset class="fieldset">
     <div class="file has-name">
@@ -107,6 +109,7 @@
 
         <button class="button" :loading="isSubmitting" @click="submitTimings" :disabled="!hasCompleteTimings && !isSubmitting">Submit</button>
     </div>
+    </div>
     </script>
     <!-- Lyric display -->
     <script type="text/x-template" id="lyric-display-template">
@@ -116,7 +119,8 @@
             <span class="upcoming-lyrics">{{upcomingLyrics}}</span>
         </div>
     </script>
-    <script src="https://unpkg.com/vue@3.2.10/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
+    <script src="https://unpkg.com/buefy/dist/buefy.min.js"></script>
     {% endverbatim %}
     <script src="{% static "timings-ui.js" %}"></script>
 </body>
