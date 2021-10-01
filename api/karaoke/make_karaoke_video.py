@@ -153,7 +153,7 @@ def set_screen_start_times(screens: List[LyricsScreen]) -> List[LyricsScreen]:
 
 
 class TimingsEncoder(json.JSONEncoder):
-    """Adds ability to encode timedeltas to JSON """
+    """Adds ability to encode timedeltas to JSON"""
 
     def default(self, obj):
         if isinstance(obj, timedelta):
@@ -220,13 +220,13 @@ def compile_lyric_timings(
 
 
 def advance_screen(screens, screen):
-    """ Add screen to screens and return a new screen object """
+    """Add screen to screens and return a new screen object"""
     screens.append(screen)
     return screens, LyricsScreen()
 
 
 def split_song(songfile: Path, song_dir: Path) -> Tuple[str, str]:
-    """ Run spleeter to split song into instrumental and vocal tracks """
+    """Run spleeter to split song into instrumental and vocal tracks"""
     from spleeter.separator import Separator
 
     separator = Separator("spleeter:2stems")
@@ -248,7 +248,7 @@ def create_video(
     video_path = str(output_dir.joinpath(filename))
     subtitles.write(ass_path)
     ffmpeg_cmd = [
-        "/usr/local/bin/ffmpeg",
+        "ffmpeg",
         "-f",
         "lavfi",
         "-i",
