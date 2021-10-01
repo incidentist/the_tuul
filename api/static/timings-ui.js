@@ -1,3 +1,7 @@
+Vue.use(Buefy, {
+    defaultIconPack: 'fas'
+});
+
 class TimingsList {
     constructor() {
         this._timings = [];
@@ -77,12 +81,12 @@ const App = {
             isPlaying: false,
             isSubmitting: false,
             currentPlaybackTime: 0.0,
+            playbackRate: 1.0,
             timings: new TimingsList()
         }
     },
     mounted() {
         window.addEventListener('keydown', this.onKeyDown);
-        this.loadSong();
     },
     computed: {
         songUrl() {
@@ -107,24 +111,12 @@ const App = {
             if (newVal) {
                 this.$refs.audio.src = URL.createObjectURL(newVal);
             }
+        },
+        playbackRate(newRate) {
+            this.$refs.audio.playbackRate = parseFloat(newRate);
         }
     },
     methods: {
-        // async loadLyrics() {
-        //     const response = await fetch('/lyrics.txt');
-        //     console.log(response);
-        //     this.lyricSegments = this.parseLyricSegments(await response.text());
-        // },
-        async onSongFileChange(e) {
-            if (this.$refs.songFileInput.files.length == 1) {
-                this.songFile = this.$refs.songFileInput.files[0];
-            }
-        },
-        async loadSong() {
-            // const response = await fetch(this.songUrl, {});
-            // this.songStream = await response.blob();
-            // this.$refs.audio.src = URL.createObjectURL(this.songStream);
-        },
         // Parse marked up lyrics into segments.
         // Line breaks separate segments.
         // Double line breaks separate screens.
@@ -154,9 +146,6 @@ const App = {
             return segments;
         },
         advanceToNextSegment(keyCode) {
-            // if (this.currentSegment == this.lyricSegments.length) {
-            //     this.timings.add(this.currentSegment, 40, )
-            // }
             if (this.currentSegment >= this.lyricSegments.length) {
                 // we're done
                 return;

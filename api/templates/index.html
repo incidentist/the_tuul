@@ -66,48 +66,46 @@
     <div class="wrapper">
     <audio ref="audio" @timeupdate="onAudioTimeUpdate"></audio>
     <fieldset class="fieldset">
-    <div class="file has-name">
-  <label class="file-label">
-    <input class="file-input" ref="songFileInput" type="file" @change="onSongFileChange" name="resume">
-    <span class="file-cta">
-      <span class="file-icon">
-        <i class="fas fa-upload"></i>
-      </span>
-      <span class="file-label">
-        Choose a song file
-      </span>
-    </span>
-    <span ref="songFileName" class="file-name">
-      {{ songFile ? songFile.name : "" }}
-    </span>
-  </label>
-</div>
-<div class="field">
-<label class="label">Lyrics</label>
-<div class="control">
-        <textarea v-model="lyricText" id="lyrics-input" class="textarea"></textarea>
-        </div>
-        </div>
+
+    <b-field class="file is-primary" :class="{'has-name': !!songFile}">
+        <b-upload v-model="songFile" class="file-label">
+            <span class="file-cta">
+                <b-icon class="file-icon" icon="audiotrack"></b-icon>
+                <span class="file-label">Click to upload</span>
+            </span>
+            <span class="file-name" v-if="songFile">
+                {{ songFile.name }}
+            </span>
+        </b-upload>
+    </b-field>
+    <b-field label="Lyrics:">
+        <b-input type="textarea" v-model="lyricText"></b-input>
+    </b-field>
+
     </fieldset>
         <lyric-display :lyric-segments="lyricSegments" :current-segment="currentSegment" @keydown="onKeyDown">
         </lyric-display>
         <div class="buttons">
-            <button class="button is-primary" @click="playPause">
+            <b-button type="is-primary" @click="playPause">
                 {{ isPlaying ? "Pause" : "Play" }}
-            </button>
-            <div class="control">
-                Playback speed: 
-                <label class="radio">
-                <input type="radio" @click="changeRate" name="playbackRate" value="1.5"/> 1.5</label>
-                <label class="radio">
-                <input type="radio" checked @click="changeRate" name="playbackRate" value="1.0"/> 1.0</label>
-                <label class="radio">
-                <input type="radio" @click="changeRate" name="playbackRate" value="0.9"/> 0.9</label>
-                <label class="radio">
-                <input type="radio" @click="changeRate" name="playbackRate" value="0.75"/> 0.75</label>
+            </b-button>
+            <div class="block">
+                <label>Playback speed:</label> 
+                <b-radio v-model="playbackRate" :native-value="1.5">
+                    1.5
+                </b-radio>
+                <b-radio v-model="playbackRate" :native-value="1.0">
+                    1.0
+                </b-radio>
+                <b-radio v-model="playbackRate" :native-value="0.9">
+                    0.9
+                </b-radio>
+                <b-radio v-model="playbackRate" :native-value="0.7">
+                    0.7
+                </b-radio>
             </div>
 
-        <button class="button" :loading="isSubmitting" @click="submitTimings" :disabled="!hasCompleteTimings && !isSubmitting">Submit</button>
+        <b-button  :loading="isSubmitting" @click="submitTimings" :disabled="!hasCompleteTimings && !isSubmitting">Submit</b-button>
     </div>
     </div>
     </script>
