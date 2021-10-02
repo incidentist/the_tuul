@@ -191,8 +191,8 @@ def compile_lyric_timings(
     events = iter(events)
     screens: List[LyricsScreen] = []
     prev_segment: Optional[LyricSegment] = None
-    line: LyricsLine = LyricsLine()
-    screen: LyricsScreen = LyricsScreen()
+    line: Optional[LyricsLine] = None
+    screen: Optional[LyricsScreen] = None
 
     try:
         for event in events:
@@ -201,17 +201,24 @@ def compile_lyric_timings(
             if marker == timing_data.LyricMarker.SEGMENT_START:
                 segment_text: str = next(segments)
                 segment = LyricSegment(segment_text, ts)
+                if screen is None:
+                    screen = LyricsScreen()
+                if line is None:
+                    line = LyricsLine()
                 line.segments.append(segment)
                 if segment_text.endswith("\n"):
                     screen.lines.append(line)
-                    line = LyricsLine()
+                    line = None
                 if segment_text.endswith("\n\n"):
-                    screens, screen = advance_screen(screens, screen)
+                    screens.append(screen)
+                    screen = None
                 prev_segment = segment
             elif marker == timing_data.LyricMarker.SEGMENT_END:
                 if prev_segment is not None:
                     prev_segment.end_ts = ts
-        screens, _ = advance_screen(screens, screen)
+        if line is not None:
+            screen.lines.append(line)  # type: ignore[union-attr]
+            screens.append(screen)  # type: ignore[arg-type]
     except StopIteration as si:
         logging.error(
             f"Reached end of segments before end of events. Events: {list(events)}, lyrics: {list(segments)}"

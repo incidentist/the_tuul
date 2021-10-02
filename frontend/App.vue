@@ -142,7 +142,7 @@ export default {
       for (var i = 0; i < lyricsText.length; i++) {
         var finishSegment = false;
         const char = lyricsText[i];
-        if (["\n", "/", "_"].includes(char)) {
+        if (["\n", "/", "_"].includes(char) || i == lyricsText.length - 1) {
           finishSegment = true;
         }
         if (char == "\n" && currentSegment == "") {

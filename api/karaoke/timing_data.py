@@ -113,9 +113,9 @@ class LyricSegmentIterator:
     def parse_segments(self, lyrics: str) -> List[str]:
         segments: List[str] = []
         current_segment = ""
-        for char in lyrics:
+        for i, char in enumerate(lyrics):
             finish_segment = False
-            if char in ["\n", "/", "_"]:
+            if char in ["\n", "/", "_"] or i == len(lyrics) - 1:
                 finish_segment = True
                 if char == "/":
                     char = ""
@@ -165,7 +165,7 @@ def gather_timing_data(
 
 
 def get_next_marker(start_ts: datetime) -> Tuple[timedelta, LyricMarker]:
-    """ Prompt the user for the next LyricMarker and timestamp """
+    """Prompt the user for the next LyricMarker and timestamp"""
     char = click.getchar()
     ts = datetime.now() - start_ts
     event = None
