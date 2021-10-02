@@ -1,3 +1,8 @@
+.DS_Store
 __pycache__
 pretrained_models
 songs/
+node_modules/
+api/assets/bundles/*
+api/static-build
+webpack-stats.json

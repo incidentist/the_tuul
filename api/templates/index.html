@@ -1,5 +1,4 @@
-{% load static %}
-{% verbatim %}
+{% load static %} {% load render_bundle from webpack_loader %}
 <!DOCTYPE html>
 <html lang="en">
 
@@ -9,7 +8,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.2.0/css/all.css">
-    <link rel="stylesheet" href="https://unpkg.com/buefy/dist/buefy.min.css">
     <style>
         html,
         body {
@@ -17,110 +15,48 @@
             overflow: hidden;
         }
 
-        #app, .wrapper {
+        #app,
+        .wrapper {
             display: flex;
             flex-direction: column;
             height: 100%;
             overflow: hidden;
-        }
-
-        .lyric-display {
-            white-space: pre;
-            flex-shrink: 1;
-            overflow-y: scroll;
-        }
-
-        .completed-lyrics {
-            color: gray;
-        }
-
-        .current-lyrics {
-            color: magenta;
-        }
-
-        span.upcoming-lyrics {
-            color: blue;
         }
     </style>
     <title>The Tuul</title>
 </head>
 
 <body>
-<div class="columns" style="height: 100%;">
-<div class="column">
-    <div class="box" id="app">
-    </div>
-    </div>
-    <div class="column content box">
-    <h1>The Tüül - Make Your Own Karaoke Video</h1>
-    <p><strong>Step 1: Choose a music file.</strong> Click the <code>Choose a song file</code> button and pick your song. Easy.</p>
-    <p><strong>Step 2: Prepare the lyrics.</strong> Paste song lyrics into the <code>Lyrics</code> box. Next, divide them up into screens by adding a blank line between the last line of one screen and the first line of the next. <strong>Pro tip:</strong> listen to the song once while reading the lyrics, to make sure all the lyrics are there.</p>
-    <p><strong>Step 3: Add Timing Information.</strong> You're gonna tell The Tüül when all those lyrics appear in the song. When you hit the Play button, the song will start playing, and the first lyric-bit that you chopped up will be highlighted in pink. <strong>Hit the spacebar</strong> when that lyric comes up, and then the next lyric will turn pink and await your spacebar-press.</p>
-    <p>If you hit the <strong>Enter</strong> key while the song is playing, that will mark the end of the <strong>previous</strong> lyric. Do that when there are pauses in the music. It can be tricky to handle both the spacebar and the enter key. If the song is going too fast, slow it down by clicking a different playback speed at the bottom.</p>
-    <p>If you need to take a break, hit the Pause button.</p>
-    <p><strong>Step 4: Create The Video.</strong> After you've given a spacebar press to the last lyric in the song, click the <code>Submit</code> button. Wait a few minutes -- maybe 3? Maybe 6? Eventually you'll be asked to download a zip file. In that file are 2 mp4 files. <code>karaoke.mp4</code> uses your spacebar presses exactly as you entered them. <code>karaoke-corrected.mp4</code> tries to use some magic to make your spacebar presses a little more accurate. Use whichever one works better!</p>
-    </div>
-    </div>
-    <!-- App Template -->
-    <script type="text/x-template" id="app-template">
-    <div class="wrapper">
-    <audio ref="audio" @timeupdate="onAudioTimeUpdate"></audio>
-    <fieldset class="fieldset">
-
-    <b-field class="file is-primary" :class="{'has-name': !!songFile}">
-        <b-upload v-model="songFile" class="file-label">
-            <span class="file-cta">
-                <b-icon class="file-icon" icon="audiotrack"></b-icon>
-                <span class="file-label">Click to upload</span>
-            </span>
-            <span class="file-name" v-if="songFile">
-                {{ songFile.name }}
-            </span>
-        </b-upload>
-    </b-field>
-    <b-field label="Lyrics:">
-        <b-input type="textarea" v-model="lyricText"></b-input>
-    </b-field>
-
-    </fieldset>
-        <lyric-display :lyric-segments="lyricSegments" :current-segment="currentSegment" @keydown="onKeyDown">
-        </lyric-display>
-        <div class="buttons">
-            <b-button type="is-primary" @click="playPause">
-                {{ isPlaying ? "Pause" : "Play" }}
-            </b-button>
-            <div class="block">
-                <label>Playback speed:</label> 
-                <b-radio v-model="playbackRate" :native-value="1.5">
-                    1.5
-                </b-radio>
-                <b-radio v-model="playbackRate" :native-value="1.0">
-                    1.0
-                </b-radio>
-                <b-radio v-model="playbackRate" :native-value="0.9">
-                    0.9
-                </b-radio>
-                <b-radio v-model="playbackRate" :native-value="0.7">
-                    0.7
-                </b-radio>
+    <div class="columns" style="height: 100%;">
+        <div class="column">
+            <div class="box" id="app">
             </div>
-
-        <b-button  :loading="isSubmitting" @click="submitTimings" :disabled="!hasCompleteTimings && !isSubmitting">Submit</b-button>
-    </div>
-    </div>
-    </script>
-    <!-- Lyric display -->
-    <script type="text/x-template" id="lyric-display-template">
-        <div class="lyric-display box">
-            <span class="completed-lyrics">{{completedLyrics}}</span>
-            <span ref="currentLyrics" class="current-lyrics">{{currentLyrics}}</span>
-            <span class="upcoming-lyrics">{{upcomingLyrics}}</span>
         </div>
-    </script>
-    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.js"></script>
-    <script src="https://unpkg.com/buefy/dist/buefy.min.js"></script>
-    {% endverbatim %}
-    <script src="{% static "timings-ui.js" %}"></script>
+        <div class="column content box">
+            <h1>The Tüül - Make Your Own Karaoke Video</h1>
+            <p><strong>Step 1: Choose a music file.</strong> Click the <code>Choose a song file</code> button and pick
+                your song. Easy.</p>
+            <p><strong>Step 2: Prepare the lyrics.</strong> Paste song lyrics into the <code>Lyrics</code> box. Next,
+                divide them up into screens by adding a blank line between the last line of one screen and the first
+                line of the next. <strong>Pro tip:</strong> listen to the song once while reading the lyrics, to make
+                sure all the lyrics are there.</p>
+            <p><strong>Step 3: Add Timing Information.</strong> You're gonna tell The Tüül when all those lyrics appear
+                in the song. When you hit the Play button, the song will start playing, and the first lyric-bit that you
+                chopped up will be highlighted in pink. <strong>Hit the spacebar</strong> when that lyric comes up, and
+                then the next lyric will turn pink and await your spacebar-press.</p>
+            <p>If you hit the <strong>Enter</strong> key while the song is playing, that will mark the end of the
+                <strong>previous</strong> lyric. Do that when there are pauses in the music. It can be tricky to handle
+                both the spacebar and the enter key. If the song is going too fast, slow it down by clicking a different
+                playback speed at the bottom.</p>
+            <p>If you need to take a break, hit the Pause button.</p>
+            <p><strong>Step 4: Create The Video.</strong> After you've given a spacebar press to the last lyric in the
+                song, click the <code>Submit</code> button. Wait a few minutes -- maybe 3? Maybe 6? Eventually you'll be
+                asked to download a zip file. In that file are 2 mp4 files. <code>karaoke.mp4</code> uses your spacebar
+                presses exactly as you entered them. <code>karaoke-corrected.mp4</code> tries to use some magic to make
+                your spacebar presses a little more accurate. Use whichever one works better!</p>
+        </div>
+    </div> 
+    {% render_bundle 'main' %}
 </body>
 
 </html>

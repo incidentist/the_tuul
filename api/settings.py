@@ -31,9 +31,7 @@ ALLOWED_HOSTS = ["*"]
 
 # Application definition
 
-INSTALLED_APPS = [
-    "django.contrib.staticfiles",
-]
+INSTALLED_APPS = ["django.contrib.staticfiles", "webpack_loader"]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -120,8 +118,20 @@ STATIC_ROOT = BASE_DIR / "staticroot"
 STATIC_URL = "/static/"
 
 STATICFILES_DIRS = [
-    BASE_DIR / "static",
+    BASE_DIR / "assets",
 ]
+
+WEBPACK_LOADER = {
+    "DEFAULT": {
+        "CACHE": not DEBUG,
+        "BUNDLE_DIR_NAME": "bundles/",  # must end with slash
+        "STATS_FILE": BASE_DIR.parent / "webpack-stats.json",
+        "POLL_INTERVAL": 0.1,
+        "TIMEOUT": None,
+        "IGNORE": [r".+\.hot-update.js", r".+\.map"],
+        "LOADER_CLASS": "webpack_loader.loader.WebpackLoader",
+    }
+}
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/3.2/ref/settings/#default-auto-field
