@@ -39,7 +39,9 @@
         :loading="isSubmitting"
         @click="submitTimings"
         :disabled="!hasCompleteTimings && !isSubmitting"
-        >Submit</b-button
+        >Create Video </b-button
+      ><span v-if="isSubmitting"
+        >Creating video. This might take a few minutes.</span
       >
     </div>
   </div>
