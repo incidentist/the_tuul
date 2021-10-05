@@ -3,12 +3,12 @@ import json
 from datetime import datetime, timedelta
 import logging
 from pathlib import Path
+import subprocess as sp
 from typing import List, Optional, Tuple, Union, Dict, Any
 
 import click
 import pydub
 
-from moviepy.tools import subprocess_call
 from . import ass, timing_data
 
 from .subtitles import LyricSegment, LyricsLine, LyricsScreen, create_subtitles
@@ -243,6 +243,27 @@ def split_song(songfile: Path, song_dir: Path) -> Tuple[str, str]:
     return str(song_dir.joinpath("accompaniment.wav")), str(
         song_dir.joinpath("vocals.wav")
     )
+
+
+def subprocess_call(cmd):
+    """Executes the given subprocess command."""
+    logger = logging.getLogger("shell")
+    logger.info("Running:\n>>> " + " ".join(cmd))
+
+    popen_params = {"stdout": sp.DEVNULL, "stderr": sp.PIPE, "stdin": sp.DEVNULL}
+
+    proc = sp.Popen(cmd, **popen_params)
+
+    out, err = proc.communicate()  # proc.wait()
+    proc.stderr.close()
+
+    if proc.returncode:
+        logger.info("Command returned an error")
+        raise IOError(err.decode("utf8"))
+    else:
+        logger.info("Command successful")
+
+    del proc
 
 
 def create_video(
