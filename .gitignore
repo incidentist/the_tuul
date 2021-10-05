@@ -5,4 +5,4 @@ songs/
 node_modules/
 api/assets/bundles/*
 api/static-build
-webpack-stats.json
+api/webpack-stats.json

@@ -17,7 +17,7 @@ module.exports = {
     plugins: [
         new VueLoaderPlugin(),
         new BundleTracker({
-            filename: './webpack-stats.json'
+            filename: './api/webpack-stats.json'
         }),
         new webpack.ProvidePlugin({
             Vue: 'Vue'
