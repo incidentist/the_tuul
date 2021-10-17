@@ -40,7 +40,6 @@ export default {
       return segment.text;
     },
     onCurrentLyricsChange() {
-      console.log(this.$refs);
       this.$refs.currentLyrics.scrollIntoView({
         behavior: "smooth",
         block: "center",

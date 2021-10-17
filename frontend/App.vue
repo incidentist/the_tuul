@@ -1,53 +1,46 @@
 <template>
   <div class="wrapper">
-    <audio ref="audio" @timeupdate="onAudioTimeUpdate"></audio>
-    <fieldset class="fieldset">
-      <b-field class="file is-primary" :class="{ 'has-name': !!songFile }">
-        <b-upload v-model="songFile" class="file-label">
-          <span class="file-cta">
-            <b-icon class="file-icon" icon="file-audio"></b-icon>
-            <span class="file-label">Click to upload</span>
-          </span>
-          <span class="file-name" v-if="songFile">
-            {{ songFile.name }}
-          </span>
-        </b-upload>
-      </b-field>
-      <b-field label="Lyrics:">
-        <b-input type="textarea" v-model="lyricText"></b-input>
-      </b-field>
-    </fieldset>
-    <lyric-display
-      :lyric-segments="lyricSegments"
-      :current-segment="currentSegment"
-      @keydown="onKeyDown"
-    >
-    </lyric-display>
-    <div class="buttons">
-      <b-button type="is-primary" @click="playPause">
-        {{ isPlaying ? "Pause" : "Play" }}
-      </b-button>
-      <div class="block">
-        <label>Playback speed:</label>
-        <b-radio v-model="playbackRate" :native-value="1.5"> 1.5 </b-radio>
-        <b-radio v-model="playbackRate" :native-value="1.0"> 1.0 </b-radio>
-        <b-radio v-model="playbackRate" :native-value="0.9"> 0.9 </b-radio>
-        <b-radio v-model="playbackRate" :native-value="0.7"> 0.7 </b-radio>
-      </div>
-
-      <b-button
-        :loading="isSubmitting"
-        @click="submitTimings"
-        :disabled="!hasCompleteTimings && !isSubmitting"
-        >Create Video </b-button
-      ><span v-if="isSubmitting"
-        >Creating video. This might take a few minutes.</span
-      >
-    </div>
+    <b-navbar shadow :mobile-burger="false">
+      <template #brand>
+        <b-navbar-item tag="span">
+          <span class="title">The Tüül</span>
+        </b-navbar-item>
+        <b-navbar-item>
+          <span class="subtitle mb-0">
+            &nbsp;(For Making Decent Karaoke Videos From Any Song in About 10
+            Minutes)</span
+          ></b-navbar-item
+        >
+      </template>
+    </b-navbar>
+    <b-tabs vertical expanded type="is-boxed">
+      <help-tab></help-tab>
+      <song-file-tab v-model="songFile"></song-file-tab>
+      <lyric-input-tab v-model="lyricText"></lyric-input-tab>
+      <song-timing-tab
+        @timing="onTimingEvent"
+        :song-file="songFile"
+        :current-segment="currentSegment"
+        :lyric-segments="lyricSegments"
+      ></song-timing-tab>
+      <submit-tab
+        :song-file="songFile"
+        :lyric-text="lyricText"
+        :timings="timings"
+        :enabled="isReadyToSubmit"
+      ></submit-tab>
+    </b-tabs>
   </div>
 </template>
 
 <script>
+import HelpTab from "@/components/HelpTab.vue";
+import SongFileTab from "@/components/SongFileTab.vue";
+import LyricInputTab from "@/components/LyricInputTab.vue";
+import SongTimingTab from "@/components/SongTimingTab.vue";
+import SubmitTab from "@/components/SubmitTab.vue";
+import { KEY_CODES, LYRIC_MARKERS } from "@/constants.js";
+
 import LyricDisplay from "@/components/LyricDisplay.vue";
 
 class TimingsList {
@@ -73,64 +66,45 @@ class TimingsList {
   }
 }
 
-const KEY_CODES = {
-  SPACEBAR: 32,
-  ENTER: 13,
-};
-
-const LYRIC_MARKERS = {
-  SEGMENT_START: 1,
-  SEGMENT_END: 2,
-};
-
 export default {
   components: {
     LyricDisplay,
+    HelpTab,
+    SongFileTab,
+    LyricInputTab,
+    SongTimingTab,
+    SubmitTab,
   },
   data() {
     return {
       lyricText: "",
       songFile: null,
       currentSegment: 0,
-      isPlaying: false,
       isSubmitting: false,
-      currentPlaybackTime: 0.0,
-      playbackRate: 1.0,
       timings: new TimingsList(),
     };
   },
-  mounted() {
-    window.addEventListener("keydown", this.onKeyDown);
-  },
+
   computed: {
-    songUrl() {
-      return "/song_file";
-    },
-    hasCompleteTimings() {
-      return this.currentSegment >= this.lyricSegments.length;
-    },
     lyricSegments() {
       return this.parseLyricSegments(this.lyricText);
     },
-  },
-  watch: {
-    isPlaying(newVal) {
-      if (newVal) {
-        this.$refs.audio.play();
-      } else {
-        this.$refs.audio.pause();
-      }
-    },
-    async songFile(newVal) {
-      if (newVal) {
-        this.$refs.audio.src = URL.createObjectURL(newVal);
-      }
-    },
-    playbackRate(newRate) {
-      this.$refs.audio.playbackRate = parseFloat(newRate);
+    isReadyToSubmit() {
+      return (
+        this.songFile &&
+        this.lyricText.length > 0 &&
+        this.currentSegment == this.lyricSegments.length
+      );
     },
   },
   methods: {
+    onTimingEvent({ keyCode, currentSongTime }) {
+      if (keyCode == KEY_CODES.ENTER) {
+        this.timings.add(this.currentSegment - 1, keyCode, currentSongTime);
+      } else if (keyCode == KEY_CODES.SPACEBAR) {
+        this.advanceToNextSegment(keyCode, currentSongTime);
+      }
+    },
     // Parse marked up lyrics into segments.
     // Line breaks separate segments.
     // Double line breaks separate screens.
@@ -159,71 +133,25 @@ export default {
       }
       return segments;
     },
-    advanceToNextSegment(keyCode) {
+    advanceToNextSegment(keyCode, currentSongTime) {
       if (this.currentSegment >= this.lyricSegments.length) {
         // we're done
         return;
       }
-      this.timings.add(
-        this.currentSegment,
-        keyCode,
-        this.$refs.audio.currentTime
-      );
+      this.timings.add(this.currentSegment, keyCode, currentSongTime);
       this.currentSegment += 1;
-    },
-    onKeyDown(e) {
-      const keyCode = e.keyCode;
-      if (Object.values(KEY_CODES).includes(keyCode) && this.isPlaying) {
-        if (keyCode == KEY_CODES.ENTER) {
-          this.timings.add(
-            this.currentSegment - 1,
-            keyCode,
-            this.$refs.audio.currentTime
-          );
-        } else if (keyCode == KEY_CODES.SPACEBAR) {
-          this.advanceToNextSegment(e.keyCode);
-        }
-        e.preventDefault();
-        return false;
-      }
-    },
-    onAudioTimeUpdate(e) {
-      this.currentPlaybackTime = this.$refs.audio.currentTime;
-    },
-    playPause() {
-      this.isPlaying = !this.isPlaying;
-    },
-    changeRate(e) {
-      const newRate = parseFloat(e.target.value);
-      this.$refs.audio.playbackRate = newRate;
-    },
-    async submitTimings() {
-      this.isSubmitting = true;
-      const formData = new FormData();
-      formData.append("lyrics", this.lyricText);
-      formData.append("timings", this.timings.toJson());
-      formData.append("songFile", this.songFile);
-
-      const response = await fetch("/generate_video", {
-        method: "POST",
-        body: formData,
-      });
-      this.isSubmitting = false;
-      await this.saveZipFile(response);
-    },
-    async saveZipFile(response) {
-      const filename = `${this.songFile.name}.zip`;
-      const blob = await response.blob();
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const anchor = document.createElement("a");
-        anchor.style.display = "none";
-        anchor.href = URL.createObjectURL(blob);
-        anchor.download = filename;
-        anchor.click();
-      };
-      reader.readAsDataURL(blob);
     },
   },
 };
 </script>
+
+<style scoped>
+.b-tabs {
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
+.b-tabs.is-vertical {
+  flex-wrap: nowrap;
+}
+</style>
