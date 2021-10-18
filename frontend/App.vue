@@ -18,10 +18,10 @@
       <song-file-tab v-model="songFile"></song-file-tab>
       <lyric-input-tab v-model="lyricText"></lyric-input-tab>
       <song-timing-tab
-        @timing="onTimingEvent"
+        @timings-complete="onTimingsComplete"
         :song-file="songFile"
-        :current-segment="currentSegment"
         :lyric-segments="lyricSegments"
+        :timings="timings"
       ></song-timing-tab>
       <submit-tab
         :song-file="songFile"
@@ -43,29 +43,6 @@ import { KEY_CODES, LYRIC_MARKERS } from "@/constants.js";
 
 import LyricDisplay from "@/components/LyricDisplay.vue";
 
-class TimingsList {
-  constructor() {
-    this._timings = [];
-  }
-  add(currentSegmentNum, keyCode, timestamp) {
-    if (currentSegmentNum < 0) {
-      return;
-    }
-    const marker =
-      keyCode == KEY_CODES.SPACEBAR
-        ? LYRIC_MARKERS.SEGMENT_START
-        : LYRIC_MARKERS.SEGMENT_END;
-    this._timings.push([timestamp, marker]);
-  }
-  toJson() {
-    return JSON.stringify(this._timings);
-  }
-
-  get length() {
-    return this._timings.length;
-  }
-}
-
 export default {
   components: {
     LyricDisplay,
@@ -79,9 +56,8 @@ export default {
     return {
       lyricText: "",
       songFile: null,
-      currentSegment: 0,
       isSubmitting: false,
-      timings: new TimingsList(),
+      timings: null,
     };
   },
 
@@ -90,20 +66,12 @@ export default {
       return this.parseLyricSegments(this.lyricText);
     },
     isReadyToSubmit() {
-      return (
-        this.songFile &&
-        this.lyricText.length > 0 &&
-        this.currentSegment == this.lyricSegments.length
-      );
+      return this.songFile && this.lyricText.length > 0 && this.timings != null;
     },
   },
   methods: {
-    onTimingEvent({ keyCode, currentSongTime }) {
-      if (keyCode == KEY_CODES.ENTER) {
-        this.timings.add(this.currentSegment - 1, keyCode, currentSongTime);
-      } else if (keyCode == KEY_CODES.SPACEBAR) {
-        this.advanceToNextSegment(keyCode, currentSongTime);
-      }
+    onTimingsComplete(timings) {
+      this.timings = timings;
     },
     // Parse marked up lyrics into segments.
     // Line breaks separate segments.
@@ -112,9 +80,9 @@ export default {
     // Sla/shes separate segments within a word.
     parseLyricSegments(lyricsText) {
       const segments = [];
-      var currentSegment = "";
-      for (var i = 0; i < lyricsText.length; i++) {
-        var finishSegment = false;
+      let currentSegment = "";
+      for (let i = 0; i < lyricsText.length; i++) {
+        let finishSegment = false;
         const char = lyricsText[i];
         if (["\n", "/", "_"].includes(char) || i == lyricsText.length - 1) {
           finishSegment = true;
@@ -132,14 +100,6 @@ export default {
         }
       }
       return segments;
-    },
-    advanceToNextSegment(keyCode, currentSongTime) {
-      if (this.currentSegment >= this.lyricSegments.length) {
-        // we're done
-        return;
-      }
-      this.timings.add(this.currentSegment, keyCode, currentSongTime);
-      this.currentSegment += 1;
     },
   },
 };
