@@ -27,7 +27,7 @@ steps:
       ]
 timeout: 1800s
 substitutions:
-  _CLOUD_RUN_APP_NAME: "main"
+  _CLOUD_RUN_APP_NAME: "the-tuul"
   _CLOUD_RUN_REGION: "us-central1"
 images:
-  - gcr.io/$PROJECT_ID/main
+  - gcr.io/$PROJECT_ID/the-tuul
