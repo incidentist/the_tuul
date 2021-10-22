@@ -33,22 +33,19 @@
       :src="audioSource"
       @timeupdate="onAudioTimeUpdate"
     ></audio>
-    <div class="level">
+    <div class="level is-mobile">
       <div class="level-item">
-        <b-button type="is-primary" @click="playPause" expanded>
-          {{ isPlaying ? "Pause" : "Play" }}
-        </b-button>
-        <b-button
-          type="is-primary"
-          @click="redoScreen"
-          expanded
-          :active="isPlaying"
-        >
-          &laquo; Redo This Screen
-        </b-button>
+        <div class="buttons">
+          <b-button type="is-primary" @click="playPause">
+            {{ isPlaying ? "Pause" : "Play" }}
+          </b-button>
+          <b-button type="is-primary" @click="redoScreen" :active="isPlaying">
+            &laquo; Redo This Screen
+          </b-button>
+        </div>
       </div>
       <div class="level-item">
-        <b-field label="Speed:" horizontal>
+        <b-field class="playback-speed" label="Speed:" horizontal>
           <b-radio v-model="playbackRate" :native-value="1.5"> 1.5 </b-radio>
           <b-radio v-model="playbackRate" :native-value="1.0"> 1.0 </b-radio>
           <b-radio v-model="playbackRate" :native-value="0.9"> 0.9 </b-radio>
@@ -249,3 +246,9 @@ export default {
   },
 };
 </script>
+
+<style scoped>
+.playback-speed {
+  display: flex;
+}
+</style>
