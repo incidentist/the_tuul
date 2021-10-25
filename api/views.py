@@ -27,6 +27,7 @@ class GenerateVideo(APIView):
         song_file = request.data.get("songFile")
 
         with tempfile.TemporaryDirectory() as song_files_dir:
+            zip_path = None
             [song_path, lyrics_path, timings_path] = self.setup_song_files_dir(
                 song_files_dir, song_file, lyrics, timings
             )
@@ -48,7 +49,6 @@ class GenerateVideo(APIView):
     def zip_project(self, song_name: str, song_files_dir: Path) -> Path:
         include_files = [
             "karaoke.mp4",
-            "karaoke-corrected.mp4",
             "lyrics.txt",
             "subtitles.ass",
             "timings.json",

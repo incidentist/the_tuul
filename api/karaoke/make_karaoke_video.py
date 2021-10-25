@@ -51,36 +51,14 @@ def run(
             "SecondaryColor": (0, 255, 255, 255),
         },
     )
-    create_video(instrumental_path, lyric_subtitles, output_dir=song_files_dir)
-
-    # Create the autocorrected video
-    click.echo("Writing autocorrected video...")
-    corrected_video_filename = "karaoke-corrected.mp4"
-    screens = autocorrect_timings(intial_screens, vocal_path)
-    screens = set_segment_end_times(screens, instrumental_path)
-    screens = set_screen_start_times(screens)
-
-    lyric_subtitles = create_subtitles(
-        screens,
-        {
-            "FontName": "Arial Narrow",
-            "FontSize": 20,
-            "PrimaryColor": (255, 0, 255, 255),
-            "SecondaryColor": (0, 255, 255, 255),
-        },
-    )
-    return create_video(
-        instrumental_path,
-        lyric_subtitles,
-        output_dir=song_files_dir,
-        filename=corrected_video_filename,
-    )
+    return create_video(instrumental_path, lyric_subtitles, output_dir=song_files_dir)
 
 
 def autocorrect_timings(
     screens: List[LyricsScreen], vocal_audio_path: Path
 ) -> List[LyricsScreen]:
     """
+    Not currently used.
     Adjust timings by looking at the difference between the time of the first vocals in the song and the time of the first spacebar press. Adjust all song timings by that amount.
     """
     click.echo("Autocorrecting timings...")

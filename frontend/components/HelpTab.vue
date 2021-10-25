@@ -32,11 +32,8 @@
       <strong>Step 4: Create The Video.</strong> After you've given a spacebar
       press to the last lyric in the song, click the <code>Submit</code> button.
       Wait a few minutes -- maybe 3? Maybe 6? Eventually you'll be asked to
-      download a zip file. In that file are 2 mp4 files.
-      <code>karaoke.mp4</code> uses your spacebar presses exactly as you entered
-      them. <code>karaoke-corrected.mp4</code> tries to use some magic to make
-      your spacebar presses a little more accurate. Use whichever one works
-      better! The zip file also includes generated
+      download a zip file. In that file is <code>karaoke.mp4</code> which is
+      your karaoke video! The zip file also includes generated
       <code>subtitles.ass</code> and <code>timings.json</code> files that were
       used to make your video. You can ignore them.
     </p>
