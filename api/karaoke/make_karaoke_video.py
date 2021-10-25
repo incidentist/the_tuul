@@ -218,6 +218,7 @@ def compile_lyric_timings(
                     prev_segment.end_ts = ts
         if line is not None:
             screen.lines.append(line)  # type: ignore[union-attr]
+        if screen is not None and len(screen.lines) > 0:
             screens.append(screen)  # type: ignore[arg-type]
     except StopIteration as si:
         logging.error(
