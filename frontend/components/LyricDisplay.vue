@@ -1,8 +1,8 @@
 <template>
   <div class="lyric-display box">
-    <span class="completed-lyrics">{{ completedLyrics }}</span>
-    <span ref="currentLyrics" class="current-lyrics">{{ currentLyrics }}</span>
-    <span class="upcoming-lyrics">{{ upcomingLyrics }}</span>
+    <span class="completed-lyrics">{{ completedLyrics }}</span
+    ><span ref="currentLyrics" class="current-lyrics">{{ currentLyrics }}</span
+    ><span class="upcoming-lyrics">{{ upcomingLyrics }}</span>
   </div>
 </template>
 
