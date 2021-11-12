@@ -39,6 +39,9 @@
       ref="audio"
       :src="audioSource"
       @timeupdate="onAudioTimeUpdate"
+      @ended="onAudioEvent"
+      @pause="onAudioEvent"
+      @play="onAudioEvent"
     ></audio>
     <div class="level is-mobile">
       <div class="level-item">
@@ -219,6 +222,10 @@ export default {
     },
     playPause() {
       this.isPlaying = !this.isPlaying;
+    },
+    onAudioEvent(e) {
+      const audioEl = this.$refs.audio;
+      this.isPlaying = !(audioEl.paused || audioEl.ended);
     },
     redoScreen() {
       var firstSegmentInScreen = this.firstSegmentOfScreen(this.currentScreen);
