@@ -11,6 +11,7 @@ module.exports = {
     output: {
         path: path.resolve('./api/assets/bundles/'),
         filename: "[name]-[contenthash].js",
+        hashFunction: "xxhash64",
         clean: true
     },
 

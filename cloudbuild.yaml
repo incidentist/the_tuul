@@ -6,8 +6,6 @@ steps:
   - name: "node"
     entrypoint: "npm"
     args: ["run", "build"]
-    env:
-      - "NODE_OPTIONS=--openssl-legacy-provider"
   # Build the container image
   - name: "gcr.io/cloud-builders/docker"
     args: ["build", "-t", "gcr.io/$PROJECT_ID/$_CLOUD_RUN_APP_NAME", "."]
