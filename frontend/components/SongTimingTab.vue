@@ -21,7 +21,14 @@
       </p>
     </div>
     <b-message
-      :active="hasCompletedTimings"
+      :active="hasCompletedTimings && !hasMarkedEndOfLastLine"
+      type="is-warning"
+      has-icon
+      icon="warning"
+      >Almost done! Press <kbd>Enter</kbd> when the last line ends.</b-message
+    >
+    <b-message
+      :active="hasCompletedTimings && hasMarkedEndOfLastLine"
       type="is-success"
       has-icon
       icon="check"
@@ -110,6 +117,10 @@ class TimingsList {
     this._timings = this._timings.slice(0, i);
   }
 
+  last() {
+    return this._timings[this._timings.length - 1];
+  }
+
   get length() {
     return this._timings.length;
   }
@@ -138,6 +149,12 @@ export default {
         this.lyricSegments &&
         this.lyricSegments.length > 0 &&
         this.currentSegment == this.lyricSegments.length
+      );
+    },
+    hasMarkedEndOfLastLine() {
+      return (
+        this.hasCompletedTimings &&
+        this.timings.last()[1] == LYRIC_MARKERS.SEGMENT_END
       );
     },
     currentScreen() {
