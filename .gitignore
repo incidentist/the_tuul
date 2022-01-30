@@ -1,6 +1,6 @@
 .DS_Store
 __pycache__
-pretrained_models
+# pretrained_models
 songs/
 node_modules/
 api/assets/bundles/*
