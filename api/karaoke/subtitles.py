@@ -74,9 +74,16 @@ class LyricsLine:
         """Decorate line with karaoke tags"""
         # Prefix the tag with centisecs prior to line in screen
         start_time = (self.ts - screen_start_ts).total_seconds() * 100
-        ass_segments = "".join([s.to_ass() for s in self.segments])
+        line = f"{{\k{start_time}}}"
+        prev_end: Optional[timedelta] = None
+        for s in self.segments:
+            if prev_end is not None and prev_end < s.ts:
+                blank_segment = LyricSegment("", prev_end, s.ts)
+                line += blank_segment.to_ass()
+            line += s.to_ass()
+            prev_end = s.end_ts
 
-        return f"{{\k{start_time}}}{ass_segments}"
+        return line
 
     def adjust_timestamps(self, adjustment) -> "LyricsLine":
         new_segments = [s.adjust_timestamps(adjustment) for s in self.segments]

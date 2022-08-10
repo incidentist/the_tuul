@@ -94,6 +94,10 @@ def find_first_vocal_time(
 
     return closest_nonsilent_start
 
+def get_file_duration(media_path: Path) -> timedelta:
+    audio = pydub.AudioSegment.from_wav(str(media_path))
+    duration = audio.duration_seconds
+    return timedelta(seconds=duration)
 
 def set_segment_end_times(
     screens: List[LyricsScreen], instrumental_path: Path
@@ -107,9 +111,7 @@ def set_segment_end_times(
     for i, segment in enumerate(segments):
         if not segment.end_ts:
             if i == len(segments) - 1:
-                audio = pydub.AudioSegment.from_wav(str(instrumental_path))
-                duration = audio.duration_seconds
-                segment.end_ts = timedelta(seconds=duration)
+                segment.end_ts = get_file_duration(instrumental_path)
             else:
                 next_segment = segments[i + 1]
                 segment.end_ts = next_segment.ts
