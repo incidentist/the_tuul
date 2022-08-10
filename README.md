@@ -14,7 +14,3 @@ This is a Django app. Run it like so:
 
 Load up http://localhost:8000 and follow the instructions!
 
-# Pro Tips
-
-* *Autocorrect* - The script outputs two videos: one with autocorrect, and one without. Autocorrect works by noting the difference between the time you marked the start of the first line, and the time when the first vocals in the song actually start. It then applies that difference to all your other timings, on the assumption that if you're .2 seconds off on the first line, you'll probably be .2 seconds off on all the other lines as well. It might mess up if a song starts with vocals that aren't really lyrics. You can either add those noises into your lyrics file and treat them like lyrics, or you can ignore the autocorrected version. As of October 2021, autocorrect is basically useless and will probably be removed.
-
