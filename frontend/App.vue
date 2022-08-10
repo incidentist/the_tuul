@@ -15,16 +15,16 @@
     </b-navbar>
     <b-tabs vertical expanded type="is-boxed">
       <help-tab></help-tab>
-      <song-file-tab v-model="songFile"></song-file-tab>
+      <song-info-tab v-model="songInfo"></song-info-tab>
       <lyric-input-tab v-model="lyricText"></lyric-input-tab>
       <song-timing-tab
         @timings-complete="onTimingsComplete"
-        :song-file="songFile"
+        :song-info="songInfo"
         :lyric-segments="lyricSegments"
         :timings="timings"
       ></song-timing-tab>
       <submit-tab
-        :song-file="songFile"
+        :song-info="songInfo"
         :lyric-text="lyricText"
         :timings="timings"
         :enabled="isReadyToSubmit"
@@ -35,7 +35,7 @@
 
 <script>
 import HelpTab from "@/components/HelpTab.vue";
-import SongFileTab from "@/components/SongFileTab.vue";
+import SongInfoTab from "@/components/SongInfoTab.vue";
 import LyricInputTab from "@/components/LyricInputTab.vue";
 import SongTimingTab from "@/components/SongTimingTab.vue";
 import SubmitTab from "@/components/SubmitTab.vue";
@@ -47,7 +47,7 @@ export default {
   components: {
     LyricDisplay,
     HelpTab,
-    SongFileTab,
+    SongInfoTab,
     LyricInputTab,
     SongTimingTab,
     SubmitTab,
@@ -55,7 +55,8 @@ export default {
   data() {
     return {
       lyricText: "",
-      songFile: null,
+      // Object containing song info: file, artist, title
+      songInfo: {file: null, artist: null, title: null},
       isSubmitting: false,
       timings: null,
     };
@@ -66,7 +67,7 @@ export default {
       return this.parseLyricSegments(this.lyricText);
     },
     isReadyToSubmit() {
-      return this.songFile && this.lyricText.length > 0 && this.timings != null;
+      return this.songInfo && this.songInfo.file && this.lyricText.length > 0 && this.timings != null;
     },
   },
   methods: {

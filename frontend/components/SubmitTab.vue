@@ -25,7 +25,7 @@
 <script>
 export default {
   props: {
-    songFile: File,
+    songInfo: Object,
     lyricText: String,
     timings: Object,
     enabled: {
@@ -38,6 +38,11 @@ export default {
       isSubmitting: false,
     };
   },
+  computed: {
+    songFile() {
+      return this.songInfo.file;
+    }
+  },
   methods: {
     async submitTimings() {
       this.isSubmitting = true;
@@ -45,6 +50,8 @@ export default {
       formData.append("lyrics", this.lyricText);
       formData.append("timings", this.timings.toJson());
       formData.append("songFile", this.songFile);
+      formData.append("songArtist", this.songInfo.artist);
+      formData.append("songTitle", this.songInfo.title);
 
       const response = await fetch("/generate_video", {
         method: "POST",

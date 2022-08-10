@@ -20,6 +20,7 @@ def run(
     lyricsfile: Path,
     songfile: Path,
     timingsfile: Path = None,
+    output_filename = "karaoke.mp4"
 ):
     song_files_dir = songfile.parent
     instrumental_path = song_files_dir.joinpath("accompaniment.wav")
@@ -51,7 +52,7 @@ def run(
             "SecondaryColor": (0, 255, 255, 255),
         },
     )
-    return create_video(instrumental_path, lyric_subtitles, output_dir=song_files_dir)
+    return create_video(instrumental_path, lyric_subtitles, output_dir=song_files_dir, filename=output_filename)
 
 
 def autocorrect_timings(

@@ -25,19 +25,22 @@ class GenerateVideo(APIView):
         lyrics = request.data.get("lyrics")
         timings = request.data.get("timings")
         song_file = request.data.get("songFile")
+        song_artist = request.data.get("songArtist", "Unknown Artist")
+        song_title = request.data.get("songTitle", "Unknown Title")
 
         with tempfile.TemporaryDirectory() as song_files_dir:
             zip_path = None
+            video_filename = self.get_output_filename(song_artist, song_title)
             [song_path, lyrics_path, timings_path] = self.setup_song_files_dir(
                 song_files_dir, song_file, lyrics, timings
             )
             logging.info(song_path)
             success = make_karaoke_video.run(
-                lyricsfile=lyrics_path, songfile=song_path, timingsfile=timings_path
+                lyricsfile=lyrics_path, songfile=song_path, timingsfile=timings_path, output_filename=video_filename
             )
             if success:
                 zip_path = self.zip_project(
-                    song_name=song_path.name, song_files_dir=Path(song_files_dir)
+                    song_name=video_filename, song_files_dir=Path(song_files_dir)
                 )
             if zip_path:
 
@@ -48,7 +51,7 @@ class GenerateVideo(APIView):
 
     def zip_project(self, song_name: str, song_files_dir: Path) -> Path:
         include_files = [
-            "karaoke.mp4",
+            song_name,
             "lyrics.txt",
             "subtitles.ass",
             "timings.json",
@@ -78,3 +81,8 @@ class GenerateVideo(APIView):
                 [song_file_name, lyrics_file_name, timings_file_name],
             )
         )
+
+    def get_output_filename(self, artist: str, title: str) -> str:
+        if artist and title:
+            return f"{artist} - {title} [karaoke].mp4"
+        return "karaoke.mp4"

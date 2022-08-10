@@ -132,7 +132,7 @@ class TimingsList {
 export default {
   components: { LyricDisplay },
   props: {
-    songFile: File,
+    songInfo: Object,
     lyricSegments: Array,
   },
   data() {
@@ -144,6 +144,12 @@ export default {
     };
   },
   computed: {
+    songFile() {
+      if (this.songInfo) {
+        return this.songInfo.file;
+      }
+      return null;
+    },
     audioSource() {
       return this.songFile ? URL.createObjectURL(this.songFile) : null;
     },
