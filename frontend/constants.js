@@ -7,3 +7,10 @@ export const LYRIC_MARKERS = {
   SEGMENT_START: 1,
   SEGMENT_END: 2,
 };
+
+export const VIDEO_SIZE = {
+  width: 400,
+  height: 320
+};
+
+export const LINE_HEIGHT = 30;
