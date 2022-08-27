@@ -20,6 +20,7 @@ def run(
     lyricsfile: Path,
     songfile: Path,
     timingsfile: Path = None,
+    lyric_subtitles: str = None,
     output_filename = "karaoke.mp4"
 ):
     song_files_dir = songfile.parent
@@ -32,7 +33,6 @@ def run(
     else:
         lyric_events = timing_data.gather_timing_data(lyrics, songfile)
         write_timings_file(song_files_dir.joinpath("timings.json"), lyric_events)
-    intial_screens = compile_lyric_timings(lyrics, lyric_events)
 
     if instrumental_path.exists() and vocal_path.exists():
         click.echo(f"Using existing instrumental track at {instrumental_path}")
@@ -40,18 +40,20 @@ def run(
         click.echo("Splitting song into instrumental and vocal tracks..")
         split_song(songfile, song_files_dir)
         click.echo(f"Wrote instrumental track to {instrumental_path}")
-    screens = set_segment_end_times(intial_screens, instrumental_path)
-    screens = set_screen_start_times(screens)
-
-    lyric_subtitles = create_subtitles(
-        screens,
-        {
-            "FontName": "Arial Narrow",
-            "FontSize": 20,
-            "PrimaryColor": (255, 0, 255, 255),
-            "SecondaryColor": (0, 255, 255, 255),
-        },
-    )
+        
+    if lyric_subtitles == None:
+        intial_screens = compile_lyric_timings(lyrics, lyric_events)
+        screens = set_segment_end_times(intial_screens, instrumental_path)
+        screens = set_screen_start_times(screens)
+        lyric_subtitles = create_subtitles(
+            screens,
+            {
+                "FontName": "Arial Narrow",
+                "FontSize": 20,
+                "PrimaryColor": (255, 0, 255, 255),
+                "SecondaryColor": (0, 255, 255, 255),
+            },
+        )
     return create_video(instrumental_path, lyric_subtitles, output_dir=song_files_dir, filename=output_filename)
 
 
