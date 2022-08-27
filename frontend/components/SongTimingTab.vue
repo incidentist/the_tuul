@@ -94,6 +94,10 @@ class TimingsList {
     return JSON.stringify(this._timings);
   }
 
+  toArray() {
+    return this._timings;
+  }
+
   timingForSegmentNum(segmentNum) {
     const starts = this._timings.filter(
       (t) => t[1] == LYRIC_MARKERS.SEGMENT_START

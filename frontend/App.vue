@@ -56,7 +56,7 @@ export default {
     return {
       lyricText: "",
       // Object containing song info: file, artist, title
-      songInfo: {file: null, artist: null, title: null},
+      songInfo: {file: null, artist: null, title: null, duration: null},
       isSubmitting: false,
       timings: null,
     };

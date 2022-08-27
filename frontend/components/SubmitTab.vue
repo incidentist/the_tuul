@@ -23,6 +23,8 @@
 </template>
 
 <script>
+import { createAssFile } from "@/lib/timing.ts";
+
 export default {
   props: {
     songInfo: Object,
@@ -41,6 +43,9 @@ export default {
   computed: {
     songFile() {
       return this.songInfo.file;
+    },
+    subtitles() {
+      return createAssFile(this.lyricText, this.timings.toArray(), this.songFile.duration);
     }
   },
   methods: {
@@ -52,6 +57,7 @@ export default {
       formData.append("songFile", this.songFile);
       formData.append("songArtist", this.songInfo.artist);
       formData.append("songTitle", this.songInfo.title);
+      formData.append("subtitles", this.subtitles);
 
       const response = await fetch("/generate_video", {
         method: "POST",

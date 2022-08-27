@@ -35,7 +35,8 @@ export default {
     return {
       songFile: this.value.file,
       artist: this.value.artist,
-      title: this.value.title
+      title: this.value.title,
+      duration: this.value.duration,
     };
   },
   computed: {
@@ -43,17 +44,20 @@ export default {
       return {
         file: this.songFile,
         artist: this.artist,
-        title: this.title
+        title: this.title,
       };
     }
   },
   methods: {
     onFileChange(e) {
       const self = this;
+      this.songInfo.duration = this.songFile.duration;
       jsmediatags.read(this.songFile, {
         onSuccess(tag) {
+          console.log(tag);
           self.artist = tag.tags.artist;
           self.title = tag.tags.title;
+          self.duration = tag.
           self.$emit("input", self.songInfo);
         },
         onFailure(error) {
