@@ -1,4 +1,4 @@
-import { LyricSegmentIterator, LyricsScreen, compileLyricTimings, setSegmentEndTimes, createAssFile, floatToTimecode} from "./timing.ts";
+import { LyricSegmentIterator, LyricsScreen, compileLyricTimings, setSegmentEndTimes, createAssFile, floatToTimecode } from "./timing.ts";
 import { LYRIC_MARKERS } from "../constants";
 import { LyricSegment } from "./timing";
 
@@ -59,6 +59,9 @@ test('setSegmentEndTimes', () => {
 test('LyricSegment', () => {
     const segment = new LyricSegment("boop", 2.0, 3.0);
     expect(segment.toAss()).toBe("{\\kf100}boop")
+
+    const underSecondSegment = new LyricSegment("baby", .5, .75);
+    expect(underSecondSegment.toAss()).toBe("{\\kf25}baby");
 });
 
 test('LyricScreen does ass', () => {

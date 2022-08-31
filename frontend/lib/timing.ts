@@ -1,18 +1,18 @@
 import { LYRIC_MARKERS, VIDEO_SIZE, LINE_HEIGHT } from "../constants";
-import _ from "lodash";
+import * as _ from "lodash";
 
 interface Segment {
-    text: string;
+  text: string;
 }
 
 interface AssEvent {
-    type: string,
-    Layer: number,
-    Style: string,
-    Start: string,
-    End: string,
-    MarginV: number,
-    Text: string
+  type: string,
+  Layer: number,
+  Style: string,
+  Start: string,
+  End: string,
+  MarginV: number,
+  Text: string
 }
 
 //
@@ -21,23 +21,24 @@ interface AssEvent {
 
 type Color = [number, number, number, number] // RGBA?
 
-function toHex(n: number) { return n.toString(16).toUpperCase().padStart(2, "0")}
+function toHex(n: number) { return n.toString(16).toUpperCase().padStart(2, "0") }
 
 function colorToString(color: Color): string {
-    return "&H" + color.map(toHex).join("");
+  // ASS color format is AABBGGRR for some reason, and alpha 0 is opaque
+  return "&H" + color.map(toHex).reverse().join("");
 }
 
 export function floatToTimecode(t: number): string {
-    // Format t (seconds) as HH:MM:SS.ms
-    const timecodeParts = [
-        Math.floor(t / 3600).toString(),
-        Math.floor(t / 60 % 60).toString().padStart(2, "0"),
-        [
-            Math.floor(t % 60).toString().padStart(2, "0"),
-            (t - Math.floor(t)).toFixed(2).slice(2, 4)
-        ].join(".")
-    ];
-    return timecodeParts.join(":")
+  // Format t (seconds) as HH:MM:SS.ms
+  const timecodeParts = [
+    Math.floor(t / 3600).toString(),
+    Math.floor(t / 60 % 60).toString().padStart(2, "0"),
+    [
+      Math.floor(t % 60).toString().padStart(2, "0"),
+      (t - Math.floor(t)).toFixed(2).slice(2, 4)
+    ].join(".")
+  ];
+  return timecodeParts.join(":")
 }
 
 //
@@ -45,11 +46,11 @@ export function floatToTimecode(t: number): string {
 //
 
 export class LyricSegmentIterator {
-    segments: Segment[];
-    includeMarkup: boolean;
+  segments: Segment[];
+  includeMarkup: boolean;
   constructor(lyrics: string, includeMarkup: boolean = false) {
-      this.includeMarkup = includeMarkup;
-      this.segments = this.parseLyrics(lyrics);
+    this.includeMarkup = includeMarkup;
+    this.segments = this.parseLyrics(lyrics);
   }
 
   parseLyrics(lyricsText: string): Segment[] {
@@ -66,11 +67,11 @@ export class LyricSegmentIterator {
       if (["\n", "/", "_"].includes(char) || i == lyricsText.length - 1) {
         finishSegment = true;
         if (!this.includeMarkup) {
-            if (char == "/") {
-                char = "";
-            } else if (char == "_") {
-                char = " "
-            }
+          if (char == "/") {
+            char = "";
+          } else if (char == "_") {
+            char = " "
+          }
         }
       }
       if (char == "\n" && currentSegment == "") {
@@ -104,9 +105,9 @@ export class LyricSegmentIterator {
 }
 
 export class LyricSegment {
-    text: string;
-    timestamp: number;
-    endTimestamp?: number;
+  text: string;
+  timestamp: number;
+  endTimestamp?: number;
 
   constructor(text: string, timestamp: number, endTimestamp: number = null) {
     this.text = text;
@@ -117,25 +118,25 @@ export class LyricSegment {
   adjustTimestamp(adjustment) {
     const newTs = this.timestamp + adjustment;
     const newEndTs = this.endTimestamp === null ? null : this.endTimestamp + adjustment;
-    return new LyricSegment(this.text, newTs, newEndTs); 
+    return new LyricSegment(this.text, newTs, newEndTs);
   }
 
   toAss() {
     // Render this segment as part of an ASS event line
-    const durationInCentiseconds = Math.floor(this.endTimestamp - this.timestamp) * 100;
+    const durationInCentiseconds = Math.floor((this.endTimestamp - this.timestamp) * 100);
     return `{\\kf${durationInCentiseconds}}${this.text}`
   }
 }
 
 export class LyricsScreen {
-    lines: LyricsLine[];
-    startTimestamp?: Timestamp;
+  lines: LyricsLine[];
+  startTimestamp?: Timestamp;
   constructor() {
     this.lines = [];
   }
   get endTimestamp(): Timestamp {
     if (this.lines.length == 0) {
-        return this.startTimestamp;
+      return this.startTimestamp;
     }
     return this.lines[this.lines.length - 1].endTimestamp;
   }
@@ -150,7 +151,7 @@ export class LyricsScreen {
     const lineCount = this.lines.length;
     return screenMiddle - (lineCount * LINE_HEIGHT / 2) + (lineInScreen * LINE_HEIGHT)
   }
-    
+
 
   toAssEvents(formatParams: Object) {
     const styleName = "Default";
@@ -160,7 +161,7 @@ export class LyricsScreen {
 }
 
 class LyricsLine {
-    segments: LyricSegment[];
+  segments: LyricSegment[];
 
   constructor() {
     this.segments = [];
@@ -168,7 +169,7 @@ class LyricsLine {
 
   get timestamp(): Timestamp {
     if (this.segments.length == 0) {
-        return 0.0;
+      return 0.0;
     }
     return this.segments[0].timestamp;
   }
@@ -179,7 +180,7 @@ class LyricsLine {
 
   get endTimestamp(): Timestamp {
     if (this.segments.length == 0) {
-        return this.timestamp;
+      return this.timestamp;
     }
     return this.segments[this.segments.length - 1].endTimestamp;
   }
@@ -194,26 +195,26 @@ class LyricsLine {
     let line = `{\\k${startTime}}`;
     let previousEnd = null;
     for (const s of segments) {
-        if (previousEnd  !== null && previousEnd < s.timestamp) {
-            // Insert a blank segment to represent a gap between segments
-            const blankSegment = new LyricSegment("", previousEnd, s.timestamp)
-            line += blankSegment.toAss()
-        }
-        line += s.toAss()
-        previousEnd = s.endTimestamp;
+      if (previousEnd !== null && previousEnd < s.timestamp) {
+        // Insert a blank segment to represent a gap between segments
+        const blankSegment = new LyricSegment("", previousEnd, s.timestamp)
+        line += blankSegment.toAss()
+      }
+      line += s.toAss()
+      previousEnd = s.endTimestamp;
     }
     return line;
   }
 
   toAssEvent(screenStart: Timestamp, screenEnd: Timestamp, style: string, topMargin: number): string {
     const e: AssEvent = {
-        type: "Dialogue",
-        Layer: 0,
-        Style: style,
-        Start: floatToTimecode(screenStart),
-        End: floatToTimecode(screenEnd),
-        MarginV: topMargin,
-        Text: this.decorateAssLine(this.segments, screenStart)
+      type: "Dialogue",
+      Layer: 0,
+      Style: style,
+      Start: floatToTimecode(screenStart),
+      End: floatToTimecode(screenEnd),
+      MarginV: topMargin,
+      Text: this.decorateAssLine(this.segments, screenStart)
     }
     return `${e.type}: ` + ["Layer", "Style", "Start", "End", "MarginV", "Text"].map(k => e[k]).join(",");
   }
@@ -275,62 +276,61 @@ export function compileLyricTimings(lyrics: string, events: LyricEvent[]) {
 }
 
 export function setSegmentEndTimes(screens: LyricsScreen[], songDuration: number): LyricsScreen[] {
-    // Infer end times of segments if they are not already set
-    const segments: LyricSegment[] = screens.flatMap(s => s.lines.flatMap(l => l.segments));
-    segments.forEach((segment, i) => {
-        if (!segment.endTimestamp) {
-            if (i == segments.length - 1) {
-                segment.endTimestamp = songDuration;
-            } else {
-                segment.endTimestamp = segments[i + 1].timestamp;
-            }
-        }
-    });
-    return screens;
+  // Infer end times of segments if they are not already set
+  const segments: LyricSegment[] = screens.flatMap(s => s.lines.flatMap(l => l.segments));
+  segments.forEach((segment, i) => {
+    if (!segment.endTimestamp) {
+      if (i == segments.length - 1) {
+        segment.endTimestamp = songDuration;
+      } else {
+        segment.endTimestamp = segments[i + 1].timestamp;
+      }
+    }
+  });
+  return screens;
 }
 
 export function setScreenStartTimes(screens: LyricsScreen[]): LyricsScreen[] {
-    // Set start times for screens to the end times of the previous screen
-    let prevScreen = null;
-    for (const screen of screens) {
-        if (!prevScreen) {
-            screen.startTimestamp = 0.0;
-        } else {
-            screen.startTimestamp = prevScreen.endTimestamp + 0.1;
-        }
-        prevScreen = screen;
+  // Set start times for screens to the end times of the previous screen
+  let prevScreen = null;
+  for (const screen of screens) {
+    if (!prevScreen) {
+      screen.startTimestamp = 0.0;
+    } else {
+      screen.startTimestamp = prevScreen.endTimestamp + 0.1;
     }
-    return screens;
+    prevScreen = screen;
+  }
+  return screens;
 }
 
 function createSubtitles(screens: LyricsScreen[], formatParams: Object): string {
-    
-    const displayParams = {
-        Name: "Default",
-        Alignment: 8,
-        Fontname: "Arial Narrow",
-        Fontsize: 20,
-        PrimaryColor: [255, 0, 255, 255],
-        SecondaryColor: [0, 255, 255, 255],
-        Bold: -1,
-        ScaleX: 100,
-        ScaleY: 100,
-        Spacing: 0,
-        MarginL: 0,
-        MarginR: 0,
-        Encoding: 0,
-        ...formatParams
-    };
-    
-    for (const key of ["PrimaryColor", "SecondaryColor"]) {
-        displayParams[key] = colorToString(displayParams[key]);
-    }
-    
-    const styleKeys = Object.keys(displayParams).join(", ");
-    const styleValues = Object.values(displayParams).join(",");
-    
-    let assText = `
-[Script Info]
+
+  const displayParams = {
+    Name: "Default",
+    Alignment: 8,
+    Fontname: "Arial Narrow",
+    Fontsize: 20,
+    PrimaryColour: [255, 0, 255, 255],
+    SecondaryColour: [0, 255, 255, 255],
+    Bold: -1,
+    ScaleX: 100,
+    ScaleY: 100,
+    Spacing: 0,
+    MarginL: 0,
+    MarginR: 0,
+    Encoding: 0,
+    ...formatParams
+  };
+
+  for (const key of ["PrimaryColour", "SecondaryColour"]) {
+    displayParams[key] = colorToString(displayParams[key]);
+  }
+
+  const styleKeys = Object.keys(displayParams).join(", ");
+  const styleValues = Object.values(displayParams).join(",");
+
+  let assText = `[Script Info]
 ; Script generated by The Tüül - https://the-tuul.com
 
 [V4+ Styles]
@@ -340,10 +340,10 @@ Style: ${styleValues}
 [Events]
 Format: Layer, Style, Start, End, MarginV, Text
 `
-    for (const screen of screens) {
-        assText += screen.toAssEvents(displayParams)
-    }
-    return assText;
+  for (const screen of screens) {
+    assText += screen.toAssEvents(displayParams)
+  }
+  return assText;
 }
 
 export function createAssFile(lyrics: string, lyricEvents: LyricEvent[], songDuration: number) {
@@ -356,7 +356,7 @@ export function createAssFile(lyrics: string, lyricEvents: LyricEvent[], songDur
   return createSubtitles(screensWithStartTimes, {
     "Fontname": "Arial Narrow",
     "Fontsize": 20,
-    "PrimaryColor": [255, 0, 255, 255],
-    "SecondaryColor": [0, 255, 255, 255]
+    "PrimaryColour": [255, 0, 255, 0],
+    "SecondaryColour": [0, 255, 255, 0]
   });
 }

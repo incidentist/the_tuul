@@ -14,7 +14,7 @@
         </b-upload>
       </b-field>
       <b-field label="Song Artist">
-        <b-input v-model="artist" @input="onTextChange"/>
+        <b-input v-model="artist" @input="onTextChange" />
       </b-field>
       <b-field label="Song Title">
         <b-input v-model="title" @input="onTextChange" />
@@ -24,7 +24,7 @@
 </template>
 
 <script>
-// jsmediatags can't be installed via npm when used in-browser: https://github.com/aadsm/jsmediatags#browser 
+// jsmediatags can't be installed via npm when used in-browser: https://github.com/aadsm/jsmediatags#browser
 const jsmediatags = require("@/jsmediatags.min.js");
 
 export default {
@@ -45,31 +45,47 @@ export default {
         file: this.songFile,
         artist: this.artist,
         title: this.title,
+        duration: this.duration,
       };
-    }
+    },
   },
   methods: {
+    async songDuration(songFile) {
+      const p = new Promise(async (resolve, reject) => {
+        const audio = document.createElement("audio");
+        audio.addEventListener(
+          "loadedmetadata",
+          () => {
+            const duration = audio.duration;
+            resolve(duration);
+          },
+          false
+        );
+        const reader = new FileReader();
+        reader.addEventListener("load", (e) => (audio.src = e.target.result));
+        reader.readAsDataURL(await this.songInfo.file);
+      });
+      return p;
+    },
     onFileChange(e) {
       const self = this;
-      this.songInfo.duration = this.songFile.duration;
       jsmediatags.read(this.songFile, {
-        onSuccess(tag) {
-          console.log(tag);
+        async onSuccess(tag) {
           self.artist = tag.tags.artist;
           self.title = tag.tags.title;
-          self.duration = tag.
+          self.duration = await self.songDuration(this.songFile);
           self.$emit("input", self.songInfo);
         },
         onFailure(error) {
           console.error(error);
           self.$emit("input", self.songInfo);
-        }
+        },
       });
     },
     onTextChange(e) {
       console.log("Text change");
       this.$emit("input", this.songInfo);
-    }
+    },
   },
 };
 </script>

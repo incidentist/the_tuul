@@ -26,13 +26,17 @@ module.exports = {
     ],
     module: {
         rules: [{
-                test: /\.vue$/,
-                loader: 'vue-loader'
-            },
-            {
-                test: /\.css$/,
-                use: ['style-loader', 'css-loader']
-            },
+            test: /\.vue$/,
+            loader: 'vue-loader'
+        },
+        {
+            test: /\.css$/,
+            use: ['style-loader', 'css-loader']
+        },
+        {
+            test: /\.tsx?$/,
+            use: "ts-loader"
+        }
 
         ]
     },
