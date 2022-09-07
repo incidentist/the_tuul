@@ -20,7 +20,8 @@ def run(
     lyricsfile: Path,
     songfile: Path,
     timingsfile: Path = None,
-    output_filename = "karaoke.mp4"
+    lyric_subtitles: str = None,
+    output_filename="karaoke.mp4",
 ):
     song_files_dir = songfile.parent
     instrumental_path = song_files_dir.joinpath("accompaniment.wav")
@@ -32,7 +33,6 @@ def run(
     else:
         lyric_events = timing_data.gather_timing_data(lyrics, songfile)
         write_timings_file(song_files_dir.joinpath("timings.json"), lyric_events)
-    intial_screens = compile_lyric_timings(lyrics, lyric_events)
 
     if instrumental_path.exists() and vocal_path.exists():
         click.echo(f"Using existing instrumental track at {instrumental_path}")
@@ -40,19 +40,26 @@ def run(
         click.echo("Splitting song into instrumental and vocal tracks..")
         split_song(songfile, song_files_dir)
         click.echo(f"Wrote instrumental track to {instrumental_path}")
-    screens = set_segment_end_times(intial_screens, instrumental_path)
-    screens = set_screen_start_times(screens)
 
-    lyric_subtitles = create_subtitles(
-        screens,
-        {
-            "FontName": "Arial Narrow",
-            "FontSize": 20,
-            "PrimaryColor": (255, 0, 255, 255),
-            "SecondaryColor": (0, 255, 255, 255),
-        },
+    if lyric_subtitles == None:
+        intial_screens = compile_lyric_timings(lyrics, lyric_events)
+        screens = set_segment_end_times(intial_screens, instrumental_path)
+        screens = set_screen_start_times(screens)
+        lyric_subtitles = create_subtitles(
+            screens,
+            {
+                "FontName": "Arial Narrow",
+                "FontSize": 20,
+                "PrimaryColor": (255, 0, 255, 255),
+                "SecondaryColor": (0, 255, 255, 255),
+            },
+        )
+    return create_video(
+        instrumental_path,
+        lyric_subtitles,
+        output_dir=song_files_dir,
+        filename=output_filename,
     )
-    return create_video(instrumental_path, lyric_subtitles, output_dir=song_files_dir, filename=output_filename)
 
 
 def autocorrect_timings(
@@ -95,10 +102,12 @@ def find_first_vocal_time(
 
     return closest_nonsilent_start
 
+
 def get_file_duration(media_path: Path) -> timedelta:
     audio = pydub.AudioSegment.from_wav(str(media_path))
     duration = audio.duration_seconds
     return timedelta(seconds=duration)
+
 
 def set_segment_end_times(
     screens: List[LyricsScreen], instrumental_path: Path
@@ -250,13 +259,16 @@ def subprocess_call(cmd):
 
 def create_video(
     audio_path: Path,
-    subtitles: ass.ASS,
+    subtitles: Union[str, ass.ASS],
     output_dir: Path,
     filename: str = "karaoke.mp4",
 ):
     ass_path = str(output_dir.joinpath("subtitles.ass"))
+    if type(subtitles) == str:
+        Path(ass_path).write_text(subtitles)
+    else:
+        subtitles.write(ass_path)
     video_path = str(output_dir.joinpath(filename))
-    subtitles.write(ass_path)
     ffmpeg_cmd = [
         "ffmpeg",
         "-f",

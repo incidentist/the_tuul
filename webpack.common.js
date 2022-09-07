@@ -26,17 +26,22 @@ module.exports = {
     ],
     module: {
         rules: [{
-                test: /\.vue$/,
-                loader: 'vue-loader'
-            },
-            {
-                test: /\.css$/,
-                use: ['style-loader', 'css-loader']
-            },
+            test: /\.vue$/,
+            loader: 'vue-loader'
+        },
+        {
+            test: /\.css$/,
+            use: ['style-loader', 'css-loader']
+        },
+        {
+            test: /\.tsx?$/,
+            use: "ts-loader"
+        }
+
         ]
     },
     resolve: {
-        extensions: ['.js', '.vue'],
+        extensions: ['.js', '.vue', '.ts', 'tsx'],
         alias: {
             'vue$': 'vue/dist/vue.esm.js',
             '@': path.resolve(__dirname, 'frontend')
