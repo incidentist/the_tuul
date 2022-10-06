@@ -23,7 +23,8 @@
 </template>
 
 <script>
-import { createAssFile } from "@/lib/timing.ts";
+import { createAssFile, createScreens } from "@/lib/timing.ts";
+import { TITLE_SCREEN_DURATION } from "@/constants.js";
 
 export default {
   props: {
@@ -45,8 +46,24 @@ export default {
       return this.songInfo.file;
     },
     subtitles() {
-      return createAssFile(this.lyricText, this.timings.toArray(), this.songFile.duration);
-    }
+      return createAssFile(
+        this.lyricText,
+        this.timings.toArray(),
+        this.songFile.duration,
+        this.songInfo.title,
+        this.songInfo.artist
+      );
+    },
+    audioDelay() {
+      const screens = createScreens(
+        this.lyricText,
+        this.timings.toArray(),
+        this.songFile.duration,
+        this.songInfo.title,
+        this.songInfo.artist
+      );
+      return _.sum(_.map(screens, "audioDelay"));
+    },
   },
   methods: {
     async submitTimings() {
@@ -58,6 +75,7 @@ export default {
       formData.append("songArtist", this.songInfo.artist);
       formData.append("songTitle", this.songInfo.title);
       formData.append("subtitles", this.subtitles);
+      formData.append("audioDelay", this.audioDelay);
 
       const response = await fetch("/generate_video", {
         method: "POST",
