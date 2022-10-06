@@ -22,12 +22,13 @@ class Index(TemplateView):
 
 class GenerateVideo(APIView):
     def post(self, request, format=None):
-        lyrics = request.data.get("lyrics")
-        timings = request.data.get("timings")
+        lyrics: str = request.data.get("lyrics")
+        timings: str = request.data.get("timings")
         song_file = request.data.get("songFile")
-        song_artist = request.data.get("songArtist", "Unknown Artist")
-        song_title = request.data.get("songTitle", "Unknown Title")
-        subtitles = request.data.get("subtitles")
+        song_artist: str = request.data.get("songArtist", "Unknown Artist")
+        song_title: str = request.data.get("songTitle", "Unknown Title")
+        subtitles: str = request.data.get("subtitles")
+        audio_delay: float = request.data.get("audioDelay", 0.0)
 
         with tempfile.TemporaryDirectory() as song_files_dir:
             zip_path = None
@@ -37,7 +38,12 @@ class GenerateVideo(APIView):
             )
             logging.info(song_path)
             success = make_karaoke_video.run(
-                lyricsfile=lyrics_path, songfile=song_path, timingsfile=timings_path, lyric_subtitles=subtitles, output_filename=video_filename
+                lyricsfile=lyrics_path,
+                songfile=song_path,
+                timingsfile=timings_path,
+                lyric_subtitles=subtitles,
+                output_filename=video_filename,
+                audio_delay=audio_delay,
             )
             if success:
                 zip_path = self.zip_project(
