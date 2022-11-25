@@ -1,5 +1,6 @@
-import { LYRIC_MARKERS, VIDEO_SIZE, LINE_HEIGHT } from "../constants";
+import { LYRIC_MARKERS, VIDEO_SIZE, LINE_HEIGHT, TITLE_SCREEN_DURATION } from "../constants";
 import * as _ from "lodash";
+import { isNumber } from "lodash";
 
 interface Segment {
   text: string;
@@ -101,7 +102,6 @@ export class LyricSegmentIterator {
       }
     }
   }
-
 }
 
 export class LyricSegment {
@@ -115,7 +115,7 @@ export class LyricSegment {
     this.endTimestamp = endTimestamp;
   }
 
-  adjustTimestamp(adjustment) {
+  adjustTimestamps(adjustment: number): LyricSegment {
     const newTs = this.timestamp + adjustment;
     const newEndTs = this.endTimestamp === null ? null : this.endTimestamp + adjustment;
     return new LyricSegment(this.text, newTs, newEndTs);
@@ -131,16 +131,20 @@ export class LyricSegment {
 export class LyricsScreen {
   lines: LyricsLine[];
   startTimestamp?: Timestamp;
-  constructor() {
-    this.lines = [];
+  // Seconds to delay the start of the audio. Only valid on the title screen and first lyrics screen.
+  audioDelay: number = 0.0;
+
+  constructor(lines: LyricsLine[] = [], audioDelay = 0.0) {
+    this.lines = lines;
+    this.audioDelay = audioDelay;
   }
+
   get endTimestamp(): Timestamp {
     if (this.lines.length == 0) {
       return this.startTimestamp;
     }
     return this.lines[this.lines.length - 1].endTimestamp;
   }
-
 
   get segments(): LyricSegment[] {
     return this.lines.flatMap(l => l.segments);
@@ -152,19 +156,42 @@ export class LyricsScreen {
     return screenMiddle - (lineCount * LINE_HEIGHT / 2) + (lineInScreen * LINE_HEIGHT)
   }
 
-
   toAssEvents(formatParams: Object) {
     const styleName = "Default";
     const self = this;
     return this.lines.map((l, i) => l.toAssEvent(self.startTimestamp, self.endTimestamp, styleName, self.getLineY(i))).join("\n") + "\n";
+  }
+
+  adjustTimestamps(adjustment: number): LyricsScreen {
+    const lines = _.map(this.lines, _.method('adjustTimestamps', adjustment));
+    const screen = new LyricsScreen(lines);
+    screen.startTimestamp = this.startTimestamp;
+    if (isNumber(screen.startTimestamp)) {
+      screen.startTimestamp = this.startTimestamp + adjustment;
+    }
+    // else {
+    //   screen.startTimestamp = adjustment;
+    // }
+    return screen;
+  }
+
+  trimDisplayStart(adjustment: number): LyricsScreen {
+    // Adjust the start of this screen's display by [adjustment]
+    const newStartTime = this.startTimestamp ? this.startTimestamp + adjustment : adjustment;
+    if (newStartTime > this.lines[0].timestamp) {
+      throw Error(`Cannot adjust screen display start by ${adjustment}s because its first line animates at ${this.lines[0].timestamp}`);
+    }
+    const trimmedScreen = new LyricsScreen(this.lines, this.audioDelay);
+    trimmedScreen.startTimestamp = newStartTime;
+    return trimmedScreen;
   }
 }
 
 class LyricsLine {
   segments: LyricSegment[];
 
-  constructor() {
-    this.segments = [];
+  constructor(segments: LyricSegment[] = []) {
+    this.segments = segments;
   }
 
   get timestamp(): Timestamp {
@@ -191,7 +218,10 @@ class LyricsLine {
     // screen to start animating.
     // That is followed by {\kf<digits>} which is how long to animate the text
     // following the tag.
-    const startTime = (this.timestamp - screenStartTimestamp) * 100;
+    const startTime = Math.floor((this.timestamp - screenStartTimestamp) * 100);
+    if (startTime < 0) {
+      throw Error(`Negative line startTime: ${self}: ${startTime}`);
+    }
     let line = `{\\k${startTime}}`;
     let previousEnd = null;
     for (const s of segments) {
@@ -207,6 +237,9 @@ class LyricsLine {
   }
 
   toAssEvent(screenStart: Timestamp, screenEnd: Timestamp, style: string, topMargin: number): string {
+    if (isNaN(this.timestamp) || isNaN(screenStart) || isNaN(screenEnd)) {
+      throw Error("NaN value for timestamp");
+    }
     const e: AssEvent = {
       type: "Dialogue",
       Layer: 0,
@@ -217,6 +250,11 @@ class LyricsLine {
       Text: this.decorateAssLine(this.segments, screenStart)
     }
     return `${e.type}: ` + ["Layer", "Style", "Start", "End", "MarginV", "Text"].map(k => e[k]).join(",");
+  }
+
+  adjustTimestamps(adjustment: number): LyricsLine {
+    const segments = _.map(this.segments, _.method('adjustTimestamps', adjustment))
+    return new LyricsLine(segments);
   }
 
 }
@@ -297,11 +335,58 @@ export function setScreenStartTimes(screens: LyricsScreen[]): LyricsScreen[] {
     if (!prevScreen) {
       screen.startTimestamp = 0.0;
     } else {
-      screen.startTimestamp = prevScreen.endTimestamp + 0.1;
+      screen.startTimestamp = prevScreen.endTimestamp;
     }
     prevScreen = screen;
   }
   return screens;
+}
+
+function getIntroLength(screens: LyricsScreen[]): number {
+  // Get the length of the song intro
+  return screens[0].lines[0].timestamp;
+}
+
+function trimStart(screens: LyricsScreen[], adjustment: number): LyricsScreen[] {
+  // Trim [adjustment] seconds from the start of the first screen, keeping other timestamps the same.
+  let otherScreens = screens.slice(1);
+  const trimmedScreen = screens[0].trimDisplayStart(adjustment);
+  return _.concat([trimmedScreen], otherScreens);
+}
+
+export function adjustScreenTimestamps(screens: LyricsScreen[], adjustment: number): LyricsScreen[] {
+  // Adjust all timings in [screens] forward by [adjustment] seconds.
+  return _.map(screens, _.method('adjustTimestamps', adjustment));
+}
+
+export function denormalizeTimestamps(screens: LyricsScreen[], songDuration: number): LyricsScreen[] {
+  // Explicitly set various timestamps
+  return setScreenStartTimes(setSegmentEndTimes(screens, songDuration));
+}
+
+export function addTitleScreen(screens: LyricsScreen[], title: string, artist: string): LyricsScreen[] {
+  const introLength = getIntroLength(screens);
+  // If the vocals start right at the beginning of the song, don't start the audio until the title screen is over.
+  const audioDelay = introLength < TITLE_SCREEN_DURATION ? TITLE_SCREEN_DURATION : 0.0;
+  let adjustedLyricScreens;
+  if (introLength > TITLE_SCREEN_DURATION + 1) {
+    // Long intro, start audio during title screen
+    adjustedLyricScreens = trimStart(screens, TITLE_SCREEN_DURATION);
+  } else {
+    // Short intro, delay audio until after title screen
+    adjustedLyricScreens = adjustScreenTimestamps(screens, TITLE_SCREEN_DURATION);
+  }
+  const titleScreen = new LyricsScreen(
+    [
+      new LyricsLine([new LyricSegment(title, 0.0, TITLE_SCREEN_DURATION / 2)]),
+      new LyricsLine([new LyricSegment(artist, TITLE_SCREEN_DURATION / 2, TITLE_SCREEN_DURATION)])
+    ],
+    audioDelay
+  );
+  const denormalizedScreen = denormalizeTimestamps([titleScreen], TITLE_SCREEN_DURATION)[0];
+  const screensWithTitle = adjustedLyricScreens.slice()
+  screensWithTitle.unshift(denormalizedScreen);
+  return screensWithTitle;
 }
 
 function createSubtitles(screens: LyricsScreen[], formatParams: Object): string {
@@ -346,14 +431,16 @@ Format: Layer, Style, Start, End, MarginV, Text
   return assText;
 }
 
-export function createAssFile(lyrics: string, lyricEvents: LyricEvent[], songDuration: number) {
+export function createScreens(lyrics: string, lyricEvents: LyricEvent[], songDuration: number, title: string, artist: string): LyricsScreen[] {
   const initialScreens = compileLyricTimings(lyrics, lyricEvents);
+  const screensWithStartTimes = denormalizeTimestamps(initialScreens, songDuration);
+  return addTitleScreen(screensWithStartTimes, title, artist);
+}
 
-  const screensWithEndTimes = setSegmentEndTimes(initialScreens, songDuration);
+export function createAssFile(lyrics: string, lyricEvents: LyricEvent[], songDuration: number, title: string, artist: string) {
+  const screensWithTitle = createScreens(lyrics, lyricEvents, songDuration, title, artist);
 
-  const screensWithStartTimes = setScreenStartTimes(screensWithEndTimes);
-
-  return createSubtitles(screensWithStartTimes, {
+  return createSubtitles(screensWithTitle, {
     "Fontname": "Arial Narrow",
     "Fontsize": 20,
     "PrimaryColour": [255, 0, 255, 0],

@@ -21,7 +21,8 @@ def run(
     songfile: Path,
     timingsfile: Path = None,
     lyric_subtitles: str = None,
-    output_filename="karaoke.mp4",
+    output_filename: str = "karaoke.mp4",
+    audio_delay: float = 0.0,
 ):
     song_files_dir = songfile.parent
     instrumental_path = song_files_dir.joinpath("accompaniment.wav")
@@ -59,6 +60,7 @@ def run(
         lyric_subtitles,
         output_dir=song_files_dir,
         filename=output_filename,
+        audio_delay=audio_delay,
     )
 
 
@@ -262,7 +264,11 @@ def create_video(
     subtitles: Union[str, ass.ASS],
     output_dir: Path,
     filename: str = "karaoke.mp4",
+    audio_delay: float = 0.0,
 ):
+    """
+    Run ffmpeg to create the karaoke video.
+    """
     ass_path = str(output_dir.joinpath("subtitles.ass"))
     if type(subtitles) == str:
         Path(ass_path).write_text(subtitles)
@@ -275,6 +281,8 @@ def create_video(
         "lavfi",
         "-i",
         "color=c=black:s=1280x720:r=20",
+        "-itsoffset",
+        str(audio_delay),
         "-i",
         str(audio_path),
         "-c:a",
