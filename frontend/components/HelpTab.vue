@@ -49,6 +49,10 @@
           your song on the beta. If something doesn't work, you can go back to
           regular ol' <a href="https://the-tuul.com">the-tuul.com</a>.
         </li>
+        <li>
+          <strong>Title screens</strong> - Your videos will now have a (very
+          basic) title screen!
+        </li>
       </ul>
     </div>
   </b-tab-item>
