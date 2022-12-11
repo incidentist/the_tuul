@@ -39,6 +39,25 @@
         <code>timings.json</code> files that were used to make your video. You
         can ignore them.
       </p>
+      <h3>Some Notes</h3>
+      <ul>
+        <li>
+          A video demonstration of how to use this thing is
+          <a href="https://www.youtube.com/watch?v=f6yzza_ZZY8">here</a>.
+        </li>
+        <li>
+          A beta version of The Tüül is available at
+          <a href="https://beta.the-tuul.com">beta.the-tuul.com</a>. Try making
+          your song on the beta and play around with its new features. If
+          something doesn't work, you can go back to regular ol'
+          <a href="https://the-tuul.com">the-tuul.com</a>.
+        </li>
+        <li>
+          If you run into problems of any kind, create a GitHub issue
+          <a href="https://github.com/incidentist/the_tuul/issues">here</a> or
+          email me at andfurthermore[AT]gmail[DOT]com.
+        </li>
+      </ul>
       <h3>What's New</h3>
       <h5>Dec 10, 2022</h5>
       <ul>
