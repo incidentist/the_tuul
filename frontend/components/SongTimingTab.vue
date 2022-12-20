@@ -217,7 +217,7 @@ export default {
         this.advanceToNextSegment(keyCode, currentSongTime);
       }
       if (this.currentSegment >= this.lyricSegments.length) {
-        this.$emit("timings-complete", this.timings);
+        this.$emit("timings-complete", this.timings.toArray());
       }
     },
     advanceToNextSegment(keyCode, currentSongTime) {

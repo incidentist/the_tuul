@@ -37,7 +37,8 @@
         <code>.mp4</code> file which is your karaoke video! The zip file also
         includes generated <code>subtitles.ass</code> and
         <code>timings.json</code> files that were used to make your video. You
-        can ignore them.
+        can ignore them. You can ignore them unless you
+        <a @click="onDevLinkClick">know what you're doing</a>.
       </p>
       <h3>Some Notes</h3>
       <ul>
@@ -76,3 +77,24 @@
     </div>
   </b-tab-item>
 </template>
+
+<script>
+import AdvancedOptionsModal from "@/components/AdvancedOptionsModal.vue";
+
+export default {
+  methods: {
+    onDevLinkClick() {
+      this.$buefy.modal.open({
+        parent: this,
+        component: AdvancedOptionsModal,
+        width: "80%",
+        events: {
+          "options-change": (e) => {
+            this.$emit("options-change", e);
+          },
+        },
+      });
+    },
+  },
+};
+</script>

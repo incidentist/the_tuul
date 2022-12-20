@@ -30,7 +30,7 @@ export default {
   props: {
     songInfo: Object,
     lyricText: String,
-    timings: Object,
+    timings: Array,
     enabled: {
       type: Boolean,
       default: false,
@@ -48,7 +48,7 @@ export default {
     subtitles() {
       return createAssFile(
         this.lyricText,
-        this.timings.toArray(),
+        this.timings,
         this.songFile.duration,
         this.songInfo.title,
         this.songInfo.artist
@@ -57,7 +57,7 @@ export default {
     audioDelay() {
       const screens = createScreens(
         this.lyricText,
-        this.timings.toArray(),
+        this.timings,
         this.songFile.duration,
         this.songInfo.title,
         this.songInfo.artist
@@ -70,7 +70,7 @@ export default {
       this.isSubmitting = true;
       const formData = new FormData();
       formData.append("lyrics", this.lyricText);
-      formData.append("timings", this.timings.toJson());
+      formData.append("timings", JSON.stringify(this.timings));
       formData.append("songFile", this.songFile);
       formData.append("songArtist", this.songInfo.artist);
       formData.append("songTitle", this.songInfo.title);

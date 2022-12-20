@@ -14,7 +14,7 @@
       </template>
     </b-navbar>
     <b-tabs vertical expanded type="is-boxed">
-      <help-tab></help-tab>
+      <help-tab @options-change="onOptionsChange"></help-tab>
       <song-info-tab v-model="songInfo"></song-info-tab>
       <lyric-input-tab v-model="lyricText"></lyric-input-tab>
       <song-timing-tab
@@ -56,8 +56,9 @@ export default {
     return {
       lyricText: "",
       // Object containing song info: file, artist, title
-      songInfo: {file: null, artist: null, title: null, duration: null},
+      songInfo: { file: null, artist: null, title: null, duration: null },
       isSubmitting: false,
+      // Array of lyric timings
       timings: null,
     };
   },
@@ -67,12 +68,25 @@ export default {
       return this.parseLyricSegments(this.lyricText);
     },
     isReadyToSubmit() {
-      return this.songInfo && this.songInfo.file && this.lyricText.length > 0 && this.timings != null;
+      return (
+        this.songInfo &&
+        this.songInfo.file &&
+        this.lyricText.length > 0 &&
+        this.timings != null
+      );
     },
   },
   methods: {
     onTimingsComplete(timings) {
       this.timings = timings;
+    },
+    onOptionsChange(newOptions) {
+      for (const key in newOptions) {
+        if (Object.hasOwnProperty.call(newOptions, key)) {
+          const newValue = newOptions[key];
+          this[key] = newValue;
+        }
+      }
     },
     // Parse marked up lyrics into segments.
     // Line breaks separate segments.
