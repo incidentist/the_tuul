@@ -277,20 +277,29 @@ def create_video(
     video_path = str(output_dir.joinpath(filename))
     ffmpeg_cmd = [
         "ffmpeg",
+        # Describe a video stream that is a black background
         "-f",
         "lavfi",
         "-i",
         "color=c=black:s=1280x720:r=20",
-        "-itsoffset",
-        str(audio_delay),
+        # Use accompaniment track as audio
         "-i",
         str(audio_path),
+        # Set audio delay if needed
+        # https://ffmpeg.org/ffmpeg-filters.html#adelay
+        "-af",
+        f"adelay=delays={audio_delay}s:all=1",
+        # Re-encode audio as mp3
         "-c:a",
         "libmp3lame",
+        # Add subtitles
         "-vf",
         "ass=" + ass_path,
+        # End encoding after the shortest stream
         "-shortest",
+        # Overwrite files without asking
         "-y",
+        # Output path of video
         video_path,
     ]
     subprocess_call(ffmpeg_cmd)
