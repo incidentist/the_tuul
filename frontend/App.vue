@@ -129,4 +129,8 @@ export default {
 .b-tabs.is-vertical {
   flex-wrap: nowrap;
 }
+
+.scroll-wrapper {
+  overflow-y: scroll;
+}
 </style>
