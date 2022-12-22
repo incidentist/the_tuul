@@ -64,6 +64,12 @@ export default {
       );
       return _.sum(_.map(screens, "audioDelay"));
     },
+    zipFileName() {
+      if (this.songInfo.artist && this.songInfo.title) {
+        return `${this.songInfo.artist} - ${this.songInfo.title} [karaoke].mp4.zip`;
+      }
+      return "karaoke.mp4.zip";
+    },
   },
   methods: {
     async submitTimings() {
@@ -85,7 +91,8 @@ export default {
       await this.saveZipFile(response);
     },
     async saveZipFile(response) {
-      const filename = `${this.songFile.name}.zip`;
+      console.log(response);
+      const filename = this.zipFileName;
       const blob = await response.blob();
       const reader = new FileReader();
       reader.onload = (e) => {

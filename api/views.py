@@ -91,5 +91,5 @@ class GenerateVideo(APIView):
 
     def get_output_filename(self, artist: str, title: str) -> str:
         if artist and title:
-            return f"{artist} - {title} [karaoke].mp4"
+            return f"{artist} - {title} [karaoke].mp4".replace("/", "_")
         return "karaoke.mp4"
