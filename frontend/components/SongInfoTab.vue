@@ -83,7 +83,6 @@ export default {
       });
     },
     onTextChange(e) {
-      console.log("Text change");
       this.$emit("input", this.songInfo);
     },
   },

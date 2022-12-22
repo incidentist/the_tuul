@@ -11,18 +11,49 @@
         >Hell/o_from_the_oth/er_side<br />I_must_have_called_a_thou/sand_times</code
       >
     </p>
-    <textarea class="textarea is-flex-grow-1" @input="onLyricInput"></textarea>
+    <div class="level is-mobile">
+      <div class="level-item">
+        <b-checkbox
+          type="is-primary"
+          v-model="magicSlashes"
+          @click="magicSlashes = !magicSlashes"
+        >
+          <b-tooltip
+            multilined
+            label="Adding a slash to a word will add the same slash to all instances of that word"
+            position="is-right"
+            dashed
+            >Magic Slashes</b-tooltip
+          ></b-checkbox
+        >
+      </div>
+    </div>
+    <lyric-editor
+      :value="value"
+      :magic-slashes="magicSlashes"
+      @input="onLyricInput"
+    ></lyric-editor>
   </b-tab-item>
 </template>
 
 <script>
+import LyricEditor from "@/components/LyricEditor.vue";
+
 export default {
+  components: {
+    LyricEditor,
+  },
   props: {
     value: String,
   },
+  data() {
+    return {
+      magicSlashes: true,
+    };
+  },
   methods: {
-    onLyricInput(e) {
-      this.$emit("input", e.target.value);
+    onLyricInput(newValue) {
+      this.$emit("input", newValue);
     },
   },
 };
