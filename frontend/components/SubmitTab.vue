@@ -23,13 +23,14 @@
 </template>
 
 <script>
-import { createAssFile } from "@/lib/timing.ts";
+import { createAssFile, createScreens } from "@/lib/timing.ts";
+import { TITLE_SCREEN_DURATION } from "@/constants.js";
 
 export default {
   props: {
     songInfo: Object,
     lyricText: String,
-    timings: Object,
+    timings: Array,
     enabled: {
       type: Boolean,
       default: false,
@@ -45,19 +46,42 @@ export default {
       return this.songInfo.file;
     },
     subtitles() {
-      return createAssFile(this.lyricText, this.timings.toArray(), this.songFile.duration);
-    }
+      return createAssFile(
+        this.lyricText,
+        this.timings,
+        this.songFile.duration,
+        this.songInfo.title,
+        this.songInfo.artist
+      );
+    },
+    audioDelay() {
+      const screens = createScreens(
+        this.lyricText,
+        this.timings,
+        this.songFile.duration,
+        this.songInfo.title,
+        this.songInfo.artist
+      );
+      return _.sum(_.map(screens, "audioDelay"));
+    },
+    zipFileName() {
+      if (this.songInfo.artist && this.songInfo.title) {
+        return `${this.songInfo.artist} - ${this.songInfo.title} [karaoke].mp4.zip`;
+      }
+      return "karaoke.mp4.zip";
+    },
   },
   methods: {
     async submitTimings() {
       this.isSubmitting = true;
       const formData = new FormData();
       formData.append("lyrics", this.lyricText);
-      formData.append("timings", this.timings.toJson());
+      formData.append("timings", JSON.stringify(this.timings));
       formData.append("songFile", this.songFile);
       formData.append("songArtist", this.songInfo.artist);
       formData.append("songTitle", this.songInfo.title);
       formData.append("subtitles", this.subtitles);
+      formData.append("audioDelay", this.audioDelay);
 
       const response = await fetch("/generate_video", {
         method: "POST",
@@ -67,7 +91,8 @@ export default {
       await this.saveZipFile(response);
     },
     async saveZipFile(response) {
-      const filename = `${this.songFile.name}.zip`;
+      console.log(response);
+      const filename = this.zipFileName;
       const blob = await response.blob();
       const reader = new FileReader();
       reader.onload = (e) => {

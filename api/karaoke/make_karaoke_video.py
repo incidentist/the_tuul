@@ -21,7 +21,8 @@ def run(
     songfile: Path,
     timingsfile: Path = None,
     lyric_subtitles: str = None,
-    output_filename="karaoke.mp4",
+    output_filename: str = "karaoke.mp4",
+    audio_delay: float = 0.0,
 ):
     song_files_dir = songfile.parent
     instrumental_path = song_files_dir.joinpath("accompaniment.wav")
@@ -59,6 +60,7 @@ def run(
         lyric_subtitles,
         output_dir=song_files_dir,
         filename=output_filename,
+        audio_delay=audio_delay,
     )
 
 
@@ -262,7 +264,11 @@ def create_video(
     subtitles: Union[str, ass.ASS],
     output_dir: Path,
     filename: str = "karaoke.mp4",
+    audio_delay: float = 0.0,
 ):
+    """
+    Run ffmpeg to create the karaoke video.
+    """
     ass_path = str(output_dir.joinpath("subtitles.ass"))
     if type(subtitles) == str:
         Path(ass_path).write_text(subtitles)
@@ -271,18 +277,29 @@ def create_video(
     video_path = str(output_dir.joinpath(filename))
     ffmpeg_cmd = [
         "ffmpeg",
+        # Describe a video stream that is a black background
         "-f",
         "lavfi",
         "-i",
         "color=c=black:s=1280x720:r=20",
+        # Use accompaniment track as audio
         "-i",
         str(audio_path),
+        # Set audio delay if needed
+        # https://ffmpeg.org/ffmpeg-filters.html#adelay
+        "-af",
+        f"adelay=delays={audio_delay}s:all=1",
+        # Re-encode audio as mp3
         "-c:a",
         "libmp3lame",
+        # Add subtitles
         "-vf",
         "ass=" + ass_path,
+        # End encoding after the shortest stream
         "-shortest",
+        # Overwrite files without asking
         "-y",
+        # Output path of video
         video_path,
     ]
     subprocess_call(ffmpeg_cmd)
