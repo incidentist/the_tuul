@@ -34,6 +34,7 @@ ALLOWED_HOSTS = ["*"]
 INSTALLED_APPS = ["django.contrib.staticfiles", "webpack_loader"]
 
 MIDDLEWARE = [
+    "middlewares.SharedArrayBufferHeadersMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.middleware.common.CommonMiddleware",
