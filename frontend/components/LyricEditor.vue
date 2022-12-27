@@ -8,7 +8,11 @@
 </template>
 
 <script>
-import { getCurrentWord, slashifyAllOccurences } from "@/lib/lyrics.ts";
+import {
+  getCurrentWord,
+  slashifyAllOccurences,
+  convertSpacesToUnderscores,
+} from "@/lib/lyrics.ts";
 
 export default {
   props: {
@@ -47,6 +51,17 @@ export default {
       return (
         e instanceof InputEvent && e.inputType == "insertText" && e.data == "/"
       );
+    },
+    convertSpaces() {
+      // Convert spaces to underscores
+      const input = this.$refs.lyricInput;
+      const currentPosition = input.selectionStart;
+      const selectionEnd = input.selectionEnd;
+      const newValue = convertSpacesToUnderscores(this.value);
+      this.$emit("input", newValue);
+      this.$nextTick(() => {
+        input.setSelectionRange(currentPosition, selectionEnd);
+      });
     },
   },
 };

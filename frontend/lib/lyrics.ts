@@ -22,8 +22,8 @@ export function getCurrentWord(body: string, cursorPosition: number): string {
     return body.slice(leftBound, rightBound);
 }
 
-function replaceSpacesWithUnderscores(text: string): string {
-    return text.replace(" ", "_");
+export function convertSpacesToUnderscores(text: string): string {
+    return text.replace(/ /g, "_");
 }
 
 function addSlashes(word: string, template: string): string {
