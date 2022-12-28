@@ -60,6 +60,16 @@
         </li>
       </ul>
       <h3>What's New</h3>
+      <h5>Dec 28, 2022</h5>
+      <ul>
+        <li>
+          <strong>New lyric tools</strong> - Marking up lyrics is faster now,
+          with a button that converts spaces to underscores and a "magic
+          slashes" mode: when you add a slash to a word to divide syllables, it
+          applies that slash to every instance of the word. This speeds up the
+          process of marking every syllable in a song.
+        </li>
+      </ul>
       <h5>Dec 10, 2022</h5>
       <ul>
         <li>
