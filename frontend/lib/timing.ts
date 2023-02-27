@@ -1,4 +1,5 @@
 import { LYRIC_MARKERS, VIDEO_SIZE, LINE_HEIGHT, TITLE_SCREEN_DURATION } from "../constants";
+import { addScreenCountIns } from "./adjustments";
 import * as _ from "lodash";
 import { isNumber } from "lodash";
 
@@ -188,6 +189,7 @@ export class LyricsScreen {
 }
 
 class LyricsLine {
+
   segments: LyricSegment[];
 
   constructor(segments: LyricSegment[] = []) {
@@ -210,6 +212,10 @@ class LyricsLine {
       return this.timestamp;
     }
     return this.segments[this.segments.length - 1].endTimestamp;
+  }
+
+  addSegmentToFront(newSegment: LyricSegment) {
+    this.segments.unshift(newSegment);
   }
 
   decorateAssLine(segments: LyricSegment[], screenStartTimestamp: Timestamp): string {
@@ -260,7 +266,7 @@ class LyricsLine {
 }
 
 type LyricEvent = [number, number]
-type Timestamp = number
+export type Timestamp = number
 
 export function compileLyricTimings(lyrics: string, events: LyricEvent[]) {
   // Read keyboard events in the order they were pressed and construct
@@ -434,7 +440,8 @@ Format: Layer, Style, Start, End, MarginV, Text
 export function createScreens(lyrics: string, lyricEvents: LyricEvent[], songDuration: number, title: string, artist: string): LyricsScreen[] {
   const initialScreens = compileLyricTimings(lyrics, lyricEvents);
   const screensWithStartTimes = denormalizeTimestamps(initialScreens, songDuration);
-  return addTitleScreen(screensWithStartTimes, title, artist);
+  const screensWithCountIns = addScreenCountIns(screensWithStartTimes);
+  return addTitleScreen(screensWithCountIns, title, artist);
 }
 
 export function createAssFile(lyrics: string, lyricEvents: LyricEvent[], songDuration: number, title: string, artist: string) {
