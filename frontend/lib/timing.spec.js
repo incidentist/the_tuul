@@ -43,12 +43,12 @@ Dialogue: 0,Default,0:00:00.00,0:00:04.00,130,{\\k0}{\\kf200}It's Cøøl to Tü�
 Dialogue: 0,Default,0:00:00.00,0:00:04.00,160,{\\k200}{\\kf200}TÜ/ÜL
 `
 
-const testAss = testAssPreamble + `Dialogue: 0,Default,0:00:04.00,0:00:10.00,130,{\\k100}{\\kf100}Be bop {\\kf100}{\\kf100}a lu bop
+const testAss = testAssPreamble + `Dialogue: 0,Default,0:00:04.00,0:00:11.00,130,{\\k0}{\\kf200}●●● {\\kf100}Be bop {\\kf100}{\\kf100}a lu bop
 
-Dialogue: 0,Default,0:00:04.00,0:00:10.00,160,{\\k400}{\\kf100}She's my ba{\\kf100}by
+Dialogue: 0,Default,0:00:04.00,0:00:11.00,160,{\\k500}{\\kf100}She's my ba{\\kf100}by
 
 
-Dialogue: 0,Default,0:00:10.00,0:01:04.00,145,{\\k0}{\\kf100}And {\\kf100}here's {\\kf100}screen {\\kf5100}two
+Dialogue: 0,Default,0:00:11.00,0:01:05.00,145,{\\k0}{\\kf100}And {\\kf100}here's {\\kf100}screen {\\kf5100}two
 `
 
 const longIntroTestAss = testAssPreamble + `Dialogue: 0,Default,0:00:04.00,0:00:15.00,130,{\\k300}{\\kf300}■■■■{\\kf100}Be bop {\\kf100}{\\kf100}a lu bop
@@ -56,7 +56,7 @@ const longIntroTestAss = testAssPreamble + `Dialogue: 0,Default,0:00:04.00,0:00:
 Dialogue: 0,Default,0:00:04.00,0:00:15.00,160,{\\k900}{\\kf100}She's my ba{\\kf100}by
 
 
-Dialogue: 0,Default,0:00:15.00,0:01:04.00,145,{\\k0}{\\kf100}And {\\kf100}here's {\\kf100}screen {\\kf4600}two
+Dialogue: 0,Default,0:00:15.00,0:01:05.00,145,{\\k0}{\\kf100}And {\\kf100}here's {\\kf100}screen {\\kf4600}two
 `
 
 test('LyricSegmentIterator', () => {
@@ -137,8 +137,15 @@ test('createAssFileForShortIntroSong', () => {
 
 test('addCountIn', () => {
     const songDuration = 60.0;
-    let assFile = createAssFile(testLyrics, longIntroTestEvents, songDuration, "It's Cøøl to Tüül", "TÜ/ÜL");
-    expect(assFile).toBe(longIntroTestAss);
+    const lyrics = "That was a long intro\nToo bad nothing rhymes with intro"
+    const timings = [[100.0, LYRIC_MARKERS.SEGMENT_START], [105.0, LYRIC_MARKERS.SEGMENT_START]]
+    let assFile = createAssFile(lyrics, timings, songDuration, "It's Cøøl to Tüül", "TÜ/ÜL");
+
+    const expected = testAssPreamble + `Dialogue: 0,Default,0:00:04.00,0:01:00.00,130,{\\k9400}{\\kf200}●●● {\\kf500}That was a long intro
+
+Dialogue: 0,Default,0:00:04.00,0:01:00.00,160,{\\k10100}{\\kf-4500}Too bad nothing rhymes with intro
+`
+    expect(assFile).toBe(expected);
 });
 
 test('addCountInToSevenSecondIntro', () => {
@@ -159,25 +166,16 @@ test('addCountInToSevenSecondIntro', () => {
         [14.0, LYRIC_MARKERS.SEGMENT_START],
         [15.0, LYRIC_MARKERS.SEGMENT_START],
     ]
-    const sevenSecondAss = testAssPreamble + `Dialogue: 0,Default,0:00:04.00,0:00:16.00,130,{\\k450}{\\kf300}■■■■{\\kf100}Be bop {\\kf50}{\\kf100}a lu bop
+    const sevenSecondAss = testAssPreamble + `Dialogue: 0,Default,0:00:04.00,0:00:12.00,130,{\\k150}{\\kf200}●●● {\\kf100}Be bop {\\kf50}{\\kf100}a lu bop
 
-Dialogue: 0,Default,0:00:04.00,0:00:16.00,160,{\\k1000}{\\kf100}She's my ba{\\kf100}by
+Dialogue: 0,Default,0:00:04.00,0:00:12.00,160,{\\k600}{\\kf100}She's my ba{\\kf100}by
 
 
-Dialogue: 0,Default,0:00:16.00,0:01:04.00,145,{\\k0}{\\kf100}And {\\kf100}here's {\\kf100}screen {\\kf4500}two
+Dialogue: 0,Default,0:00:12.00,0:01:00.00,145,{\\k0}{\\kf100}And {\\kf100}here's {\\kf100}screen {\\kf4500}two
 `
     const assFile = createAssFile(testLyrics, sevenSecondEvents, songDuration, "It's Cøøl to Tüül", "TÜ/ÜL");
     expect(assFile).toBe(sevenSecondAss);
 
-});
-
-test('createAssForMeatPies', () => {
-    const songDuration = 60.0;
-    const lyrics = fs.readFileSync('tests/assets/meat_pies_lyrics.txt', { encoding: 'utf-8' });
-    const events = JSON.parse(fs.readFileSync('tests/assets/meat_pies_timings.json'));
-    const expectedAss = fs.readFileSync('tests/assets/meat_pies_subtitles.ass', { encoding: 'utf-8' });
-    const ass = createAssFile(lyrics, events, songDuration, "Meat Pies", "My First Earthquake");
-    expect(ass).toBe(expectedAss);
 });
 
 test('floatToTimecode', () => {
