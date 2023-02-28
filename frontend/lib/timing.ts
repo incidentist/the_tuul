@@ -373,13 +373,14 @@ export function denormalizeTimestamps(screens: LyricsScreen[], songDuration: num
 export function addTitleScreen(screens: LyricsScreen[], title: string, artist: string): LyricsScreen[] {
   const introLength = getIntroLength(screens);
   // If the vocals start right at the beginning of the song, don't start the audio until the title screen is over.
-  const audioDelay = introLength < TITLE_SCREEN_DURATION ? TITLE_SCREEN_DURATION : 0.0;
+  let audioDelay = 0.0; introLength < TITLE_SCREEN_DURATION ? TITLE_SCREEN_DURATION : 0.0;
   let adjustedLyricScreens;
   if (introLength > TITLE_SCREEN_DURATION + 1) {
     // Long intro, start audio during title screen
     adjustedLyricScreens = trimStart(screens, TITLE_SCREEN_DURATION);
   } else {
     // Short intro, delay audio until after title screen
+    audioDelay = TITLE_SCREEN_DURATION;
     adjustedLyricScreens = adjustScreenTimestamps(screens, TITLE_SCREEN_DURATION);
   }
   const titleScreen = new LyricsScreen(
