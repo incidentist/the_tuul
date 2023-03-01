@@ -1,4 +1,5 @@
 import { LYRIC_MARKERS, VIDEO_SIZE, LINE_HEIGHT, TITLE_SCREEN_DURATION } from "../constants";
+import { addQuickStartCountIn, addScreenCountIns } from "./adjustments";
 import * as _ from "lodash";
 import { isNumber } from "lodash";
 
@@ -164,7 +165,7 @@ export class LyricsScreen {
 
   adjustTimestamps(adjustment: number): LyricsScreen {
     const lines = _.map(this.lines, _.method('adjustTimestamps', adjustment));
-    const screen = new LyricsScreen(lines);
+    const screen = new LyricsScreen(lines, this.audioDelay);
     screen.startTimestamp = this.startTimestamp;
     if (isNumber(screen.startTimestamp)) {
       screen.startTimestamp = this.startTimestamp + adjustment;
@@ -188,6 +189,7 @@ export class LyricsScreen {
 }
 
 class LyricsLine {
+
   segments: LyricSegment[];
 
   constructor(segments: LyricSegment[] = []) {
@@ -212,6 +214,10 @@ class LyricsLine {
     return this.segments[this.segments.length - 1].endTimestamp;
   }
 
+  addSegmentToFront(newSegment: LyricSegment) {
+    this.segments.unshift(newSegment);
+  }
+
   decorateAssLine(segments: LyricSegment[], screenStartTimestamp: Timestamp): string {
     // Decorate the line with karaoke tags
     // An ASS line starts with {k<digits>} which is centiseconds within the current
@@ -220,7 +226,7 @@ class LyricsLine {
     // following the tag.
     const startTime = Math.floor((this.timestamp - screenStartTimestamp) * 100);
     if (startTime < 0) {
-      throw Error(`Negative line startTime: ${self}: ${startTime}`);
+      throw Error(`Negative line startTime: ${this}: ${startTime}`);
     }
     let line = `{\\k${startTime}}`;
     let previousEnd = null;
@@ -260,7 +266,7 @@ class LyricsLine {
 }
 
 type LyricEvent = [number, number]
-type Timestamp = number
+export type Timestamp = number
 
 export function compileLyricTimings(lyrics: string, events: LyricEvent[]) {
   // Read keyboard events in the order they were pressed and construct
@@ -367,13 +373,14 @@ export function denormalizeTimestamps(screens: LyricsScreen[], songDuration: num
 export function addTitleScreen(screens: LyricsScreen[], title: string, artist: string): LyricsScreen[] {
   const introLength = getIntroLength(screens);
   // If the vocals start right at the beginning of the song, don't start the audio until the title screen is over.
-  const audioDelay = introLength < TITLE_SCREEN_DURATION ? TITLE_SCREEN_DURATION : 0.0;
+  let audioDelay = 0.0;
   let adjustedLyricScreens;
   if (introLength > TITLE_SCREEN_DURATION + 1) {
     // Long intro, start audio during title screen
     adjustedLyricScreens = trimStart(screens, TITLE_SCREEN_DURATION);
   } else {
     // Short intro, delay audio until after title screen
+    audioDelay = TITLE_SCREEN_DURATION;
     adjustedLyricScreens = adjustScreenTimestamps(screens, TITLE_SCREEN_DURATION);
   }
   const titleScreen = new LyricsScreen(
@@ -432,9 +439,11 @@ Format: Layer, Style, Start, End, MarginV, Text
 }
 
 export function createScreens(lyrics: string, lyricEvents: LyricEvent[], songDuration: number, title: string, artist: string): LyricsScreen[] {
-  const initialScreens = compileLyricTimings(lyrics, lyricEvents);
-  const screensWithStartTimes = denormalizeTimestamps(initialScreens, songDuration);
-  return addTitleScreen(screensWithStartTimes, title, artist);
+  let screens = compileLyricTimings(lyrics, lyricEvents);
+  screens = denormalizeTimestamps(screens, songDuration);
+  screens = addQuickStartCountIn(screens);
+  screens = addScreenCountIns(screens);
+  return addTitleScreen(screens, title, artist);
 }
 
 export function createAssFile(lyrics: string, lyricEvents: LyricEvent[], songDuration: number, title: string, artist: string) {
