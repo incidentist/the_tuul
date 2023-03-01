@@ -60,6 +60,14 @@
         </li>
       </ul>
       <h3>What's New</h3>
+      <h5>Feb 28, 2023</h5>
+      <ul>
+        <li>
+          <strong>Count-ins</strong> - The Tüül now adds automatic count-ins
+          after long instrumental breaks. It also adds a count-in for songs
+          where the vocals start right away.
+        </li>
+      </ul>
       <h5>Dec 28, 2022</h5>
       <ul>
         <li>
