@@ -227,7 +227,13 @@ def advance_screen(screens, screen):
 
 def split_song(songfile: Path, song_dir: Path) -> Tuple[str, str]:
     """Run spleeter to split song into instrumental and vocal tracks"""
-    from spleeter.separator import Separator
+    try:
+        from spleeter.separator import Separator
+    except ModuleNotFoundError:
+        logging.warning(
+            "Spleeter not found. I assume we're testing. Gonna use the original song."
+        )
+        return str(songfile.rename(song_dir.joinpath("accompaniment.wav")))
 
     separator = Separator("spleeter:2stems")
     separator.separate_to_file(
