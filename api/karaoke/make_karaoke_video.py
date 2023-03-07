@@ -275,6 +275,7 @@ def create_video(
     else:
         subtitles.write(ass_path)
     video_path = str(output_dir.joinpath(filename))
+    audio_delay_ms = int(audio_delay * 1000)  # milliseconds
     ffmpeg_cmd = [
         "ffmpeg",
         # Describe a video stream that is a black background
@@ -288,7 +289,7 @@ def create_video(
         # Set audio delay if needed
         # https://ffmpeg.org/ffmpeg-filters.html#adelay
         "-af",
-        f"adelay=delays={audio_delay}s:all=1",
+        f"adelay=delays={audio_delay_ms}:all=1",
         # Re-encode audio as mp3
         "-c:a",
         "libmp3lame",
