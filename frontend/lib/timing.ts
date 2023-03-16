@@ -1,5 +1,5 @@
 import { LYRIC_MARKERS, VIDEO_SIZE, LINE_HEIGHT, TITLE_SCREEN_DURATION } from "../constants";
-import { addQuickStartCountIn, addScreenCountIns } from "./adjustments";
+import { addQuickStartCountIn, addScreenCountIns, addTitleScreen } from "./adjustments";
 import * as _ from "lodash";
 import { isNumber } from "lodash";
 
@@ -188,7 +188,7 @@ export class LyricsScreen {
   }
 }
 
-class LyricsLine {
+export class LyricsLine {
 
   segments: LyricSegment[];
 
@@ -348,18 +348,6 @@ export function setScreenStartTimes(screens: LyricsScreen[]): LyricsScreen[] {
   return screens;
 }
 
-function getIntroLength(screens: LyricsScreen[]): number {
-  // Get the length of the song intro
-  return screens[0].lines[0].timestamp;
-}
-
-function trimStart(screens: LyricsScreen[], adjustment: number): LyricsScreen[] {
-  // Trim [adjustment] seconds from the start of the first screen, keeping other timestamps the same.
-  let otherScreens = screens.slice(1);
-  const trimmedScreen = screens[0].trimDisplayStart(adjustment);
-  return _.concat([trimmedScreen], otherScreens);
-}
-
 export function adjustScreenTimestamps(screens: LyricsScreen[], adjustment: number): LyricsScreen[] {
   // Adjust all timings in [screens] forward by [adjustment] seconds.
   return _.map(screens, _.method('adjustTimestamps', adjustment));
@@ -368,32 +356,6 @@ export function adjustScreenTimestamps(screens: LyricsScreen[], adjustment: numb
 export function denormalizeTimestamps(screens: LyricsScreen[], songDuration: number): LyricsScreen[] {
   // Explicitly set various timestamps
   return setScreenStartTimes(setSegmentEndTimes(screens, songDuration));
-}
-
-export function addTitleScreen(screens: LyricsScreen[], title: string, artist: string): LyricsScreen[] {
-  const introLength = getIntroLength(screens);
-  // If the vocals start right at the beginning of the song, don't start the audio until the title screen is over.
-  let audioDelay = 0.0;
-  let adjustedLyricScreens;
-  if (introLength > TITLE_SCREEN_DURATION + 1) {
-    // Long intro, start audio during title screen
-    adjustedLyricScreens = trimStart(screens, TITLE_SCREEN_DURATION);
-  } else {
-    // Short intro, delay audio until after title screen
-    audioDelay = TITLE_SCREEN_DURATION;
-    adjustedLyricScreens = adjustScreenTimestamps(screens, TITLE_SCREEN_DURATION);
-  }
-  const titleScreen = new LyricsScreen(
-    [
-      new LyricsLine([new LyricSegment(title, 0.0, TITLE_SCREEN_DURATION / 2)]),
-      new LyricsLine([new LyricSegment(artist, TITLE_SCREEN_DURATION / 2, TITLE_SCREEN_DURATION)])
-    ],
-    audioDelay
-  );
-  const denormalizedScreen = denormalizeTimestamps([titleScreen], TITLE_SCREEN_DURATION)[0];
-  const screensWithTitle = adjustedLyricScreens.slice()
-  screensWithTitle.unshift(denormalizedScreen);
-  return screensWithTitle;
 }
 
 function createSubtitles(screens: LyricsScreen[], formatParams: Object): string {
