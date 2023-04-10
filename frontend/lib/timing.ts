@@ -1,5 +1,5 @@
-import { LYRIC_MARKERS, VIDEO_SIZE, LINE_HEIGHT, TITLE_SCREEN_DURATION } from "../constants";
-import { addQuickStartCountIn, addScreenCountIns, addTitleScreen } from "./adjustments";
+import { LYRIC_MARKERS, VIDEO_SIZE, LINE_HEIGHT, TITLE_SCREEN_MIN_DURATION } from "../constants";
+import { addQuickStartCountIn, addScreenCountIns, addTitleScreen, addInstrumentalScreens } from "./adjustments";
 import * as _ from "lodash";
 import { isNumber } from "lodash";
 
@@ -180,7 +180,7 @@ export class LyricsScreen {
     // Adjust the start of this screen's display by [adjustment]
     const newStartTime = this.startTimestamp ? this.startTimestamp + adjustment : adjustment;
     if (newStartTime > this.lines[0].timestamp) {
-      throw Error(`Cannot adjust screen display start by ${adjustment}s because its first line animates at ${this.lines[0].timestamp}`);
+      throw Error(`Cannot adjust screen display start by ${adjustment}s: display start is ${this.startTimestamp}, first line animates at ${this.lines[0].timestamp}`);
     }
     const trimmedScreen = new LyricsScreen(this.lines, this.audioDelay);
     trimmedScreen.startTimestamp = newStartTime;
@@ -244,6 +244,7 @@ export class LyricsLine {
 
   toAssEvent(screenStart: Timestamp, screenEnd: Timestamp, style: string, topMargin: number): string {
     if (isNaN(this.timestamp) || isNaN(screenStart) || isNaN(screenEnd)) {
+      console.error("NaN value for line", this, screenStart, screenEnd);
       throw Error("NaN value for timestamp");
     }
     const e: AssEvent = {
@@ -265,7 +266,7 @@ export class LyricsLine {
 
 }
 
-type LyricEvent = [number, number]
+export type LyricEvent = [number, number]
 export type Timestamp = number
 
 export function compileLyricTimings(lyrics: string, events: LyricEvent[]) {
@@ -405,7 +406,9 @@ export function createScreens(lyrics: string, lyricEvents: LyricEvent[], songDur
   screens = denormalizeTimestamps(screens, songDuration);
   screens = addQuickStartCountIn(screens);
   screens = addScreenCountIns(screens);
-  return addTitleScreen(screens, title, artist);
+  screens = addTitleScreen(screens, title, artist);
+  screens = addInstrumentalScreens(screens);
+  return screens
 }
 
 export function createAssFile(lyrics: string, lyricEvents: LyricEvent[], songDuration: number, title: string, artist: string) {

@@ -15,3 +15,4 @@ export const VIDEO_SIZE = {
 
 export const LINE_HEIGHT = 30;
 export const TITLE_SCREEN_DURATION = 4.0
+export const INSTRUMENTAL_SCREEN_THRESHOLD = 8.0

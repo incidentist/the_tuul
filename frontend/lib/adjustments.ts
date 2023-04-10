@@ -1,5 +1,5 @@
 import { adjustScreenTimestamps, LyricSegment, LyricsScreen, LyricsLine, Timestamp, denormalizeTimestamps } from "./timing";
-import { LYRIC_MARKERS, VIDEO_SIZE, LINE_HEIGHT, TITLE_SCREEN_DURATION } from "../constants";
+import { TITLE_SCREEN_DURATION as TITLE_SCREEN_DURATION, INSTRUMENTAL_SCREEN_THRESHOLD } from "../constants";
 import * as _ from "lodash";
 
 const FIRST_SCREEN_QUICK_START_THRESHOLD: Timestamp = 1.0
@@ -62,12 +62,40 @@ export function trimStart(screens: LyricsScreen[], adjustment: number): LyricsSc
     return _.concat([trimmedScreen], otherScreens);
 }
 
+function createInstrumentalScreen(startTime: Timestamp, duration: number): LyricsScreen {
+    // Create an INSTRUMENTAL screen lasting [duration] seconds
+    const line = new LyricsLine([new LyricSegment("||||||||||||||||||||||||||||||||||", startTime, startTime + duration)])
+    const screen = new LyricsScreen([line]);
+    screen.startTimestamp = startTime;
+    return screen;
+}
+
+export function addInstrumentalScreens(screens: LyricsScreen[]): LyricsScreen[] {
+    // Add instrumental countdown screens between screens with a long gap
+    if (screens.length < 2) {
+        return screens;
+    }
+    // We need to use actual segment times, not calculated screen start/end times
+    const currentScreen = screens[1];
+    const prevScreenEnd = screens[0].endTimestamp;
+    const screenStart = currentScreen.segments[0].timestamp;
+    const screenGap = screenStart - prevScreenEnd;
+    if (screenGap < INSTRUMENTAL_SCREEN_THRESHOLD) {
+        return [screens[0]].concat(addInstrumentalScreens(screens.slice(1)));
+    } else {
+        const instrumentalScreen = createInstrumentalScreen(screens[0].endTimestamp, screenGap);
+        const adjustedScreens = trimStart(screens.slice(1), screenGap);
+        return [screens[0], instrumentalScreen].concat(addInstrumentalScreens(adjustedScreens))
+    }
+
+}
+
 export function addTitleScreen(screens: LyricsScreen[], title: string, artist: string): LyricsScreen[] {
     const introLength = getIntroLength(screens);
     // If the vocals start right at the beginning of the song, don't start the audio until the title screen is over.
     let audioDelay = 0.0;
     let adjustedLyricScreens;
-    if (introLength > TITLE_SCREEN_DURATION + 1) {
+    if (introLength > TITLE_SCREEN_DURATION) {
         // Long intro, start audio during title screen
         adjustedLyricScreens = trimStart(screens, TITLE_SCREEN_DURATION);
     } else {
