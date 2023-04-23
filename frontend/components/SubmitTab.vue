@@ -3,8 +3,18 @@
     label="Submit"
     icon="blender"
     class="submit-tab"
-    :disabled="!enabled"
+    :disabled="enabled"
   >
+    <b-field expanded horizontal
+      ><b-switch left-label v-model="videoOptions.addCountIns"
+        >Add Count-Ins</b-switch
+      ></b-field
+    >
+    <b-field expanded horizontal
+      ><b-switch left-label v-model="videoOptions.addInstrumentalScreens"
+        >Add Instrumental Breaks</b-switch
+      ></b-field
+    >
     <div class="buttons">
       <b-button
         expanded
@@ -39,6 +49,10 @@ export default {
   data() {
     return {
       isSubmitting: false,
+      videoOptions: {
+        addCountIns: true,
+        addInstrumentalScreens: true,
+      },
     };
   },
   computed: {
@@ -51,7 +65,8 @@ export default {
         this.timings,
         this.songFile.duration,
         this.songInfo.title,
-        this.songInfo.artist
+        this.songInfo.artist,
+        this.options
       );
     },
     audioDelay() {
@@ -110,6 +125,6 @@ export default {
 
 <style scoped>
 .submit-tab {
-  margin: auto;
+  margin: auto 30%;
 }
 </style>

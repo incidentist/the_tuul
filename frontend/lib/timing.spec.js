@@ -3,6 +3,10 @@ import { LYRIC_MARKERS } from "../constants";
 import { LyricSegment } from "./timing";
 import fs from 'fs';
 
+const DEFAULT_OPTIONS = {
+    addCountIns: true,
+    addInstrumentalScreens: true
+}
 
 export const testLyrics = "Be bop_a lu bop\nShe's my ba/by\n\nAnd_here's_screen_two"
 const testEvents = [
@@ -120,7 +124,7 @@ test('adjustTimestamps', () => {
 
 test('createAssFileForShortIntroSong', () => {
     const songDuration = 60.0;
-    const assFile = createAssFile(testLyrics, shortIntroTestEvents, songDuration, "It's Cøøl to Tüül", "TÜ/ÜL");
+    const assFile = createAssFile(testLyrics, shortIntroTestEvents, songDuration, "It's Cøøl to Tüül", "TÜ/ÜL", DEFAULT_OPTIONS);
     expect(assFile).toBe(testAss);
 });
 
@@ -128,7 +132,7 @@ test('addCountIn', () => {
     const songDuration = 60.0;
     const lyrics = "That was a long intro\nToo bad nothing rhymes with intro"
     const timings = [[100.0, LYRIC_MARKERS.SEGMENT_START], [105.0, LYRIC_MARKERS.SEGMENT_START]]
-    let assFile = createAssFile(lyrics, timings, songDuration, "It's Cøøl to Tüül", "TÜ/ÜL");
+    let assFile = createAssFile(lyrics, timings, songDuration, "It's Cøøl to Tüül", "TÜ/ÜL", { addCountIns: true, addInstrumentalScreens: false });
 
     const expected = testAssPreamble + `Dialogue: 0,Default,0:00:04.00,0:01:00.00,130,{\\k9400}{\\kf200}●●● {\\kf500}That was a long intro
 
@@ -162,7 +166,7 @@ Dialogue: 0,Default,0:00:04.00,0:00:12.00,160,{\\k600}{\\kf100}She's my ba{\\kf1
 
 Dialogue: 0,Default,0:00:12.00,0:01:00.00,145,{\\k0}{\\kf100}And {\\kf100}here's {\\kf100}screen {\\kf4500}two
 `
-    const assFile = createAssFile(testLyrics, sevenSecondEvents, songDuration, "It's Cøøl to Tüül", "TÜ/ÜL");
+    const assFile = createAssFile(testLyrics, sevenSecondEvents, songDuration, "It's Cøøl to Tüül", "TÜ/ÜL", { addCountIns: true, addInstrumentalScreens: false });
     expect(assFile).toBe(sevenSecondAss);
 
 });

@@ -3,6 +3,11 @@ import { addQuickStartCountIn, addScreenCountIns, addTitleScreen, addInstrumenta
 import * as _ from "lodash";
 import { isNumber } from "lodash";
 
+interface KaraokeOptions {
+  addCountIns: boolean,
+  addInstrumentalScreens: boolean
+}
+
 interface Segment {
   text: string;
 }
@@ -401,18 +406,23 @@ Format: Layer, Style, Start, End, MarginV, Text
   return assText;
 }
 
-export function createScreens(lyrics: string, lyricEvents: LyricEvent[], songDuration: number, title: string, artist: string): LyricsScreen[] {
+export function createScreens(lyrics: string, lyricEvents: LyricEvent[], songDuration: number, title: string, artist: string, options: KaraokeOptions): LyricsScreen[] {
   let screens = compileLyricTimings(lyrics, lyricEvents);
   screens = denormalizeTimestamps(screens, songDuration);
   screens = addQuickStartCountIn(screens);
-  screens = addScreenCountIns(screens);
+  if (options.addCountIns) {
+    screens = addScreenCountIns(screens);
+  }
   screens = addTitleScreen(screens, title, artist);
-  screens = addInstrumentalScreens(screens);
+  if (options.addInstrumentalScreens) {
+    screens = addInstrumentalScreens(screens);
+  }
   return screens
 }
 
-export function createAssFile(lyrics: string, lyricEvents: LyricEvent[], songDuration: number, title: string, artist: string) {
-  const screensWithTitle = createScreens(lyrics, lyricEvents, songDuration, title, artist);
+export function createAssFile(lyrics: string, lyricEvents: LyricEvent[], songDuration: number, title: string, artist: string, options: KaraokeOptions) {
+  // Entry point to subtitles. Creates an .ass file from the given info.
+  const screensWithTitle = createScreens(lyrics, lyricEvents, songDuration, title, artist, options);
 
   return createSubtitles(screensWithTitle, {
     "Fontname": "Arial Narrow",

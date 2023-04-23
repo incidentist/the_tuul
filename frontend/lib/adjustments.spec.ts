@@ -49,8 +49,8 @@ test('addInstrumentalScreenFor3ScreenSong', () => {
         [30.0, LYRIC_MARKERS.SEGMENT_START],
         [31.0, LYRIC_MARKERS.SEGMENT_END],
     ]
-    let screens = compileLyricTimings(lyrics, timings);
-
+    let screens = compileLyricTimings(lyrics, timings)
+        ;
     screens = denormalizeTimestamps(addInstrumentalScreens(screens), 60.0);
     expect(screens.length).toBe(5)
 
