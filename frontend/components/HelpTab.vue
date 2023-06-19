@@ -60,6 +60,15 @@
         </li>
       </ul>
       <h3>What's New</h3>
+      <h5>June 19, 2023</h5>
+      <ul>
+        <li>
+          <strong>Instrumentals</strong> - The Tüül now adds a screen for long
+          instrumental breaks. You can turn this on or off before you submit the
+          video, in case you added your own screens for this. You can also turn
+          count-ins on or off.
+        </li>
+      </ul>
       <h5>Feb 28, 2023</h5>
       <ul>
         <li>
