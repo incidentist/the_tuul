@@ -3,7 +3,7 @@
     label="Submit"
     icon="blender"
     class="submit-tab"
-    :disabled="enabled"
+    :disabled="!enabled"
   >
     <b-field expanded horizontal
       ><b-switch left-label v-model="videoOptions.addCountIns"
@@ -66,7 +66,7 @@ export default {
         this.songFile.duration,
         this.songInfo.title,
         this.songInfo.artist,
-        this.options
+        this.videoOptions
       );
     },
     audioDelay() {
@@ -75,7 +75,8 @@ export default {
         this.timings,
         this.songFile.duration,
         this.songInfo.title,
-        this.songInfo.artist
+        this.songInfo.artist,
+        this.videoOptions
       );
       return _.sum(_.map(screens, "audioDelay"));
     },
