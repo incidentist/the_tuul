@@ -32,11 +32,12 @@
   </b-tab-item>
 </template>
 
-<script>
-import { createAssFile, createScreens } from "@/lib/timing.ts";
-import { TITLE_SCREEN_DURATION } from "@/constants.js";
+<script lang="ts">
+import * as _ from "lodash";
+import { defineComponent } from "vue";
+import { createAssFile, createScreens, KaraokeOptions } from "@/lib/timing";
 
-export default {
+export default defineComponent({
   props: {
     songInfo: Object,
     lyricText: String,
@@ -121,7 +122,7 @@ export default {
       reader.readAsDataURL(blob);
     },
   },
-};
+});
 </script>
 
 <style scoped>

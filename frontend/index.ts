@@ -17,3 +17,5 @@ window.addEventListener('load', function () {
         template: '<App/>'
     });
 });
+
+export default Vue

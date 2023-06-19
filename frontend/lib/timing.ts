@@ -1,9 +1,9 @@
-import { LYRIC_MARKERS, VIDEO_SIZE, LINE_HEIGHT, TITLE_SCREEN_MIN_DURATION } from "../constants";
+import { LYRIC_MARKERS, VIDEO_SIZE, LINE_HEIGHT, TITLE_SCREEN_DURATION } from "../constants";
 import { addQuickStartCountIn, addScreenCountIns, addTitleScreen, addInstrumentalScreens } from "./adjustments";
 import * as _ from "lodash";
 import { isNumber } from "lodash";
 
-interface KaraokeOptions {
+export interface KaraokeOptions {
   addCountIns: boolean,
   addInstrumentalScreens: boolean
 }
