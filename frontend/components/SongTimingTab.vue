@@ -72,11 +72,17 @@
     </lyric-display>
   </b-tab-item>
 </template>
-<script>
-import { KEY_CODES, LYRIC_MARKERS } from "@/constants.js";
+
+<script lang="ts">
+import { defineComponent } from "vue";
+import { KEY_CODES, LYRIC_MARKERS } from "@/constants";
 import LyricDisplay from "@/components/LyricDisplay.vue";
 
+interface LyricTimingEvent {}
+type LyricMarker = number;
+
 class TimingsList {
+  _timings: Array<[number, LyricMarker]>;
   constructor() {
     this._timings = [];
   }
@@ -133,7 +139,7 @@ class TimingsList {
   }
 }
 
-export default {
+export default defineComponent({
   components: { LyricDisplay },
   props: {
     songInfo: Object,
@@ -278,7 +284,7 @@ export default {
       );
     },
   },
-};
+});
 </script>
 
 <style scoped>
