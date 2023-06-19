@@ -96,10 +96,11 @@
   </b-tab-item>
 </template>
 
-<script>
+<script lang="ts">
+import { defineComponent } from "vue";
 import AdvancedOptionsModal from "@/components/AdvancedOptionsModal.vue";
 
-export default {
+export default defineComponent({
   methods: {
     onDevLinkClick() {
       this.$buefy.modal.open({
@@ -114,5 +115,5 @@ export default {
       });
     },
   },
-};
+});
 </script>

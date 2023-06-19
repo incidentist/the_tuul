@@ -23,8 +23,9 @@
   </div>
 </template>
 
-<script>
-export default {
+<script lang="ts">
+import { defineComponent } from "vue";
+export default defineComponent({
   data() {
     return {
       timingsFile: null,
@@ -34,7 +35,7 @@ export default {
     onTimingFileChange(file) {
       const reader = new FileReader();
       reader.onload = (e) => {
-        this.onChange("timings", JSON.parse(e.target.result));
+        this.onChange("timings", JSON.parse(e.target.result.toString()));
       };
       reader.readAsText(file);
     },
@@ -42,7 +43,7 @@ export default {
       this.$emit("options-change", { [optionName]: newValue });
     },
   },
-};
+});
 </script>
 
 

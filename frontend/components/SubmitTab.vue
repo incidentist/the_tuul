@@ -5,6 +5,16 @@
     class="submit-tab"
     :disabled="!enabled"
   >
+    <b-field expanded horizontal
+      ><b-switch left-label v-model="videoOptions.addCountIns"
+        >Add Count-Ins</b-switch
+      ></b-field
+    >
+    <b-field expanded horizontal
+      ><b-switch left-label v-model="videoOptions.addInstrumentalScreens"
+        >Add Instrumental Breaks</b-switch
+      ></b-field
+    >
     <div class="buttons">
       <b-button
         expanded
@@ -22,11 +32,12 @@
   </b-tab-item>
 </template>
 
-<script>
-import { createAssFile, createScreens } from "@/lib/timing.ts";
-import { TITLE_SCREEN_DURATION } from "@/constants.js";
+<script lang="ts">
+import * as _ from "lodash";
+import { defineComponent } from "vue";
+import { createAssFile, createScreens, KaraokeOptions } from "@/lib/timing";
 
-export default {
+export default defineComponent({
   props: {
     songInfo: Object,
     lyricText: String,
@@ -39,6 +50,10 @@ export default {
   data() {
     return {
       isSubmitting: false,
+      videoOptions: {
+        addCountIns: true,
+        addInstrumentalScreens: true,
+      },
     };
   },
   computed: {
@@ -51,7 +66,8 @@ export default {
         this.timings,
         this.songFile.duration,
         this.songInfo.title,
-        this.songInfo.artist
+        this.songInfo.artist,
+        this.videoOptions
       );
     },
     audioDelay() {
@@ -60,7 +76,8 @@ export default {
         this.timings,
         this.songFile.duration,
         this.songInfo.title,
-        this.songInfo.artist
+        this.songInfo.artist,
+        this.videoOptions
       );
       return _.sum(_.map(screens, "audioDelay"));
     },
@@ -105,11 +122,11 @@ export default {
       reader.readAsDataURL(blob);
     },
   },
-};
+});
 </script>
 
 <style scoped>
 .submit-tab {
-  margin: auto;
+  margin: auto 30%;
 }
 </style>

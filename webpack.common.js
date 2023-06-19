@@ -1,12 +1,12 @@
 var path = require("path");
 var webpack = require("webpack");
 var BundleTracker = require('webpack-bundle-tracker');
-const VueLoaderPlugin = require('vue-loader/lib/plugin');
+const { VueLoaderPlugin } = require('vue-loader');
 
 module.exports = {
     context: __dirname,
 
-    entry: './frontend/index.js',
+    entry: './frontend/index.ts',
 
     output: {
         path: path.resolve('./api/assets/bundles/'),
@@ -35,13 +35,15 @@ module.exports = {
         },
         {
             test: /\.tsx?$/,
-            use: "ts-loader"
-        }
+            loader: "ts-loader",
+            options: { appendTsSuffixTo: [/\.vue$/] },
+            exclude: /node_modules/,
+        },
 
         ]
     },
     resolve: {
-        extensions: ['.js', '.vue', '.ts', 'tsx'],
+        extensions: ['.js', '.vue', '.ts', '.tsx'],
         alias: {
             'vue$': 'vue/dist/vue.esm.js',
             '@': path.resolve(__dirname, 'frontend')

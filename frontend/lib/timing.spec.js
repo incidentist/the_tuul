@@ -3,8 +3,12 @@ import { LYRIC_MARKERS } from "../constants";
 import { LyricSegment } from "./timing";
 import fs from 'fs';
 
+const DEFAULT_OPTIONS = {
+    addCountIns: true,
+    addInstrumentalScreens: true
+}
 
-const testLyrics = "Be bop_a lu bop\nShe's my ba/by\n\nAnd_here's_screen_two"
+export const testLyrics = "Be bop_a lu bop\nShe's my ba/by\n\nAnd_here's_screen_two"
 const testEvents = [
     [1.0, LYRIC_MARKERS.SEGMENT_START],
     [2.0, LYRIC_MARKERS.SEGMENT_END],
@@ -17,7 +21,7 @@ const testEvents = [
     [9.0, LYRIC_MARKERS.SEGMENT_START]
 ]
 
-const shortIntroTestEvents = testEvents;
+export const shortIntroTestEvents = testEvents;
 const longIntroTestEvents = [
     [6.0, LYRIC_MARKERS.SEGMENT_START],
     [7.0, LYRIC_MARKERS.SEGMENT_END],
@@ -118,20 +122,9 @@ test('adjustTimestamps', () => {
     expect(adjusted[0].startTimestamp).toBe(1.0)
 });
 
-test('addTitleScreenToShortIntroSong', () => {
-    const titleScreenAss = `Dialogue: 0,Default,0:00:00.00,0:00:04.00,130,{\\k0}{\\kf200}Tüülin' Around
-Dialogue: 0,Default,0:00:00.00,0:00:04.00,160,{\\k200}{\\kf200}The Tüüls
-`
-    const screens = denormalizeTimestamps(compileLyricTimings(testLyrics, shortIntroTestEvents), 60.0);
-    const screensWithTitle = addTitleScreen(screens, "Tüülin' Around", "The Tüüls");
-    expect(screensWithTitle.length).toBe(3);
-    expect(screensWithTitle[0].toAssEvents({})).toBe(titleScreenAss);
-    expect(screensWithTitle[0].audioDelay).toBe(4);
-});
-
 test('createAssFileForShortIntroSong', () => {
     const songDuration = 60.0;
-    const assFile = createAssFile(testLyrics, shortIntroTestEvents, songDuration, "It's Cøøl to Tüül", "TÜ/ÜL");
+    const assFile = createAssFile(testLyrics, shortIntroTestEvents, songDuration, "It's Cøøl to Tüül", "TÜ/ÜL", DEFAULT_OPTIONS);
     expect(assFile).toBe(testAss);
 });
 
@@ -139,7 +132,7 @@ test('addCountIn', () => {
     const songDuration = 60.0;
     const lyrics = "That was a long intro\nToo bad nothing rhymes with intro"
     const timings = [[100.0, LYRIC_MARKERS.SEGMENT_START], [105.0, LYRIC_MARKERS.SEGMENT_START]]
-    let assFile = createAssFile(lyrics, timings, songDuration, "It's Cøøl to Tüül", "TÜ/ÜL");
+    let assFile = createAssFile(lyrics, timings, songDuration, "It's Cøøl to Tüül", "TÜ/ÜL", { addCountIns: true, addInstrumentalScreens: false });
 
     const expected = testAssPreamble + `Dialogue: 0,Default,0:00:04.00,0:01:00.00,130,{\\k9400}{\\kf200}●●● {\\kf500}That was a long intro
 
@@ -173,7 +166,7 @@ Dialogue: 0,Default,0:00:04.00,0:00:12.00,160,{\\k600}{\\kf100}She's my ba{\\kf1
 
 Dialogue: 0,Default,0:00:12.00,0:01:00.00,145,{\\k0}{\\kf100}And {\\kf100}here's {\\kf100}screen {\\kf4500}two
 `
-    const assFile = createAssFile(testLyrics, sevenSecondEvents, songDuration, "It's Cøøl to Tüül", "TÜ/ÜL");
+    const assFile = createAssFile(testLyrics, sevenSecondEvents, songDuration, "It's Cøøl to Tüül", "TÜ/ÜL", { addCountIns: true, addInstrumentalScreens: false });
     expect(assFile).toBe(sevenSecondAss);
 
 });

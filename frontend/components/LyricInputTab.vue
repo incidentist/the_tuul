@@ -49,9 +49,10 @@
 </template>
 
 <script>
+import { defineComponent } from "vue";
 import LyricEditor from "@/components/LyricEditor.vue";
 
-export default {
+export default defineComponent({
   components: {
     LyricEditor,
   },
@@ -71,7 +72,7 @@ export default {
       this.$refs.lyricEditor.convertSpaces();
     },
   },
-};
+});
 </script>
 
 <style scoped>
