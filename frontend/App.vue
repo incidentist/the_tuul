@@ -34,20 +34,15 @@
 </template>
 
 <script lang="ts">
-import { getCurrentWord } from "@/lib/lyrics";
 import { defineComponent } from "vue";
 import HelpTab from "@/components/HelpTab.vue";
 import SongInfoTab from "@/components/SongInfoTab.vue";
 import LyricInputTab from "@/components/LyricInputTab.vue";
 import SongTimingTab from "@/components/SongTimingTab.vue";
 import SubmitTab from "@/components/SubmitTab.vue";
-import { KEY_CODES, LYRIC_MARKERS } from "@/constants";
-
-import LyricDisplay from "@/components/LyricDisplay.vue";
 
 export default defineComponent({
   components: {
-    LyricDisplay,
     HelpTab,
     SongInfoTab,
     LyricInputTab,

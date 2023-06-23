@@ -24,6 +24,7 @@
   "homepage": "https://github.com/incidentist/karaoke_video_tools#readme",
   "dependencies": {
     "buefy": "^0.9.22",
+    "libass-wasm": "^4.1.0",
     "lodash": "^4.17.21",
     "vue": "^2.7.14"
   },

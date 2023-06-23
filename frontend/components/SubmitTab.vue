@@ -5,6 +5,11 @@
     class="submit-tab"
     :disabled="!enabled"
   >
+    <video-preview
+      v-if="enabled"
+      :song-file="songFile"
+      :subtitles="subtitles"
+    />
     <b-field expanded horizontal
       ><b-switch left-label v-model="videoOptions.addCountIns"
         >Add Count-Ins</b-switch
@@ -36,8 +41,10 @@
 import * as _ from "lodash";
 import { defineComponent } from "vue";
 import { createAssFile, createScreens, KaraokeOptions } from "@/lib/timing";
+import VideoPreview from "@/components/VideoPreview.vue";
 
 export default defineComponent({
+  components: { VideoPreview },
   props: {
     songInfo: Object,
     lyricText: String,
@@ -60,7 +67,10 @@ export default defineComponent({
     songFile() {
       return this.songInfo.file;
     },
-    subtitles() {
+    subtitles(): string {
+      if (this.songFile == null) {
+        return "";
+      }
       return createAssFile(
         this.lyricText,
         this.timings,
@@ -70,7 +80,10 @@ export default defineComponent({
         this.videoOptions
       );
     },
-    audioDelay() {
+    audioDelay(): number {
+      if (this.songFile == null) {
+        return 0;
+      }
       const screens = createScreens(
         this.lyricText,
         this.timings,
@@ -81,7 +94,7 @@ export default defineComponent({
       );
       return _.sum(_.map(screens, "audioDelay"));
     },
-    zipFileName() {
+    zipFileName(): string {
       if (this.songInfo.artist && this.songInfo.title) {
         return `${this.songInfo.artist} - ${this.songInfo.title} [karaoke].mp4.zip`;
       }
