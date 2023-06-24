@@ -23,6 +23,7 @@
   },
   "homepage": "https://github.com/incidentist/karaoke_video_tools#readme",
   "dependencies": {
+    "audiobuffer-to-wav": "^1.0.0",
     "buefy": "^0.9.22",
     "libass-wasm": "^4.1.0",
     "lodash": "^4.17.21",

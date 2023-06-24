@@ -9,7 +9,7 @@
     <audio
       ref="player"
       controls
-      :src="audioData"
+      :src="audioDataUrl"
       @timeupdate="onAudioTimeUpdate"
       @playing="onAudioPlaying"
       @pause="onAudioPause"
@@ -26,27 +26,32 @@
 // TODO: Incorporate audio delay
 
 import { defineComponent } from "vue";
+import bufferToWav from "audiobuffer-to-wav";
 import SubtitlesOctopus from "libass-wasm";
 
 export default defineComponent({
   props: {
     songFile: {
-      type: File,
+      type: Blob,
       required: true,
     },
     subtitles: {
       type: String,
       required: true,
     },
+    audioDelay: {
+      type: Number,
+      default: 0.0,
+    },
   },
   data() {
     return {
       subtitleManager: null,
+      audioDataUrl: "",
     };
   },
   mounted() {
     const canvas = this.$refs.subtitleCanvas;
-    const audioElement = this.$refs.player;
 
     // Create a subtitle renderer and tie it to our player and canvas
     var options = {
@@ -58,39 +63,81 @@ export default defineComponent({
       legacyWorkerUrl: "/static/subtitles-octopus-worker-legacy.js", // Link to non-WebAssembly worker
     };
     this.subtitleManager = new SubtitlesOctopus(options);
+
+    this.updateAudio(this.songFile, this.audioDelay);
   },
   watch: {
     subtitles(newSubs: string) {
       this.subtitleManager.setTrack(newSubs);
     },
-  },
-  computed: {
-    audioData(): string {
-      return this.songFile ? URL.createObjectURL(this.songFile) : "";
-    },
-    videoData(): string {
-      const durationInSeconds = 10;
-      const fillColor = "#000000";
-      const width = 640;
-      const height = 480;
-      const canvas = document.createElement("canvas") as HTMLCanvasElement;
-      canvas.width = width;
-      canvas.height = height;
-
-      // Fill canvas with black
-      var ctx = canvas.getContext("2d");
-      ctx.fillStyle = fillColor;
-      ctx.fillRect(0, 0, width, height);
-
-      var dataUrl = canvas.toDataURL("video/webm");
-      // Set the duration in the data url
-      const durationString = "#t=0," + durationInSeconds;
-      dataUrl = dataUrl.replace(/#t=0,/, durationString);
-
-      return dataUrl;
+    songFile(newSongFile: Blob) {
+      this.updateAudio(newSongFile, this.audioDelay);
     },
   },
   methods: {
+    async updateAudio(audioData: Blob, silence: number) {
+      const audioWithSilence = await this.prependSilence(audioData, silence);
+      this.audioDataUrl = URL.createObjectURL(audioWithSilence);
+    },
+    async prependSilence(
+      audioData: Blob,
+      secondsOfSilence: number
+    ): Promise<Blob> {
+      // Prepend N seconds of silence to the start of the songfile
+      if (secondsOfSilence == 0) {
+        return audioData;
+      }
+
+      // TODO: can we do some of these steps in parallel?
+      const audioContext = new AudioContext();
+      const arrayBuffer = await audioData.arrayBuffer();
+      const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+      // Create an OfflineAudioContext with the desired duration
+      const offlineAudioContext = new OfflineAudioContext({
+        numberOfChannels: audioBuffer.numberOfChannels,
+        length: audioBuffer.length + secondsOfSilence * audioBuffer.sampleRate,
+        sampleRate: audioBuffer.sampleRate,
+      });
+
+      // Create a source node from the original audio buffer
+      const source = offlineAudioContext.createBufferSource();
+      source.buffer = audioBuffer;
+
+      // Connect the source node to the destination node (output)
+      source.connect(offlineAudioContext.destination);
+
+      // Start rendering the audio
+      source.start();
+
+      // Wait for the audio to finish rendering
+      const songBuffer = await offlineAudioContext.startRendering();
+
+      // Create a new AudioBuffer with the desired length
+      const songWithSilenceBuffer = audioContext.createBuffer(
+        songBuffer.numberOfChannels,
+        songBuffer.length + secondsOfSilence * audioBuffer.sampleRate,
+        songBuffer.sampleRate
+      );
+
+      // Get the channel data from the result buffer
+      for (let channel = 0; channel < songBuffer.numberOfChannels; channel++) {
+        const resultData = songBuffer.getChannelData(channel);
+        const silenceData = songWithSilenceBuffer.getChannelData(channel);
+
+        // Copy the result data to the end of the silence buffer
+        silenceData.set(resultData, secondsOfSilence * audioBuffer.sampleRate);
+      }
+
+      // Convert the result buffer to a wav
+      const wavAudio: ArrayBuffer = bufferToWav(songWithSilenceBuffer);
+      const result = new Blob([new DataView(wavAudio)], {
+        type: "audio/wav",
+      });
+
+      return result;
+    },
+
     onAudioTimeUpdate() {
       this.subtitleManager.setCurrentTime(this.$refs.player.currentTime);
     },

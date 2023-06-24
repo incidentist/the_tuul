@@ -9,6 +9,7 @@
       v-if="enabled"
       :song-file="songFile"
       :subtitles="subtitles"
+      :audio-delay="audioDelay"
     />
     <b-field expanded horizontal
       ><b-switch left-label v-model="videoOptions.addCountIns"
