@@ -31,13 +31,13 @@
       <p>If you need to take a break, hit the Pause button.</p>
       <p>
         <strong>Step 4: Create The Video.</strong> After you've given a spacebar
-        press to the last lyric in the song, click the
+        press to the last lyric in the song, watch the preview and click the
         <code>Submit</code> button. Wait a few minutes -- maybe 3? Maybe 6?
         Eventually you'll be asked to download a zip file. Inside that zip is an
         <code>.mp4</code> file which is your karaoke video! The zip file also
         includes generated <code>subtitles.ass</code> and
         <code>timings.json</code> files that were used to make your video. You
-        can ignore them. You can ignore them unless you
+        can ignore them unless you
         <a @click="onDevLinkClick">know what you're doing</a>.
       </p>
       <h3>Some Notes</h3>
@@ -60,6 +60,14 @@
         </li>
       </ul>
       <h3>What's New</h3>
+      <h5>June 25, 2023</h5>
+      <ul>
+        <li>
+          <strong>Video Preview</strong> - You can now see what your video will
+          look like before you create it. Unlike the finished video, the preview
+          has vocals in it so you can see how well the timing matches up.
+        </li>
+      </ul>
       <h5>June 19, 2023</h5>
       <ul>
         <li>
