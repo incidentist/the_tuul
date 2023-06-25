@@ -5,36 +5,52 @@
     class="submit-tab"
     :disabled="!enabled"
   >
-    <video-preview
-      v-if="enabled"
-      :song-file="songFile"
-      :subtitles="subtitles"
-      :audio-delay="audioDelay"
-    />
-    <b-field expanded horizontal
-      ><b-switch left-label v-model="videoOptions.addCountIns"
-        >Add Count-Ins</b-switch
-      ></b-field
-    >
-    <b-field expanded horizontal
-      ><b-switch left-label v-model="videoOptions.addInstrumentalScreens"
-        >Add Instrumental Breaks</b-switch
-      ></b-field
-    >
-    <div class="buttons">
-      <b-button
-        expanded
-        type="is-primary"
-        :loading="isSubmitting"
-        @click="submitTimings"
-        :disabled="!enabled && !isSubmitting"
-      >
-        Create Video
-      </b-button>
+    <div class="columns is-variable is-5">
+      <div class="column settings-column">
+        <h3 class="title">More Settings:</h3>
+        <b-field
+          expanded
+          horizontal
+          label="Add Count-Ins"
+          custom-class="fit-content"
+          ><b-switch v-model="videoOptions.addCountIns"></b-switch
+        ></b-field>
+        <b-field
+          expanded
+          horizontal
+          label="Add Instrumental Breaks"
+          custom-class="fit-content"
+          ><b-switch v-model="videoOptions.addInstrumentalScreens"></b-switch
+        ></b-field>
+      </div>
+      <div class="column is-narrow">
+        <h3 class="title">Video Preview:</h3>
+        <video-preview
+          v-if="enabled"
+          :song-file="songFile"
+          :subtitles="subtitles"
+          :audio-delay="audioDelay"
+        />
+      </div>
     </div>
-    <b-message :active="isSubmitting" type="is-success" has-icon icon="magic">
-      Creating your karaoke video. This might take a few minutes.
-    </b-message>
+
+    <div class="submit-button-container">
+      <div class="buttons">
+        <b-button
+          expanded
+          size="is-large"
+          type="is-primary"
+          :loading="isSubmitting"
+          @click="submitTimings"
+          :disabled="!enabled && !isSubmitting"
+        >
+          Create Video
+        </b-button>
+      </div>
+      <b-message :active="isSubmitting" type="is-success" has-icon icon="magic">
+        Creating your karaoke video. This might take a few minutes.
+      </b-message>
+    </div>
   </b-tab-item>
 </template>
 
@@ -138,9 +154,22 @@ export default defineComponent({
   },
 });
 </script>
-
+<style>
+.fit-content {
+  width: max-content;
+}
+</style>
 <style scoped>
 .submit-tab {
-  margin: auto 30%;
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.settings-column {
+  margin: 0 10%;
+}
+
+.submit-tab column {
+  text-align: center;
 }
 </style>

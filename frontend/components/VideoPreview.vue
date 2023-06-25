@@ -1,5 +1,8 @@
 <template>
-  <div>
+  <div class="preview-container">
+    <b-message type="is-info">
+      Audio in this preview includes vocals, but the finished video won't.
+    </b-message>
     <canvas
       class="subtitle-canvas"
       ref="subtitleCanvas"
@@ -17,7 +20,6 @@
       @seeked="onAudioSeeked"
       @waiting="onAudioWaiting"
     />
-    <!-- <button @click="play">Play</button> -->
   </div>
 </template>
 
@@ -176,6 +178,10 @@ export default defineComponent({
 });
 </script>
 <style scoped>
+.preview-container {
+  text-align: center;
+  width: 320px;
+}
 .subtitle-canvas {
   background-color: black;
 }
