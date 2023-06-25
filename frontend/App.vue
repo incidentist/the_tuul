@@ -12,6 +12,20 @@
           ></b-navbar-item
         >
       </template>
+      <template #end>
+        <b-navbar-item>
+          <div class="buttons">
+            <b-button
+              tag="a"
+              href="https://github.com/incidentist/the_tuul"
+              type="is-text"
+            >
+              <b-icon pack="fab" icon="github" size="is-large" title="GitHub">
+              </b-icon
+            ></b-button>
+          </div>
+        </b-navbar-item>
+      </template>
     </b-navbar>
     <b-tabs vertical expanded type="is-boxed">
       <help-tab @options-change="onOptionsChange"></help-tab>
