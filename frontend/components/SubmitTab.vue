@@ -8,18 +8,23 @@
     <div class="columns is-variable is-5">
       <div class="column settings-column">
         <h3 class="title">More Settings:</h3>
-        <b-field
-          expanded
-          horizontal
-          label="Add Count-Ins"
-          custom-class="fit-content"
-          ><b-switch v-model="videoOptions.addCountIns"></b-switch
+        <b-field expanded horizontal custom-class="fit-content">
+          <template #label>
+            Add Count-Ins
+            <b-tooltip
+              label="Add count-in dots so you know when to start singing"
+            >
+              <b-icon size="is-small" icon="question-circle"></b-icon>
+            </b-tooltip>
+          </template>
+          <b-switch v-model="videoOptions.addCountIns"></b-switch
         ></b-field>
-        <b-field
-          expanded
-          horizontal
-          label="Add Instrumental Breaks"
-          custom-class="fit-content"
+        <b-field expanded horizontal custom-class="fit-content">
+          <template #label>
+            Add Instrumental Breaks
+            <b-tooltip label="Add screens that count down long instrumentals">
+              <b-icon size="is-small" icon="question-circle"></b-icon>
+            </b-tooltip> </template
           ><b-switch v-model="videoOptions.addInstrumentalScreens"></b-switch
         ></b-field>
       </div>
