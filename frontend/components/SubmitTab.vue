@@ -90,7 +90,7 @@ export default defineComponent({
       return this.songInfo.file;
     },
     subtitles(): string {
-      if (this.songFile == null) {
+      if (!this.enabled) {
         return "";
       }
       return createAssFile(
@@ -103,7 +103,7 @@ export default defineComponent({
       );
     },
     audioDelay(): number {
-      if (this.songFile == null) {
+      if (!this.enabled) {
         return 0;
       }
       const screens = createScreens(
