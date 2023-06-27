@@ -38,7 +38,6 @@
     <audio
       ref="audio"
       :src="audioSource"
-      @timeupdate="onAudioTimeUpdate"
       @ended="onAudioEvent"
       @pause="onAudioEvent"
       @play="onAudioEvent"
@@ -233,15 +232,15 @@ export default defineComponent({
       this.timings.add(this.currentSegment, keyCode, currentSongTime);
       this.currentSegment += 1;
     },
-    onAudioTimeUpdate(e) {
-      this.currentPlaybackTime = this.$refs.audio.currentTime;
-    },
     playPause() {
       this.isPlaying = !this.isPlaying;
     },
-    onAudioEvent(e) {
+    onAudioEvent(e: Event) {
       const audioEl = this.$refs.audio;
       this.isPlaying = !(audioEl.paused || audioEl.ended);
+      if (e.type == "ended") {
+        this.addTimingEvent(KEY_CODES.ENTER, this.$refs.audio.currentTime);
+      }
     },
     redoScreen() {
       var firstSegmentInScreen = this.firstSegmentOfScreen(this.currentScreen);
