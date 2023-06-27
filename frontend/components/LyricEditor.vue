@@ -7,14 +7,18 @@
   ></textarea>
 </template>
 
-<script>
+<script lang="ts">
+import { defineComponent } from "vue";
+
+// import { getCurrentWord } from "@/lib/lyrics";
+
 import {
   getCurrentWord,
   slashifyAllOccurences,
   convertSpacesToUnderscores,
-} from "@/lib/lyrics.ts";
+} from "@/lib/lyrics";
 
-export default {
+export default defineComponent({
   props: {
     value: String,
     magicSlashes: {
@@ -64,6 +68,6 @@ export default {
       });
     },
   },
-};
+});
 </script>
 

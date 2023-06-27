@@ -23,6 +23,7 @@ def run(
     lyric_subtitles: str = None,
     output_filename: str = "karaoke.mp4",
     audio_delay: float = 0.0,
+    metadata: dict = {},
 ):
     song_files_dir = songfile.parent
     instrumental_path = song_files_dir.joinpath("accompaniment.wav")
@@ -61,6 +62,7 @@ def run(
         output_dir=song_files_dir,
         filename=output_filename,
         audio_delay=audio_delay,
+        metadata=metadata,
     )
 
 
@@ -227,7 +229,13 @@ def advance_screen(screens, screen):
 
 def split_song(songfile: Path, song_dir: Path) -> Tuple[str, str]:
     """Run spleeter to split song into instrumental and vocal tracks"""
-    from spleeter.separator import Separator
+    try:
+        from spleeter.separator import Separator
+    except ModuleNotFoundError:
+        logging.warning(
+            "Spleeter not found. I assume we're testing. Gonna use the original song."
+        )
+        return str(songfile.rename(song_dir.joinpath("accompaniment.wav")))
 
     separator = Separator("spleeter:2stems")
     separator.separate_to_file(
@@ -259,12 +267,28 @@ def subprocess_call(cmd):
     del proc
 
 
+def get_metadata_args(metadata: dict) -> list[str]:
+    """Get ffmpeg arguments for setting video metadata"""
+    result = []
+    if metadata.get("artist"):
+        result.append("-metadata")
+        result.append(f"artist={metadata.get('artist')}")
+    if metadata.get("title"):
+        result.append("-metadata")
+        result.append(f"title={metadata.get('title')}")
+    result.append("-metadata")
+    result.append("description=Karaoke version created by the-tuul.com")
+
+    return result
+
+
 def create_video(
     audio_path: Path,
     subtitles: Union[str, ass.ASS],
     output_dir: Path,
     filename: str = "karaoke.mp4",
     audio_delay: float = 0.0,
+    metadata: dict = {},
 ):
     """
     Run ffmpeg to create the karaoke video.
@@ -275,6 +299,8 @@ def create_video(
     else:
         subtitles.write(ass_path)
     video_path = str(output_dir.joinpath(filename))
+    audio_delay_ms = int(audio_delay * 1000)  # milliseconds
+    video_metadata = get_metadata_args(metadata)
     ffmpeg_cmd = [
         "ffmpeg",
         # Describe a video stream that is a black background
@@ -288,7 +314,7 @@ def create_video(
         # Set audio delay if needed
         # https://ffmpeg.org/ffmpeg-filters.html#adelay
         "-af",
-        f"adelay=delays={audio_delay}s:all=1",
+        f"adelay=delays={audio_delay_ms}:all=1",
         # Re-encode audio as mp3
         "-c:a",
         "libmp3lame",
@@ -299,6 +325,7 @@ def create_video(
         "-shortest",
         # Overwrite files without asking
         "-y",
+        *video_metadata,
         # Output path of video
         video_path,
     ]

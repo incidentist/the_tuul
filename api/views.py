@@ -28,7 +28,7 @@ class GenerateVideo(APIView):
         song_artist: str = request.data.get("songArtist", "Unknown Artist")
         song_title: str = request.data.get("songTitle", "Unknown Title")
         subtitles: str = request.data.get("subtitles")
-        audio_delay: float = request.data.get("audioDelay", 0.0)
+        audio_delay: float = float(request.data.get("audioDelay", 0.0))
 
         with tempfile.TemporaryDirectory() as song_files_dir:
             zip_path = None
@@ -44,13 +44,13 @@ class GenerateVideo(APIView):
                 lyric_subtitles=subtitles,
                 output_filename=video_filename,
                 audio_delay=audio_delay,
+                metadata={"title": song_title, "artist": song_artist},
             )
             if success:
                 zip_path = self.zip_project(
                     song_name=video_filename, song_files_dir=Path(song_files_dir)
                 )
             if zip_path:
-
                 response = FileResponse(zip_path.open("rb"), as_attachment=True)
                 return response
             else:

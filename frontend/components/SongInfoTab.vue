@@ -23,11 +23,12 @@
   </b-tab-item>
 </template>
 
-<script>
+<script lang="ts">
+import { defineComponent } from "vue";
 // jsmediatags can't be installed via npm when used in-browser: https://github.com/aadsm/jsmediatags#browser
 const jsmediatags = require("@/jsmediatags.min.js");
 
-export default {
+export default defineComponent({
   props: {
     value: Object,
   },
@@ -62,7 +63,10 @@ export default {
           false
         );
         const reader = new FileReader();
-        reader.addEventListener("load", (e) => (audio.src = e.target.result));
+        reader.addEventListener(
+          "load",
+          (e) => (audio.src = e.target.result.toString())
+        );
         reader.readAsDataURL(await this.songInfo.file);
       });
       return p;
@@ -86,7 +90,7 @@ export default {
       this.$emit("input", this.songInfo);
     },
   },
-};
+});
 </script>
 
 <style scoped>

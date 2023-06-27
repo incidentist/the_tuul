@@ -38,7 +38,6 @@
     <audio
       ref="audio"
       :src="audioSource"
-      @timeupdate="onAudioTimeUpdate"
       @ended="onAudioEvent"
       @pause="onAudioEvent"
       @play="onAudioEvent"
@@ -72,11 +71,17 @@
     </lyric-display>
   </b-tab-item>
 </template>
-<script>
-import { KEY_CODES, LYRIC_MARKERS } from "@/constants.js";
+
+<script lang="ts">
+import { defineComponent } from "vue";
+import { KEY_CODES, LYRIC_MARKERS } from "@/constants";
 import LyricDisplay from "@/components/LyricDisplay.vue";
 
+interface LyricTimingEvent {}
+type LyricMarker = number;
+
 class TimingsList {
+  _timings: Array<[number, LyricMarker]>;
   constructor() {
     this._timings = [];
   }
@@ -133,7 +138,7 @@ class TimingsList {
   }
 }
 
-export default {
+export default defineComponent({
   components: { LyricDisplay },
   props: {
     songInfo: Object,
@@ -216,7 +221,7 @@ export default {
       } else if (keyCode == KEY_CODES.SPACEBAR) {
         this.advanceToNextSegment(keyCode, currentSongTime);
       }
-      if (this.currentSegment >= this.lyricSegments.length) {
+      if (this.hasMarkedEndOfLastLine) {
         this.$emit("timings-complete", this.timings.toArray());
       }
     },
@@ -227,15 +232,15 @@ export default {
       this.timings.add(this.currentSegment, keyCode, currentSongTime);
       this.currentSegment += 1;
     },
-    onAudioTimeUpdate(e) {
-      this.currentPlaybackTime = this.$refs.audio.currentTime;
-    },
     playPause() {
       this.isPlaying = !this.isPlaying;
     },
-    onAudioEvent(e) {
+    onAudioEvent(e: Event) {
       const audioEl = this.$refs.audio;
       this.isPlaying = !(audioEl.paused || audioEl.ended);
+      if (e.type == "ended") {
+        this.addTimingEvent(KEY_CODES.ENTER, this.$refs.audio.currentTime);
+      }
     },
     redoScreen() {
       var firstSegmentInScreen = this.firstSegmentOfScreen(this.currentScreen);
@@ -278,7 +283,7 @@ export default {
       );
     },
   },
-};
+});
 </script>
 
 <style scoped>

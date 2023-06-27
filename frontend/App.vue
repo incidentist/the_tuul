@@ -12,6 +12,20 @@
           ></b-navbar-item
         >
       </template>
+      <template #end>
+        <b-navbar-item>
+          <div class="buttons">
+            <b-button
+              tag="a"
+              href="https://github.com/incidentist/the_tuul"
+              type="is-text"
+            >
+              <b-icon pack="fab" icon="github" size="is-large" title="GitHub">
+              </b-icon
+            ></b-button>
+          </div>
+        </b-navbar-item>
+      </template>
     </b-navbar>
     <b-tabs vertical expanded type="is-boxed">
       <help-tab @options-change="onOptionsChange"></help-tab>
@@ -33,19 +47,16 @@
   </div>
 </template>
 
-<script>
+<script lang="ts">
+import { defineComponent } from "vue";
 import HelpTab from "@/components/HelpTab.vue";
 import SongInfoTab from "@/components/SongInfoTab.vue";
 import LyricInputTab from "@/components/LyricInputTab.vue";
 import SongTimingTab from "@/components/SongTimingTab.vue";
 import SubmitTab from "@/components/SubmitTab.vue";
-import { KEY_CODES, LYRIC_MARKERS } from "@/constants.js";
 
-import LyricDisplay from "@/components/LyricDisplay.vue";
-
-export default {
+export default defineComponent({
   components: {
-    LyricDisplay,
     HelpTab,
     SongInfoTab,
     LyricInputTab,
@@ -117,7 +128,7 @@ export default {
       return segments;
     },
   },
-};
+});
 </script>
 
 <style scoped>
