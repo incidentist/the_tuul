@@ -23,6 +23,7 @@ def run(
     lyric_subtitles: str = None,
     output_filename: str = "karaoke.mp4",
     audio_delay: float = 0.0,
+    metadata: dict = {},
 ):
     song_files_dir = songfile.parent
     instrumental_path = song_files_dir.joinpath("accompaniment.wav")
@@ -61,6 +62,7 @@ def run(
         output_dir=song_files_dir,
         filename=output_filename,
         audio_delay=audio_delay,
+        metadata=metadata,
     )
 
 
@@ -265,12 +267,28 @@ def subprocess_call(cmd):
     del proc
 
 
+def get_metadata_args(metadata: dict) -> list[str]:
+    """Get ffmpeg arguments for setting video metadata"""
+    result = []
+    if metadata.get("artist"):
+        result.append("-metadata")
+        result.append(f"artist={metadata.get('artist')}")
+    if metadata.get("title"):
+        result.append("-metadata")
+        result.append(f"title={metadata.get('title')}")
+    result.append("-metadata")
+    result.append("description=Karaoke version created by the-tuul.com")
+
+    return result
+
+
 def create_video(
     audio_path: Path,
     subtitles: Union[str, ass.ASS],
     output_dir: Path,
     filename: str = "karaoke.mp4",
     audio_delay: float = 0.0,
+    metadata: dict = {},
 ):
     """
     Run ffmpeg to create the karaoke video.
@@ -282,6 +300,7 @@ def create_video(
         subtitles.write(ass_path)
     video_path = str(output_dir.joinpath(filename))
     audio_delay_ms = int(audio_delay * 1000)  # milliseconds
+    video_metadata = get_metadata_args(metadata)
     ffmpeg_cmd = [
         "ffmpeg",
         # Describe a video stream that is a black background
@@ -306,6 +325,7 @@ def create_video(
         "-shortest",
         # Overwrite files without asking
         "-y",
+        *video_metadata,
         # Output path of video
         video_path,
     ]

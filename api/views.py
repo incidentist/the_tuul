@@ -44,13 +44,13 @@ class GenerateVideo(APIView):
                 lyric_subtitles=subtitles,
                 output_filename=video_filename,
                 audio_delay=audio_delay,
+                metadata={"title": song_title, "artist": song_artist},
             )
             if success:
                 zip_path = self.zip_project(
                     song_name=video_filename, song_files_dir=Path(song_files_dir)
                 )
             if zip_path:
-
                 response = FileResponse(zip_path.open("rb"), as_attachment=True)
                 return response
             else:
