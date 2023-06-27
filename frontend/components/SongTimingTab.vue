@@ -222,7 +222,7 @@ export default defineComponent({
       } else if (keyCode == KEY_CODES.SPACEBAR) {
         this.advanceToNextSegment(keyCode, currentSongTime);
       }
-      if (this.currentSegment >= this.lyricSegments.length) {
+      if (this.hasMarkedEndOfLastLine) {
         this.$emit("timings-complete", this.timings.toArray());
       }
     },
