@@ -238,7 +238,7 @@ export default defineComponent({
     onAudioEvent(e: Event) {
       const audioEl = this.$refs.audio;
       this.isPlaying = !(audioEl.paused || audioEl.ended);
-      if (e.type == "ended") {
+      if (e.type == "ended" && !this.hasMarkedEndOfLastLine) {
         this.addTimingEvent(KEY_CODES.ENTER, this.$refs.audio.currentTime);
       }
     },
