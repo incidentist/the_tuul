@@ -7,7 +7,6 @@ license = "MIT"
 
 [tool.poetry.dependencies]
 python = ">=3.9,<3.10"
-spleeter = "^2.3.0"
 pydub = "^0.25.1"
 Django = "^3.2.7"
 djangorestframework = "^3.12.4"
@@ -15,6 +14,10 @@ click = "7.1.2"
 gunicorn = "^20.1.0"
 whitenoise = {extras = ["brotli"], version = "^5.3.0"}
 django-webpack-loader = "^1.4.0"
+audio-separator = "^0.2.3"
+# When this is an implicit dependency, it installs an older version
+# of numba that exhibits this problem: https://github.com/numba/numba/issues/8615
+numba = "^0.57.1"
 
 [tool.poetry.dev-dependencies]
 # More recent versions of black conflict with spleeter somehow

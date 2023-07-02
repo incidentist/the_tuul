@@ -9,7 +9,7 @@ from typing import List, Optional, Tuple, Union, Dict, Any
 import click
 import pydub
 
-from . import ass, timing_data
+from . import ass, timing_data, music_separation
 
 from .subtitles import LyricSegment, LyricsLine, LyricsScreen, create_subtitles
 
@@ -40,7 +40,9 @@ def run(
         click.echo(f"Using existing instrumental track at {instrumental_path}")
     else:
         click.echo("Splitting song into instrumental and vocal tracks..")
-        split_song(songfile, song_files_dir)
+        instrumental_path, vocals_path = music_separation.split_song(
+            songfile, song_files_dir
+        )
         click.echo(f"Wrote instrumental track to {instrumental_path}")
 
     if lyric_subtitles == None:
@@ -225,25 +227,6 @@ def advance_screen(screens, screen):
     """Add screen to screens and return a new screen object"""
     screens.append(screen)
     return screens, LyricsScreen()
-
-
-def split_song(songfile: Path, song_dir: Path) -> Tuple[str, str]:
-    """Run spleeter to split song into instrumental and vocal tracks"""
-    try:
-        from spleeter.separator import Separator
-    except ModuleNotFoundError:
-        logging.warning(
-            "Spleeter not found. I assume we're testing. Gonna use the original song."
-        )
-        return str(songfile.rename(song_dir.joinpath("accompaniment.wav")))
-
-    separator = Separator("spleeter:2stems")
-    separator.separate_to_file(
-        str(songfile), str(song_dir), filename_format="{instrument}.{codec}"
-    )
-    return str(song_dir.joinpath("accompaniment.wav")), str(
-        song_dir.joinpath("vocals.wav")
-    )
 
 
 def subprocess_call(cmd):
