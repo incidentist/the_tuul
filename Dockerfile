@@ -6,7 +6,7 @@ ENV APP_HOME=/app
 # Setting this ensures print statements and log messages
 # promptly appear in Cloud Logging.
 ENV PYTHONUNBUFFERED=TRUE \
-    POETRY_VERSION=1.1.10 \
+    POETRY_VERSION=1.5.1 \
     # make poetry install to this location
     POETRY_HOME="/opt/poetry" 
 WORKDIR $APP_HOME
