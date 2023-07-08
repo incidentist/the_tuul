@@ -1,3 +1,5 @@
+export const API_HOSTNAME = process.env.API_HOSTNAME;
+
 export const KEY_CODES = {
   SPACEBAR: 32,
   ENTER: 13,

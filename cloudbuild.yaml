@@ -6,14 +6,27 @@ steps:
   - name: "node"
     entrypoint: "npm"
     args: ["run", "build"]
+    env:
+      - "API_HOSTNAME=$_API_HOSTNAME"
+  - id: "container_pull"
+    name: "gcr.io/cloud-builders/docker"
+    entrypoint: "bash"
+    args:
+      [
+        "-c",
+        "docker pull gcr.io/$PROJECT_ID/${_CLOUD_RUN_APP_NAME}:latest || exit 0",
+      ]
   # Build the container image
   - name: "gcr.io/cloud-builders/docker"
     args: ["build", "-t", "gcr.io/$PROJECT_ID/$_CLOUD_RUN_APP_NAME", "."]
   # Push the container image to Container Registry
-  - name: "gcr.io/cloud-builders/docker"
+  - id: "container_push"
+    name: "gcr.io/cloud-builders/docker"
     args: ["push", "gcr.io/$PROJECT_ID/$_CLOUD_RUN_APP_NAME"]
-  # Deploy container image to Cloud Run
-  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+  # Deploy service for simple requests
+  - waitFor:
+    - container_push
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
     entrypoint: gcloud
     args:
       [
@@ -24,10 +37,35 @@ steps:
         "gcr.io/$PROJECT_ID/$_CLOUD_RUN_APP_NAME",
         "--region",
         "$_CLOUD_RUN_REGION",
+        "--concurrency=40",
+        "--cpu=1",
+        "--memory=2Gi",
+      ]
+  # Deploy API service for high-intensity requests
+  - waitFor:
+    - container_push
+    name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: gcloud
+    args:
+      [
+        "run",
+        "deploy",
+        "$_CLOUD_RUN_HEAVY_DUTY_APP_NAME",
+        "--image",
+        "gcr.io/$PROJECT_ID/$_CLOUD_RUN_APP_NAME",
+        "--region",
+        "$_CLOUD_RUN_REGION",
+        "--concurrency=1",
+        "--cpu=2",
+        "--memory=8Gi",
+        "--timeout=1200s",
+        "--no-cpu-throttling",
       ]
 timeout: 1800s
 substitutions:
   _CLOUD_RUN_APP_NAME: "the-tuul"
+  _CLOUD_RUN_HEAVY_DUTY_APP_NAME: "the-tuul-heavy-duty"
   _CLOUD_RUN_REGION: "us-central1"
+  _API_HOSTNAME: "https://separate.the-tuul.com"
 images:
   - gcr.io/$PROJECT_ID/the-tuul

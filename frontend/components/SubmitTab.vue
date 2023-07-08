@@ -63,6 +63,7 @@
 import * as _ from "lodash";
 import { defineComponent } from "vue";
 import { createAssFile, createScreens, KaraokeOptions } from "@/lib/timing";
+import { API_HOSTNAME } from "@/constants";
 import VideoPreview from "@/components/VideoPreview.vue";
 
 export default defineComponent({
@@ -135,7 +136,9 @@ export default defineComponent({
       formData.append("subtitles", this.subtitles);
       formData.append("audioDelay", this.audioDelay);
 
-      const response = await fetch("/generate_video", {
+      const url = `${API_HOSTNAME}/generate_video`;
+
+      const response = await fetch(url, {
         method: "POST",
         body: formData,
       });

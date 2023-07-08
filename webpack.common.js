@@ -23,6 +23,7 @@ module.exports = {
         new webpack.ProvidePlugin({
             Vue: 'Vue'
         }),
+        new webpack.EnvironmentPlugin({ 'API_HOSTNAME': "" })
     ],
     module: {
         rules: [{
