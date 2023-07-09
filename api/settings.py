@@ -31,9 +31,10 @@ ALLOWED_HOSTS = ["*"]
 
 # Application definition
 
-INSTALLED_APPS = ["django.contrib.staticfiles", "webpack_loader"]
+INSTALLED_APPS = ["django.contrib.staticfiles", "webpack_loader", "corsheaders"]
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -106,6 +107,8 @@ USE_L10N = True
 
 USE_TZ = True
 
+# CORS Config
+CORS_ALLOW_ALL_ORIGINS = True
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/3.2/howto/static-files/
