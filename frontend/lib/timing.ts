@@ -409,8 +409,8 @@ Format: Layer, Style, Start, End, MarginV, Text
 export function createScreens(lyrics: string, lyricEvents: LyricEvent[], songDuration: number, title: string, artist: string, options: KaraokeOptions): LyricsScreen[] {
   let screens = compileLyricTimings(lyrics, lyricEvents);
   screens = denormalizeTimestamps(screens, songDuration);
-  screens = addQuickStartCountIn(screens);
   if (options.addCountIns) {
+    screens = addQuickStartCountIn(screens);
     screens = addScreenCountIns(screens);
   }
   screens = addTitleScreen(screens, title, artist);
