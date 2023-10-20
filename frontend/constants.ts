@@ -1,8 +1,8 @@
 export const API_HOSTNAME = process.env.API_HOSTNAME;
 
 export const KEY_CODES = {
-  SPACEBAR: 32,
-  ENTER: 13,
+  SPACEBAR: 32, // code: "Space"
+  ENTER: 13, // code: "Enter"
 };
 
 export const LYRIC_MARKERS = {

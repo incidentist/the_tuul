@@ -1,8 +1,12 @@
 <template>
-  <div class="lyric-display box">
-    <span class="completed-lyrics">{{ completedLyrics }}</span
-    ><span ref="currentLyrics" class="current-lyrics">{{ currentLyrics }}</span
-    ><span class="upcoming-lyrics">{{ upcomingLyrics }}</span>
+  <div class="lyric-display-wrapper">
+    <div class="lyric-display box">
+      <span class="completed-lyrics">{{ completedLyrics }}</span
+      ><span ref="currentLyrics" class="current-lyrics">{{
+        currentLyrics
+      }}</span
+      ><span class="upcoming-lyrics">{{ upcomingLyrics }}</span>
+    </div>
   </div>
 </template>
 
@@ -36,6 +40,9 @@ export default defineComponent({
         .map(this.wrapLyricSegment)
         .join("");
     },
+    hasKeyboard(): boolean {
+      return false;
+    },
   },
   methods: {
     wrapLyricSegment(segment) {
@@ -52,10 +59,18 @@ export default defineComponent({
 </script>
 
 <style scoped>
+.lyric-display-wrapper {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  overflow: hidden;
+}
+
 .lyric-display {
   white-space: pre;
   flex-shrink: 1;
-  overflow-y: scroll;
+  flex-grow: 1;
+  overflow: hidden;
 }
 
 .completed-lyrics {

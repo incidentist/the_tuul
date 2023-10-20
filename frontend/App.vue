@@ -27,7 +27,7 @@
         </b-navbar-item>
       </template>
     </b-navbar>
-    <b-tabs vertical expanded type="is-boxed">
+    <b-tabs expanded :vertical="!isMobile" type="is-boxed" class="main-tabs">
       <help-tab @options-change="onOptionsChange"></help-tab>
       <song-info-tab v-model="songInfo"></song-info-tab>
       <lyric-input-tab v-model="lyricText"></lyric-input-tab>
@@ -49,6 +49,7 @@
 
 <script lang="ts">
 import { defineComponent } from "vue";
+import { isMobile } from "@/lib/device";
 import HelpTab from "@/components/HelpTab.vue";
 import SongInfoTab from "@/components/SongInfoTab.vue";
 import LyricInputTab from "@/components/LyricInputTab.vue";
@@ -86,6 +87,7 @@ export default defineComponent({
         this.timings != null
       );
     },
+    isMobile,
   },
   methods: {
     onTimingsComplete(timings) {
@@ -132,7 +134,9 @@ export default defineComponent({
 </script>
 
 <style scoped>
-.b-tabs {
+.main-tabs {
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
   overflow: hidden;
 }
@@ -143,5 +147,12 @@ export default defineComponent({
 
 .scroll-wrapper {
   overflow-y: scroll;
+  -webkit-overflow-scrolling: touch;
+}
+</style>
+<style>
+.b-tabs.main-tabs .tab-content {
+  flex-grow: 1;
+  overflow: hidden;
 }
 </style>

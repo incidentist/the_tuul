@@ -9,9 +9,15 @@
     <link rel="icon" href="data:,">
     <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.15.4/css/all.css">
     <style>
+        html {
+            height: 100%;
+            overflow-y: hidden !important;
+        }
+
         html,
         body {
             height: 100%;
+            width: 100vw;
             overflow: hidden;
         }
 
@@ -22,6 +28,11 @@
             height: 100%;
             overflow: hidden;
             flex-grow: 1;
+        }
+
+        .b-tab .tab-content {
+            flex-grow: 1;
+            flex-shrink: 1;
         }
 
         kbd {

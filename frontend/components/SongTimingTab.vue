@@ -5,8 +5,17 @@
     class="wrapper"
     :disabled="!songFile || lyricSegments.length == 0"
   >
-    <h2 class="title">Song Timing</h2>
-    <div class="content">
+    <h2 class="title">
+      Song Timing
+      <b-button
+        v-if="isMobile"
+        icon="help"
+        icon-right="question-circle"
+        :type="isShowingHelp ? 'is-primary' : ''"
+        @click="isShowingHelp = !isShowingHelp"
+      />
+    </h2>
+    <b-collapse v-model="isShowingHelp" class="content">
       <p>
         Press <kbd>spacebar</kbd> when the singer starts the highlighted
         segment.
@@ -19,7 +28,7 @@
         Adjust the playback speed to slow down fast parts or skip through long
         instrumentals.
       </p>
-    </div>
+    </b-collapse>
     <b-message
       :active="hasCompletedTimings && !hasMarkedEndOfLastLine"
       type="is-warning"
@@ -42,7 +51,7 @@
       @pause="onAudioEvent"
       @play="onAudioEvent"
     ></audio>
-    <div class="level is-mobile">
+    <div class="level">
       <div class="level-item">
         <div class="buttons">
           <b-button type="is-primary" @click="playPause">
@@ -51,14 +60,48 @@
           <b-button type="is-primary" @click="redoScreen" :active="isPlaying">
             &laquo; Redo This Screen
           </b-button>
+          <div class="field">
+            <b-button
+              @click="showButtonKeyboard = !showButtonKeyboard"
+              icon-right="keyboard"
+              :type="showButtonKeyboard ? 'is-primary' : ''"
+              title="Show or hide buttons for entering timings, if you don't have a keyboard"
+            ></b-button>
+          </div>
         </div>
       </div>
       <div class="level-item">
-        <b-field class="playback-speed" label="Speed:" horizontal>
-          <b-radio v-model="playbackRate" :native-value="1.5"> 1.5 </b-radio>
-          <b-radio v-model="playbackRate" :native-value="1.0"> 1.0 </b-radio>
-          <b-radio v-model="playbackRate" :native-value="0.9"> 0.9 </b-radio>
-          <b-radio v-model="playbackRate" :native-value="0.7"> 0.7 </b-radio>
+        <b-field class="playback-speed" label="Speed: " horizontal>
+          <b-field>
+            <b-radio-button
+              class="is-flex"
+              v-model="playbackRate"
+              :native-value="1.5"
+            >
+              1.5
+            </b-radio-button>
+            <b-radio-button
+              class="is-flex"
+              v-model="playbackRate"
+              :native-value="1.0"
+            >
+              1.0
+            </b-radio-button>
+            <b-radio-button
+              class="is-flex"
+              v-model="playbackRate"
+              :native-value="0.9"
+            >
+              0.9
+            </b-radio-button>
+            <b-radio-button
+              class="is-flex"
+              v-model="playbackRate"
+              :native-value="0.7"
+            >
+              0.7
+            </b-radio-button>
+          </b-field>
         </b-field>
       </div>
     </div>
@@ -69,13 +112,16 @@
       @keydown="onKeyDown"
     >
     </lyric-display>
+    <timing-buttons v-if="showButtonKeyboard" @keydown="onKeyDown" />
   </b-tab-item>
 </template>
 
 <script lang="ts">
 import { defineComponent } from "vue";
 import { KEY_CODES, LYRIC_MARKERS } from "@/constants";
+import { isMobile } from "@/lib/device";
 import LyricDisplay from "@/components/LyricDisplay.vue";
+import TimingButtons from "@/components/TimingButtons.vue";
 
 interface LyricTimingEvent {}
 type LyricMarker = number;
@@ -139,7 +185,7 @@ class TimingsList {
 }
 
 export default defineComponent({
-  components: { LyricDisplay },
+  components: { LyricDisplay, TimingButtons },
   props: {
     songInfo: Object,
     lyricSegments: Array,
@@ -148,11 +194,14 @@ export default defineComponent({
     return {
       currentSegment: 0,
       isPlaying: false,
+      isShowingHelp: !isMobile(),
       playbackRate: 1.0,
+      showButtonKeyboard: isMobile(),
       timings: new TimingsList(),
     };
   },
   computed: {
+    isMobile,
     songFile() {
       if (this.songInfo) {
         return this.songInfo.file;
@@ -204,7 +253,7 @@ export default defineComponent({
     },
   },
   methods: {
-    onKeyDown(e) {
+    onKeyDown(e: KeyboardEvent) {
       const keyCode = e.keyCode;
       if (Object.values(KEY_CODES).includes(keyCode) && this.isPlaying) {
         const currentSongTime = this.$refs.audio.currentTime;
