@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "the_tuul"
-version = "0.1.0"
+version = "0.5.0"
 description = "Create a good-enough karaoke track for any song in about 10 minutes"
 authors = ["Dan Kurtz  <andfurthermore@gmail.com>"]
 license = "MIT"
@@ -14,7 +14,7 @@ click = "7.1.2"
 gunicorn = "^20.1.0"
 whitenoise = {extras = ["brotli"], version = "^5.3.0"}
 django-webpack-loader = "^1.4.0"
-audio-separator = "^0.2.3"
+audio-separator = "^0.8.0"
 # When this is an implicit dependency, it installs an older version
 # of numba that exhibits this problem: https://github.com/numba/numba/issues/8615
 numba = "^0.57.1"

@@ -60,6 +60,23 @@
         </li>
       </ul>
       <h3>What's New</h3>
+      <h5>October 21, 2023</h5>
+      <ul>
+        <li>
+          <strong>New Backend</strong> - We now use a higher-quality vocal
+          separation model from
+          <a href="https://ultimatevocalremover.com/">Ultimate Vocal Remover</a
+          >. It sounds better than Spleeter (our old model) and leaves in the
+          background vocals. Thanks to
+          <a href="https://github.com/beveradb">@beveradb</a> for the help!
+        </li>
+        <li>
+          <strong>Works on Mobile</strong> - The Tüül has gone handheld. Mobile
+          users should now be able to complete the entire process, thanks to
+          "Spacebar" and "Enter" buttons. Show or hide the buttons by toggling
+          the <b-icon icon="keyboard" /> button in the Song Timing tab.
+        </li>
+      </ul>
       <h5>June 25, 2023</h5>
       <ul>
         <li>
