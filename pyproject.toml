@@ -19,6 +19,7 @@ audio-separator = "^0.8.0"
 # of numba that exhibits this problem: https://github.com/numba/numba/issues/8615
 numba = "^0.57.1"
 django-cors-headers = "^4.1.0"
+torch = ">=2.0.0, !=2.0.1, !=2.1.0"
 
 [tool.poetry.dev-dependencies]
 # More recent versions of black conflict with spleeter somehow
