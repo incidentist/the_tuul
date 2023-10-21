@@ -68,4 +68,4 @@ substitutions:
   _CLOUD_RUN_REGION: "us-central1"
   _API_HOSTNAME: "https://separate.the-tuul.com"
 images:
-  - gcr.io/$PROJECT_ID/the-tuul
+  - gcr.io/$PROJECT_ID/$_CLOUD_RUN_APP_NAME
