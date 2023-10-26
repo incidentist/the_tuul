@@ -24,6 +24,7 @@ def run(
     output_filename: str = "karaoke.mp4",
     audio_delay: float = 0.0,
     metadata: dict = {},
+    background_color: str = "#000000",
 ):
     song_files_dir = songfile.parent
     instrumental_path = song_files_dir.joinpath("accompaniment.wav")
@@ -65,6 +66,7 @@ def run(
         filename=output_filename,
         audio_delay=audio_delay,
         metadata=metadata,
+        background_color=background_color,
     )
 
 
@@ -272,6 +274,7 @@ def create_video(
     filename: str = "karaoke.mp4",
     audio_delay: float = 0.0,
     metadata: dict = {},
+    background_color: str = "#000000",
 ):
     """
     Run ffmpeg to create the karaoke video.
@@ -290,7 +293,7 @@ def create_video(
         "-f",
         "lavfi",
         "-i",
-        "color=c=black:s=1280x720:r=20",
+        f"color=c=0x{background_color[1:]}:s=1280x720:r=20",
         # Use accompaniment track as audio
         "-i",
         str(audio_path),
