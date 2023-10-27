@@ -16,7 +16,9 @@ def split_song(songfile: Path, song_dir: Path) -> Tuple[str, str]:
         logging.warning(
             "Spleeter not found. I assume we're testing. Gonna use the original song."
         )
-        return str(songfile.rename(song_dir.joinpath("accompaniment.wav")))
+        return str(
+            songfile.rename(song_dir.joinpath("accompaniment.wav"))
+        ), song_dir.joinpath("vocals.wav")
 
     separator = Separator(
         str(songfile),
