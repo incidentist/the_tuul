@@ -39,6 +39,18 @@
               ></b-icon>
             </a>
           </template>
+          <b-field horizontal label="Font">
+            <b-select v-model="videoOptions.font.name">
+              <option
+                v-for="(path, name) in fonts"
+                :key="path"
+                :value="name"
+                :selected="name == videoOptions.font.name"
+              >
+                {{ name }}
+              </option>
+            </b-select>
+          </b-field>
           <b-field horizontal label="Font Size"
             ><b-numberinput
               v-model="videoOptions.font.size"
@@ -63,6 +75,7 @@
           :song-file="songFile"
           :subtitles="subtitles"
           :audio-delay="audioDelay"
+          :fonts="fonts"
           :background-color="videoOptions.color.background.toString()"
         />
       </div>
@@ -96,6 +109,21 @@ import { API_HOSTNAME } from "@/constants";
 import VideoPreview from "@/components/VideoPreview.vue";
 import Color from "buefy/src/utils/color";
 
+const fonts = {
+  "Andale Mono": "/static/fonts/AndaleMono.ttf",
+  Arial: "/static/fonts/Arial.ttf",
+  "Arial Narrow": "/static/fonts/ArialNarrow.ttf",
+  "Comic Sans": "/static/fonts/ComicSans.ttf",
+  "Courier New": "/static/fonts/CourierNew.ttf",
+  Georgia: "/static/fonts/Georgia.ttf",
+  Impact: "/static/fonts/Impact.ttf",
+  "Metal Mania": "/static/fonts/MetalMania.ttf",
+  "Times New Roman": "/static/fonts/TimesNewRoman.ttf",
+  Trebuchet: "/static/fonts/Trebuchet.ttf",
+  Verdana: "/static/fonts/Verdana.ttf",
+  "Liberation Sans": "/static/default.woff2",
+};
+
 export default defineComponent({
   components: { VideoPreview },
   props: {
@@ -109,6 +137,7 @@ export default defineComponent({
   },
   data() {
     return {
+      fonts,
       isSubmitting: false,
       videoOptions: {
         addCountIns: true,
