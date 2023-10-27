@@ -125,6 +125,17 @@ export default defineComponent({
       },
     };
   },
+  mounted() {
+    Object.assign(this.videoOptions, this.loadSettings());
+  },
+  watch: {
+    videoOptions: {
+      handler: function (newOptions) {
+        this.saveSettings(newOptions);
+      },
+      deep: true,
+    },
+  },
   computed: {
     songFile() {
       return this.songInfo.file;
@@ -164,6 +175,22 @@ export default defineComponent({
     },
   },
   methods: {
+    loadSettings(): Object {
+      try {
+        const options = JSON.parse(localStorage.videoOptions || "{}");
+        options.color.background = Color.parseObject(options.color.background);
+        options.color.primary = Color.parseObject(options.color.primary);
+        options.color.secondary = Color.parseObject(options.color.secondary);
+
+        return options;
+      } catch (e) {
+        console.error(e);
+        return {};
+      }
+    },
+    saveSettings(settings: Object) {
+      localStorage.videoOptions = JSON.stringify(settings);
+    },
     async submitTimings() {
       this.isSubmitting = true;
       const formData = new FormData();
