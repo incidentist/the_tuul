@@ -8,6 +8,7 @@
       ref="subtitleCanvas"
       width="320"
       height="240"
+      :style="{ backgroundColor }"
     ></canvas>
     <audio
       ref="player"
@@ -30,6 +31,7 @@
 import { defineComponent } from "vue";
 import bufferToWav from "audiobuffer-to-wav";
 import SubtitlesOctopus from "libass-wasm";
+import { Color } from "buefy/src/utils/color";
 
 export default defineComponent({
   props: {
@@ -44,6 +46,10 @@ export default defineComponent({
     audioDelay: {
       type: Number,
       default: 0.0,
+    },
+    backgroundColor: {
+      type: String,
+      default: "#000000",
     },
   },
   data() {
@@ -181,8 +187,5 @@ export default defineComponent({
 .preview-container {
   text-align: center;
   width: 320px;
-}
-.subtitle-canvas {
-  background-color: black;
 }
 </style>

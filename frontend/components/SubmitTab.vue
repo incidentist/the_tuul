@@ -8,7 +8,7 @@
     <div class="columns is-variable is-5">
       <div class="column settings-column">
         <h3 class="title">More Settings:</h3>
-        <b-field expanded horizontal custom-class="fit-content">
+        <b-field horizontal>
           <template #label>
             Add Count-Ins
             <b-tooltip
@@ -17,16 +17,44 @@
               <b-icon size="is-small" icon="question-circle"></b-icon>
             </b-tooltip>
           </template>
-          <b-switch v-model="videoOptions.addCountIns"></b-switch
+          <b-switch expanded v-model="videoOptions.addCountIns"></b-switch
         ></b-field>
-        <b-field expanded horizontal custom-class="fit-content">
+        <b-field horizontal>
           <template #label>
             Add Instrumental Breaks
             <b-tooltip label="Add screens that count down long instrumentals">
               <b-icon size="is-small" icon="question-circle"></b-icon>
             </b-tooltip> </template
-          ><b-switch v-model="videoOptions.addInstrumentalScreens"></b-switch
+          ><b-switch
+            expanded
+            v-model="videoOptions.addInstrumentalScreens"
+          ></b-switch
         ></b-field>
+        <b-collapse :open="false">
+          <template #trigger="props">
+            <a aria-controls="contentIdForA11y4" :aria-expanded="props.open">
+              Fonts and Colors
+              <b-icon
+                :icon="props.open ? 'angle-down' : 'angle-right'"
+              ></b-icon>
+            </a>
+          </template>
+          <b-field horizontal label="Font Size"
+            ><b-numberinput
+              v-model="videoOptions.font.size"
+              controls-position="compact"
+            ></b-numberinput
+          ></b-field>
+          <b-field horizontal label="Background Color"
+            ><b-colorpicker v-model="videoOptions.color.background"
+          /></b-field>
+          <b-field horizontal label="Primary Color"
+            ><b-colorpicker v-model="videoOptions.color.primary"
+          /></b-field>
+          <b-field horizontal label="Secondary Color"
+            ><b-colorpicker v-model="videoOptions.color.secondary"
+          /></b-field>
+        </b-collapse>
       </div>
       <div class="column is-narrow">
         <h3 class="title">Video Preview:</h3>
@@ -35,6 +63,7 @@
           :song-file="songFile"
           :subtitles="subtitles"
           :audio-delay="audioDelay"
+          :background-color="videoOptions.color.background.toString()"
         />
       </div>
     </div>
@@ -65,6 +94,7 @@ import { defineComponent } from "vue";
 import { createAssFile, createScreens, KaraokeOptions } from "@/lib/timing";
 import { API_HOSTNAME } from "@/constants";
 import VideoPreview from "@/components/VideoPreview.vue";
+import Color from "buefy/src/utils/color";
 
 export default defineComponent({
   components: { VideoPreview },
@@ -83,8 +113,28 @@ export default defineComponent({
       videoOptions: {
         addCountIns: true,
         addInstrumentalScreens: true,
+        font: {
+          size: 20,
+          name: "Arial Narrow",
+        },
+        color: {
+          background: Color.parse("black"),
+          primary: Color.parse("#FF00FF"),
+          secondary: Color.parse("#00FFFF"),
+        },
       },
     };
+  },
+  mounted() {
+    Object.assign(this.videoOptions, this.loadSettings());
+  },
+  watch: {
+    videoOptions: {
+      handler: function (newOptions) {
+        this.saveSettings(newOptions);
+      },
+      deep: true,
+    },
   },
   computed: {
     songFile() {
@@ -125,6 +175,22 @@ export default defineComponent({
     },
   },
   methods: {
+    loadSettings(): Object {
+      try {
+        const options = JSON.parse(localStorage.videoOptions || "{}");
+        options.color.background = Color.parseObject(options.color.background);
+        options.color.primary = Color.parseObject(options.color.primary);
+        options.color.secondary = Color.parseObject(options.color.secondary);
+
+        return options;
+      } catch (e) {
+        console.error(e);
+        return {};
+      }
+    },
+    saveSettings(settings: Object) {
+      localStorage.videoOptions = JSON.stringify(settings);
+    },
     async submitTimings() {
       this.isSubmitting = true;
       const formData = new FormData();
@@ -135,6 +201,7 @@ export default defineComponent({
       formData.append("songTitle", this.songInfo.title);
       formData.append("subtitles", this.subtitles);
       formData.append("audioDelay", this.audioDelay);
+      formData.append("backgroundColor", this.videoOptions.color.background);
 
       const url = `${API_HOSTNAME}/generate_video`;
 
@@ -163,8 +230,11 @@ export default defineComponent({
 });
 </script>
 <style>
-.fit-content {
+/* .fit-content {
   width: max-content;
+} */
+.field.is-horizontal .field-label {
+  flex-grow: 3;
 }
 </style>
 <style scoped>
