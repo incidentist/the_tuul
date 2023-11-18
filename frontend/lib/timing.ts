@@ -241,9 +241,10 @@ export class LyricsLine {
     // screen to start animating.
     // That is followed by {\kf<digits>} which is how long to animate the text
     // following the tag.
-    const startTime = Math.floor((this.timestamp - screenStartTimestamp) * 100);
+    let startTime = Math.floor((this.timestamp - screenStartTimestamp) * 100);
     if (startTime < 0) {
-      throw Error(`Negative line startTime: ${this}: ${startTime}`);
+      console.error(`Negative line startTime: ${this}: ${startTime}`);
+      startTime = 0;
     }
     let line = `{\\k${startTime}}`;
     let previousEnd = null;
