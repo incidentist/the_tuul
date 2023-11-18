@@ -1,6 +1,6 @@
 # Use an official lightweight Python image.
 # https://hub.docker.com/_/python
-FROM python:3.9-slim
+FROM python:3.11-slim
 
 ENV APP_HOME=/app
 # Setting this ensures print statements and log messages
