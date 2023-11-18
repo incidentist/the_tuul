@@ -122,7 +122,7 @@ import { KEY_CODES, LYRIC_MARKERS } from "@/constants";
 import { isMobile } from "@/lib/device";
 import LyricDisplay from "@/components/LyricDisplay.vue";
 import TimingButtons from "@/components/TimingButtons.vue";
-import TimingsList from "@/lib/TimingsList.js";
+import TimingsList from "@/lib/TimingsList";
 
 interface LyricTimingEvent {}
 
