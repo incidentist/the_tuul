@@ -15,11 +15,7 @@ gunicorn = "^21.2.0"
 whitenoise = {extras = ["brotli"], version = "^6.6.0"}
 django-webpack-loader = "^2.0.1"
 audio-separator = "^0.8.0"
-# When this is an implicit dependency, it installs an older version
-# of numba that exhibits this problem: https://github.com/numba/numba/issues/8615
-numba = "^0.57.1"
 django-cors-headers = "^4.3.1"
-torch = ">=2.0.0, !=2.0.1, !=2.1.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.11.0"
