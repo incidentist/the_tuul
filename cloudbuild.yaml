@@ -60,6 +60,8 @@ steps:
         "--memory=8Gi",
         "--timeout=1200s",
         "--no-cpu-throttling",
+        "--set-env-vars",
+        "LOGGING_FORMAT=json"
       ]
 timeout: 1800s
 substitutions:
