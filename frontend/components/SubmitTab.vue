@@ -82,21 +82,29 @@
     </div>
 
     <div class="submit-button-container">
-      <div class="buttons">
-        <b-button
-          expanded
-          size="is-large"
-          type="is-primary"
-          :loading="isSubmitting"
-          @click="submitTimings"
-          :disabled="!enabled && !isSubmitting"
-        >
-          Create Video
-        </b-button>
-      </div>
+      <div class="buttons"></div>
       <b-message :active="isSubmitting" type="is-success" has-icon icon="magic">
         Creating your karaoke video. This might take a few minutes.
       </b-message>
+      <b-message
+        :active="Boolean(submitError)"
+        type="is-danger"
+        has-icon
+        icon="exclamation-circle"
+      >
+        There was a problem making your video: {{ submitError }}. Try again? Or
+        email me?
+      </b-message>
+      <b-button
+        expanded
+        size="is-large"
+        type="is-primary"
+        :loading="isSubmitting"
+        @click="submitTimings"
+        :disabled="!enabled && !isSubmitting"
+      >
+        Create Video
+      </b-button>
     </div>
   </b-tab-item>
 </template>
@@ -152,6 +160,7 @@ export default defineComponent({
           secondary: Color.parse("#00FFFF"),
         },
       },
+      submitError: null,
     };
   },
   mounted() {
@@ -233,13 +242,17 @@ export default defineComponent({
       formData.append("backgroundColor", this.videoOptions.color.background);
 
       const url = `${API_HOSTNAME}/generate_video`;
-
-      const response = await fetch(url, {
-        method: "POST",
-        body: formData,
-      });
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          body: formData,
+        });
+        await this.saveZipFile(response);
+      } catch (e) {
+        console.error(e);
+        this.submitError = e;
+      }
       this.isSubmitting = false;
-      await this.saveZipFile(response);
     },
     async saveZipFile(response) {
       console.log(response);
