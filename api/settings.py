@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 
 import structlog
+import loggers
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent
@@ -43,32 +44,38 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
-    "django_structlog.middlewares.RequestMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "django_structlog.middlewares.RequestMiddleware",
 ]
 
+# Valid values are 'console' or 'gcp'
 LOGGING_FORMAT = os.getenv("LOGGING_FORMAT", "console")
 
 LOGGING = {
     "version": 1,
     "disable_existing_loggers": False,
     "formatters": {
-        "json_formatter": {
+        "gcp": {
             "()": structlog.stdlib.ProcessorFormatter,
             "processor": structlog.processors.JSONRenderer(),
+            "foreign_pre_chain": [
+                structlog.contextvars.merge_contextvars,
+                structlog.processors.TimeStamper(fmt="iso"),
+                structlog.stdlib.add_log_level,
+                structlog.stdlib.add_logger_name,
+                structlog.stdlib.PositionalArgumentsFormatter(),
+                structlog.processors.StackInfoRenderer(),
+                structlog.processors.format_exc_info,
+                structlog.processors.UnicodeDecoder(),
+                loggers.CloudLoggingFormatter(),
+            ],
         },
         "plain_console": {
             "()": structlog.stdlib.ProcessorFormatter,
             "processor": structlog.dev.ConsoleRenderer(),
-        },
-        "key_value": {
-            "()": structlog.stdlib.ProcessorFormatter,
-            "processor": structlog.processors.KeyValueRenderer(
-                key_order=["timestamp", "level", "event", "logger"]
-            ),
         },
     },
     "handlers": {
@@ -76,44 +83,28 @@ LOGGING = {
             "class": "logging.StreamHandler",
             "formatter": "plain_console",
         },
-        "json": {
+        "gcp": {
             "class": "logging.StreamHandler",
-            "formatter": "json_formatter",
+            "formatter": "gcp",
         },
     },
     "loggers": {
-        "django_structlog": {
-            "handlers": ["console"],
-            "level": "INFO",
-        },
-        "*": {
+        "root": {
             "handlers": ["console"],
             "level": "INFO",
         },
     },
 }
-# hih
-if LOGGING_FORMAT == "json":
-    LOGGING["loggers"]["*"]["handlers"] = ["json"]
-    LOGGING["loggers"]["django_structlog"]["handlers"] = ["json"]
 
+if LOGGING_FORMAT == "gcp":
+    LOGGING["loggers"]["root"]["handlers"] = ["gcp"]
 
-structlog.configure(
-    processors=[
-        structlog.contextvars.merge_contextvars,
-        structlog.stdlib.filter_by_level,
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.stdlib.add_logger_name,
-        structlog.stdlib.add_log_level,
-        structlog.stdlib.PositionalArgumentsFormatter(),
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
-        structlog.processors.UnicodeDecoder(),
-        structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
-    ],
-    logger_factory=structlog.stdlib.LoggerFactory(),
-    cache_logger_on_first_use=True,
-)
+    structlog.configure_once(
+        processors=LOGGING["formatters"]["gcp"]["foreign_pre_chain"]
+        + [structlog.stdlib.ProcessorFormatter.wrap_for_formatter],
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
 
 ROOT_URLCONF = "urls"
 

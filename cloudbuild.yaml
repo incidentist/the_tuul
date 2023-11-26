@@ -40,6 +40,8 @@ steps:
         "--concurrency=40",
         "--cpu=1",
         "--memory=2Gi",
+        "--set-env-vars",
+        "LOGGING_FORMAT=gcp",
       ]
   # Deploy API service for high-intensity requests
   - waitFor:
@@ -61,7 +63,7 @@ steps:
         "--timeout=1200s",
         "--no-cpu-throttling",
         "--set-env-vars",
-        "LOGGING_FORMAT=json"
+        "LOGGING_FORMAT=gcp"
       ]
 timeout: 1800s
 substitutions:
