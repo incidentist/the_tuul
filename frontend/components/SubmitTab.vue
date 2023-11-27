@@ -82,7 +82,6 @@
     </div>
 
     <div class="submit-button-container">
-      <div class="buttons"></div>
       <b-message :active="isSubmitting" type="is-success" has-icon icon="magic">
         Creating your karaoke video. This might take a few minutes.
       </b-message>
@@ -95,16 +94,18 @@
         There was a problem making your video: {{ submitError }}. Try again? Or
         email me?
       </b-message>
-      <b-button
-        expanded
-        size="is-large"
-        type="is-primary"
-        :loading="isSubmitting"
-        @click="submitTimings"
-        :disabled="!enabled && !isSubmitting"
-      >
-        Create Video
-      </b-button>
+      <div class="buttons">
+        <b-button
+          expanded
+          size="is-large"
+          type="is-primary"
+          :loading="isSubmitting"
+          @click="submitTimings"
+          :disabled="!enabled && !isSubmitting"
+        >
+          Create Video
+        </b-button>
+      </div>
     </div>
   </b-tab-item>
 </template>
