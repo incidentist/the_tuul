@@ -2,7 +2,7 @@
   <b-tab-item
     label="Submit"
     icon="blender"
-    class="submit-tab"
+    class="submit-tab scroll-wrapper"
     :disabled="!enabled"
   >
     <div class="columns is-variable is-5">
