@@ -1,11 +1,22 @@
-import { LYRIC_MARKERS, VIDEO_SIZE, LINE_HEIGHT, TITLE_SCREEN_DURATION } from "../constants";
+import { LYRIC_MARKERS, VIDEO_SIZE, TITLE_SCREEN_DURATION } from "../constants";
 import { addQuickStartCountIn, addScreenCountIns, addTitleScreen, addInstrumentalScreens } from "./adjustments";
 import * as _ from "lodash";
 import { isNumber } from "lodash";
+import { Color as BuefyColor } from "buefy/src/utils/color";
+
 
 export interface KaraokeOptions {
   addCountIns: boolean,
-  addInstrumentalScreens: boolean
+  addInstrumentalScreens: boolean,
+  font: {
+    size: number,
+    name: string
+  }
+  color: {
+    background: BuefyColor,
+    primary: BuefyColor,
+    secondary: BuefyColor
+  }
 }
 
 interface Segment {
@@ -156,16 +167,17 @@ export class LyricsScreen {
     return this.lines.flatMap(l => l.segments);
   }
 
-  getLineY(lineInScreen: number): number {
+  getLineY(lineInScreen: number, fontSize: number): number {
     const screenMiddle = VIDEO_SIZE.height / 2;
     const lineCount = this.lines.length;
-    return screenMiddle - (lineCount * LINE_HEIGHT / 2) + (lineInScreen * LINE_HEIGHT)
+    const lineHeight = fontSize * 1.5;
+    return screenMiddle - (lineCount * lineHeight / 2) + (lineInScreen * lineHeight)
   }
 
   toAssEvents(formatParams: Object) {
     const styleName = "Default";
     const self = this;
-    return this.lines.map((l, i) => l.toAssEvent(self.startTimestamp, self.endTimestamp, styleName, self.getLineY(i))).join("\n") + "\n";
+    return this.lines.map((l, i) => l.toAssEvent(self.startTimestamp, self.endTimestamp, styleName, self.getLineY(i, formatParams["Fontsize"]))).join("\n") + "\n";
   }
 
   adjustTimestamps(adjustment: number): LyricsScreen {
@@ -229,9 +241,10 @@ export class LyricsLine {
     // screen to start animating.
     // That is followed by {\kf<digits>} which is how long to animate the text
     // following the tag.
-    const startTime = Math.floor((this.timestamp - screenStartTimestamp) * 100);
+    let startTime = Math.floor((this.timestamp - screenStartTimestamp) * 100);
     if (startTime < 0) {
-      throw Error(`Negative line startTime: ${this}: ${startTime}`);
+      console.error(`Negative line startTime: ${this}: ${startTime}`);
+      startTime = 0;
     }
     let line = `{\\k${startTime}}`;
     let previousEnd = null;
@@ -423,11 +436,13 @@ export function createScreens(lyrics: string, lyricEvents: LyricEvent[], songDur
 export function createAssFile(lyrics: string, lyricEvents: LyricEvent[], songDuration: number, title: string, artist: string, options: KaraokeOptions) {
   // Entry point to subtitles. Creates an .ass file from the given info.
   const screensWithTitle = createScreens(lyrics, lyricEvents, songDuration, title, artist, options);
+  const primaryColor = options.color.primary;
+  const secondaryColor = options.color.secondary;
 
   return createSubtitles(screensWithTitle, {
-    "Fontname": "Arial Narrow",
-    "Fontsize": 20,
-    "PrimaryColour": [255, 0, 255, 0],
-    "SecondaryColour": [0, 255, 255, 0]
+    "Fontname": options.font.name,
+    "Fontsize": options.font.size,
+    "PrimaryColour": [primaryColor.red, primaryColor.green, primaryColor.blue, 0],
+    "SecondaryColour": [secondaryColor.red, secondaryColor.green, secondaryColor.blue, 0]
   });
 }

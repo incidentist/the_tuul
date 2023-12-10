@@ -1,6 +1,6 @@
 import itertools
 import json
-from datetime import datetime, timedelta
+from datetime import timedelta
 import logging
 from pathlib import Path
 import subprocess as sp
@@ -8,6 +8,8 @@ from typing import List, Optional, Tuple, Union, Dict, Any
 
 import click
 import pydub
+
+from django.conf import settings
 
 from . import ass, timing_data, music_separation
 
@@ -24,6 +26,7 @@ def run(
     output_filename: str = "karaoke.mp4",
     audio_delay: float = 0.0,
     metadata: dict = {},
+    background_color: str = "#000000",
 ):
     song_files_dir = songfile.parent
     instrumental_path = song_files_dir.joinpath("accompaniment.wav")
@@ -58,13 +61,18 @@ def run(
                 "SecondaryColor": (0, 255, 255, 255),
             },
         )
+
+    fonts_dir = settings.BASE_DIR / "assets" / "fonts"
+
     return create_video(
         instrumental_path,
         lyric_subtitles,
         output_dir=song_files_dir,
+        fonts_dir=fonts_dir,
         filename=output_filename,
         audio_delay=audio_delay,
         metadata=metadata,
+        background_color=background_color,
     )
 
 
@@ -269,9 +277,11 @@ def create_video(
     audio_path: Path,
     subtitles: Union[str, ass.ASS],
     output_dir: Path,
+    fonts_dir: Path,
     filename: str = "karaoke.mp4",
     audio_delay: float = 0.0,
     metadata: dict = {},
+    background_color: str = "#000000",
 ):
     """
     Run ffmpeg to create the karaoke video.
@@ -284,13 +294,14 @@ def create_video(
     video_path = str(output_dir.joinpath(filename))
     audio_delay_ms = int(audio_delay * 1000)  # milliseconds
     video_metadata = get_metadata_args(metadata)
+    subtitle_arg = f"ass={ass_path}:fontsdir={str(fonts_dir)}"
     ffmpeg_cmd = [
         "ffmpeg",
         # Describe a video stream that is a black background
         "-f",
         "lavfi",
         "-i",
-        "color=c=black:s=1280x720:r=20",
+        f"color=c=0x{background_color[1:]}:s=1280x720:r=20",
         # Use accompaniment track as audio
         "-i",
         str(audio_path),
@@ -303,7 +314,7 @@ def create_video(
         "libmp3lame",
         # Add subtitles
         "-vf",
-        "ass=" + ass_path,
+        subtitle_arg,
         # End encoding after the shortest stream
         "-shortest",
         # Overwrite files without asking

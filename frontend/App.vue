@@ -148,6 +148,7 @@ export default defineComponent({
 .scroll-wrapper {
   overflow-y: scroll;
   -webkit-overflow-scrolling: touch;
+  height: 100%;
 }
 </style>
 <style>

@@ -13,6 +13,9 @@ https://docs.djangoproject.com/en/3.2/ref/settings/
 import os
 from pathlib import Path
 
+import structlog
+import loggers
+
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -31,7 +34,12 @@ ALLOWED_HOSTS = ["*"]
 
 # Application definition
 
-INSTALLED_APPS = ["django.contrib.staticfiles", "webpack_loader", "corsheaders"]
+INSTALLED_APPS = [
+    "django.contrib.staticfiles",
+    "webpack_loader",
+    "corsheaders",
+    "django_structlog",
+]
 
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
@@ -40,7 +48,63 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
+    "django_structlog.middlewares.RequestMiddleware",
 ]
+
+# Valid values are 'console' or 'gcp'
+LOGGING_FORMAT = os.getenv("LOGGING_FORMAT", "console")
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "gcp": {
+            "()": structlog.stdlib.ProcessorFormatter,
+            "processor": structlog.processors.JSONRenderer(),
+            "foreign_pre_chain": [
+                structlog.contextvars.merge_contextvars,
+                structlog.processors.TimeStamper(fmt="iso"),
+                structlog.stdlib.add_log_level,
+                structlog.stdlib.add_logger_name,
+                structlog.stdlib.PositionalArgumentsFormatter(),
+                structlog.processors.StackInfoRenderer(),
+                structlog.processors.format_exc_info,
+                structlog.processors.UnicodeDecoder(),
+                loggers.CloudLoggingFormatter(),
+            ],
+        },
+        "plain_console": {
+            "()": structlog.stdlib.ProcessorFormatter,
+            "processor": structlog.dev.ConsoleRenderer(),
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "plain_console",
+        },
+        "gcp": {
+            "class": "logging.StreamHandler",
+            "formatter": "gcp",
+        },
+    },
+    "loggers": {
+        "root": {
+            "handlers": ["console"],
+            "level": "INFO",
+        },
+    },
+}
+
+if LOGGING_FORMAT == "gcp":
+    LOGGING["loggers"]["root"]["handlers"] = ["gcp"]
+
+    structlog.configure_once(
+        processors=LOGGING["formatters"]["gcp"]["foreign_pre_chain"]
+        + [structlog.stdlib.ProcessorFormatter.wrap_for_formatter],
+        logger_factory=structlog.stdlib.LoggerFactory(),
+        cache_logger_on_first_use=True,
+    )
 
 ROOT_URLCONF = "urls"
 
@@ -102,8 +166,6 @@ LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"
 
 USE_I18N = True
-
-USE_L10N = True
 
 USE_TZ = True
 

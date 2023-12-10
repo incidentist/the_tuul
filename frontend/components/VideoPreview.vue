@@ -8,6 +8,7 @@
       ref="subtitleCanvas"
       width="320"
       height="240"
+      :style="{ backgroundColor }"
     ></canvas>
     <audio
       ref="player"
@@ -27,6 +28,7 @@
 /* A component that displays WebVTT subtitles over a black screen, with an audio file provided as a prop */
 // TODO: Incorporate audio delay
 
+import * as _ from "lodash";
 import { defineComponent } from "vue";
 import bufferToWav from "audiobuffer-to-wav";
 import SubtitlesOctopus from "libass-wasm";
@@ -45,6 +47,13 @@ export default defineComponent({
       type: Number,
       default: 0.0,
     },
+    fonts: {
+      type: Object,
+    },
+    backgroundColor: {
+      type: String,
+      default: "#000000",
+    },
   },
   data() {
     return {
@@ -54,13 +63,16 @@ export default defineComponent({
   },
   mounted() {
     const canvas = this.$refs.subtitleCanvas;
-
+    // SubtitleOctopus expects font names to be lowercase
+    const fontMap = _.mapKeys(this.fonts, (_, key) => key.toLowerCase());
     // Create a subtitle renderer and tie it to our player and canvas
+    console.log(fontMap);
     var options = {
       debug: false,
       canvas: canvas,
       subContent: this.subtitles,
-      fonts: ["/static/ArialNarrow.ttf"], // Links to fonts (not required, default font already included in build)
+      lazyFileLoading: true,
+      availableFonts: fontMap,
       workerUrl: "/static/subtitles-octopus-worker.js", // Link to WebAssembly-based file "libassjs-worker.js"
       legacyWorkerUrl: "/static/subtitles-octopus-worker-legacy.js", // Link to non-WebAssembly worker
     };
@@ -181,8 +193,5 @@ export default defineComponent({
 .preview-container {
   text-align: center;
   width: 320px;
-}
-.subtitle-canvas {
-  background-color: black;
 }
 </style>

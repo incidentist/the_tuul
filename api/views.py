@@ -1,19 +1,20 @@
 import io
-import json
-import logging
 import tempfile
 from pathlib import Path
 from typing import Tuple
 import zipfile
 
+import structlog
+
 from django.core.files.storage import FileSystemStorage
-from django.core.files import File
 from django.http import FileResponse
 from django.views.generic.base import TemplateView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from karaoke import make_karaoke_video
+
+logger = structlog.get_logger(__name__)
 
 
 class Index(TemplateView):
@@ -29,6 +30,17 @@ class GenerateVideo(APIView):
         song_title: str = request.data.get("songTitle", "Unknown Title")
         subtitles: str = request.data.get("subtitles")
         audio_delay: float = float(request.data.get("audioDelay", 0.0))
+        background_color: str = request.data.get("backgroundColor", "#000000")
+
+        logger.info(
+            "generate_video",
+            lyrics=lyrics,
+            timings=timings,
+            song_artist=song_artist,
+            song_title=song_title,
+            subtitles=subtitles,
+            song_size=len(song_file),
+        )
 
         with tempfile.TemporaryDirectory() as song_files_dir:
             zip_path = None
@@ -36,7 +48,6 @@ class GenerateVideo(APIView):
             [song_path, lyrics_path, timings_path] = self.setup_song_files_dir(
                 song_files_dir, song_file, lyrics, timings
             )
-            logging.info(song_path)
             success = make_karaoke_video.run(
                 lyricsfile=lyrics_path,
                 songfile=song_path,
@@ -45,6 +56,7 @@ class GenerateVideo(APIView):
                 output_filename=video_filename,
                 audio_delay=audio_delay,
                 metadata={"title": song_title, "artist": song_artist},
+                background_color=background_color,
             )
             if success:
                 zip_path = self.zip_project(
@@ -54,7 +66,7 @@ class GenerateVideo(APIView):
                 response = FileResponse(zip_path.open("rb"), as_attachment=True)
                 return response
             else:
-                logging.error("No zip path for some reason.")
+                logger.error("No zip path for some reason.")
 
     def zip_project(self, song_name: str, song_files_dir: Path) -> Path:
         include_files = [
@@ -68,7 +80,7 @@ class GenerateVideo(APIView):
             for entry in song_files_dir.glob("*"):
                 if entry.name in include_files:
                     zip_file.write(entry, entry.relative_to(song_files_dir))
-        logging.info(f"Zipped to: {zip_path}")
+        logger.info(f"Zipped to: {zip_path}")
         return zip_path
 
     def setup_song_files_dir(

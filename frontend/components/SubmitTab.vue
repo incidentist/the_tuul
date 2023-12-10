@@ -2,13 +2,13 @@
   <b-tab-item
     label="Submit"
     icon="blender"
-    class="submit-tab"
+    class="submit-tab scroll-wrapper"
     :disabled="!enabled"
   >
     <div class="columns is-variable is-5">
       <div class="column settings-column">
         <h3 class="title">More Settings:</h3>
-        <b-field expanded horizontal custom-class="fit-content">
+        <b-field horizontal>
           <template #label>
             Add Count-Ins
             <b-tooltip
@@ -17,16 +17,56 @@
               <b-icon size="is-small" icon="question-circle"></b-icon>
             </b-tooltip>
           </template>
-          <b-switch v-model="videoOptions.addCountIns"></b-switch
+          <b-switch expanded v-model="videoOptions.addCountIns"></b-switch
         ></b-field>
-        <b-field expanded horizontal custom-class="fit-content">
+        <b-field horizontal>
           <template #label>
             Add Instrumental Breaks
             <b-tooltip label="Add screens that count down long instrumentals">
               <b-icon size="is-small" icon="question-circle"></b-icon>
             </b-tooltip> </template
-          ><b-switch v-model="videoOptions.addInstrumentalScreens"></b-switch
+          ><b-switch
+            expanded
+            v-model="videoOptions.addInstrumentalScreens"
+          ></b-switch
         ></b-field>
+        <b-collapse :open="false">
+          <template #trigger="props">
+            <a aria-controls="contentIdForA11y4" :aria-expanded="props.open">
+              Fonts and Colors
+              <b-icon
+                :icon="props.open ? 'angle-down' : 'angle-right'"
+              ></b-icon>
+            </a>
+          </template>
+          <b-field horizontal label="Font">
+            <b-select v-model="videoOptions.font.name">
+              <option
+                v-for="(path, name) in fonts"
+                :key="path"
+                :value="name"
+                :selected="name == videoOptions.font.name"
+              >
+                {{ name }}
+              </option>
+            </b-select>
+          </b-field>
+          <b-field horizontal label="Font Size"
+            ><b-numberinput
+              v-model="videoOptions.font.size"
+              controls-position="compact"
+            ></b-numberinput
+          ></b-field>
+          <b-field horizontal label="Background Color"
+            ><b-colorpicker v-model="videoOptions.color.background"
+          /></b-field>
+          <b-field horizontal label="Primary Color"
+            ><b-colorpicker v-model="videoOptions.color.primary"
+          /></b-field>
+          <b-field horizontal label="Secondary Color"
+            ><b-colorpicker v-model="videoOptions.color.secondary"
+          /></b-field>
+        </b-collapse>
       </div>
       <div class="column is-narrow">
         <h3 class="title">Video Preview:</h3>
@@ -35,11 +75,25 @@
           :song-file="songFile"
           :subtitles="subtitles"
           :audio-delay="audioDelay"
+          :fonts="fonts"
+          :background-color="videoOptions.color.background.toString()"
         />
       </div>
     </div>
 
     <div class="submit-button-container">
+      <b-message :active="isSubmitting" type="is-success" has-icon icon="magic">
+        Creating your karaoke video. This might take a few minutes.
+      </b-message>
+      <b-message
+        :active="Boolean(submitError)"
+        type="is-danger"
+        has-icon
+        icon="exclamation-circle"
+      >
+        There was a problem making your video: {{ submitError }}. Try again? Or
+        email me?
+      </b-message>
       <div class="buttons">
         <b-button
           expanded
@@ -52,9 +106,6 @@
           Create Video
         </b-button>
       </div>
-      <b-message :active="isSubmitting" type="is-success" has-icon icon="magic">
-        Creating your karaoke video. This might take a few minutes.
-      </b-message>
     </div>
   </b-tab-item>
 </template>
@@ -65,6 +116,22 @@ import { defineComponent } from "vue";
 import { createAssFile, createScreens, KaraokeOptions } from "@/lib/timing";
 import { API_HOSTNAME } from "@/constants";
 import VideoPreview from "@/components/VideoPreview.vue";
+import Color from "buefy/src/utils/color";
+
+const fonts = {
+  "Andale Mono": "/static/fonts/AndaleMono.ttf",
+  Arial: "/static/fonts/Arial.ttf",
+  "Arial Narrow": "/static/fonts/ArialNarrow.ttf",
+  "Comic Sans": "/static/fonts/ComicSans.ttf",
+  "Courier New": "/static/fonts/CourierNew.ttf",
+  Georgia: "/static/fonts/Georgia.ttf",
+  Impact: "/static/fonts/Impact.ttf",
+  "Metal Mania": "/static/fonts/MetalMania.ttf",
+  "Times New Roman": "/static/fonts/TimesNewRoman.ttf",
+  Trebuchet: "/static/fonts/Trebuchet.ttf",
+  Verdana: "/static/fonts/Verdana.ttf",
+  "Liberation Sans": "/static/default.woff2",
+};
 
 export default defineComponent({
   components: { VideoPreview },
@@ -79,12 +146,34 @@ export default defineComponent({
   },
   data() {
     return {
+      fonts,
       isSubmitting: false,
       videoOptions: {
         addCountIns: true,
         addInstrumentalScreens: true,
+        font: {
+          size: 20,
+          name: "Arial Narrow",
+        },
+        color: {
+          background: Color.parse("black"),
+          primary: Color.parse("#FF00FF"),
+          secondary: Color.parse("#00FFFF"),
+        },
       },
+      submitError: null,
     };
+  },
+  mounted() {
+    Object.assign(this.videoOptions, this.loadSettings());
+  },
+  watch: {
+    videoOptions: {
+      handler: function (newOptions) {
+        this.saveSettings(newOptions);
+      },
+      deep: true,
+    },
   },
   computed: {
     songFile() {
@@ -125,6 +214,22 @@ export default defineComponent({
     },
   },
   methods: {
+    loadSettings(): Object {
+      try {
+        const options = JSON.parse(localStorage.videoOptions || "{}");
+        options.color.background = Color.parseObject(options.color.background);
+        options.color.primary = Color.parseObject(options.color.primary);
+        options.color.secondary = Color.parseObject(options.color.secondary);
+
+        return options;
+      } catch (e) {
+        console.error(e);
+        return {};
+      }
+    },
+    saveSettings(settings: Object) {
+      localStorage.videoOptions = JSON.stringify(settings);
+    },
     async submitTimings() {
       this.isSubmitting = true;
       const formData = new FormData();
@@ -135,15 +240,20 @@ export default defineComponent({
       formData.append("songTitle", this.songInfo.title);
       formData.append("subtitles", this.subtitles);
       formData.append("audioDelay", this.audioDelay);
+      formData.append("backgroundColor", this.videoOptions.color.background);
 
       const url = `${API_HOSTNAME}/generate_video`;
-
-      const response = await fetch(url, {
-        method: "POST",
-        body: formData,
-      });
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          body: formData,
+        });
+        await this.saveZipFile(response);
+      } catch (e) {
+        console.error(e);
+        this.submitError = e;
+      }
       this.isSubmitting = false;
-      await this.saveZipFile(response);
     },
     async saveZipFile(response) {
       console.log(response);
@@ -163,8 +273,11 @@ export default defineComponent({
 });
 </script>
 <style>
-.fit-content {
+/* .fit-content {
   width: max-content;
+} */
+.field.is-horizontal .field-label {
+  flex-grow: 3;
 }
 </style>
 <style scoped>
