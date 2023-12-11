@@ -1,15 +1,24 @@
-import { LyricSegmentIterator, LyricsScreen, compileLyricTimings, setScreenStartTimes, adjustScreenTimestamps, setSegmentEndTimes, createAssFile, floatToTimecode, addTitleScreen, denormalizeTimestamps } from "./timing";
+import { LyricSegmentIterator, LyricsScreen, compileLyricTimings, setScreenStartTimes, adjustScreenTimestamps, setSegmentEndTimes, createAssFile, floatToTimecode, addTitleScreen, denormalizeTimestamps, LyricsLine, KaraokeOptions, LyricEvent } from "./timing";
 import { LYRIC_MARKERS } from "../constants";
 import { LyricSegment } from "./timing";
 import fs from 'fs';
 
-const DEFAULT_OPTIONS = {
+const DEFAULT_OPTIONS: KaraokeOptions = {
     addCountIns: true,
-    addInstrumentalScreens: true
+    addInstrumentalScreens: true,
+    font: {
+        size: 20,
+        name: "Arial Narrow"
+    },
+    color: {
+        background: { red: 255, green: 255, blue: 0 },
+        primary: { red: 255, green: 0, blue: 255 },
+        secondary: { red: 0, green: 255, blue: 255 }
+    }
 }
 
 export const testLyrics = "Be bop_a lu bop\nShe's my ba/by\n\nAnd_here's_screen_two"
-const testEvents = [
+const testEvents: LyricEvent[] = [
     [1.0, LYRIC_MARKERS.SEGMENT_START],
     [2.0, LYRIC_MARKERS.SEGMENT_END],
     [3.0, LYRIC_MARKERS.SEGMENT_START],
@@ -22,7 +31,7 @@ const testEvents = [
 ]
 
 export const shortIntroTestEvents = testEvents;
-const longIntroTestEvents = [
+const longIntroTestEvents: LyricEvent[] = [
     [6.0, LYRIC_MARKERS.SEGMENT_START],
     [7.0, LYRIC_MARKERS.SEGMENT_END],
     [8.0, LYRIC_MARKERS.SEGMENT_START],
@@ -131,8 +140,9 @@ test('createAssFileForShortIntroSong', () => {
 test('addCountIn', () => {
     const songDuration = 60.0;
     const lyrics = "That was a long intro\nToo bad nothing rhymes with intro"
-    const timings = [[100.0, LYRIC_MARKERS.SEGMENT_START], [105.0, LYRIC_MARKERS.SEGMENT_START]]
-    let assFile = createAssFile(lyrics, timings, songDuration, "It's Cøøl to Tüül", "TÜ/ÜL", { addCountIns: true, addInstrumentalScreens: false });
+    const timings: LyricEvent[] = [[100.0, LYRIC_MARKERS.SEGMENT_START], [105.0, LYRIC_MARKERS.SEGMENT_START]]
+    const options = { ...DEFAULT_OPTIONS, addInstrumentalScreens: false }
+    let assFile = createAssFile(lyrics, timings, songDuration, "It's Cøøl to Tüül", "TÜ/ÜL", options);
 
     const expected = testAssPreamble + `Dialogue: 0,Default,0:00:04.00,0:01:00.00,130,{\\k9400}{\\kf200}●●● {\\kf500}That was a long intro
 
@@ -148,7 +158,7 @@ test('addCountInToSevenSecondIntro', () => {
     const songDuration = 60.0;
 
     // a corner case when the first event is between 7 and 8 seconds
-    const sevenSecondEvents = [
+    const sevenSecondEvents: LyricEvent[] = [
         [7.5, LYRIC_MARKERS.SEGMENT_START],
         [8.5, LYRIC_MARKERS.SEGMENT_END],
         [9.0, LYRIC_MARKERS.SEGMENT_START],
@@ -166,7 +176,9 @@ Dialogue: 0,Default,0:00:04.00,0:00:12.00,160,{\\k600}{\\kf100}She's my ba{\\kf1
 
 Dialogue: 0,Default,0:00:12.00,0:01:00.00,145,{\\k0}{\\kf100}And {\\kf100}here's {\\kf100}screen {\\kf4500}two
 `
-    const assFile = createAssFile(testLyrics, sevenSecondEvents, songDuration, "It's Cøøl to Tüül", "TÜ/ÜL", { addCountIns: true, addInstrumentalScreens: false });
+    const options = { ...DEFAULT_OPTIONS, addInstrumentalScreens: false }
+
+    const assFile = createAssFile(testLyrics, sevenSecondEvents, songDuration, "It's Cøøl to Tüül", "TÜ/ÜL", options);
     expect(assFile).toBe(sevenSecondAss);
 
 });
