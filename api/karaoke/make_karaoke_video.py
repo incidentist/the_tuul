@@ -14,8 +14,8 @@ SONG_ROOT_PATH = "songs/"
 def run(
     lyricsfile: Path,
     songfile: Path,
-    timingsfile: Path = None,
-    lyric_subtitles: str = None,
+    timingsfile: Path,
+    lyric_subtitles: str,
     output_filename: str = "karaoke.mp4",
     audio_delay: float = 0.0,
     metadata: dict = {},
@@ -25,13 +25,11 @@ def run(
     instrumental_path = song_files_dir.joinpath("accompaniment.wav")
     vocal_path = song_files_dir.joinpath("vocals.wav")
 
-    lyrics = lyricsfile.read_text()
-
     if instrumental_path.exists() and vocal_path.exists():
         click.echo(f"Using existing instrumental track at {instrumental_path}")
     else:
         click.echo("Splitting song into instrumental and vocal tracks..")
-        instrumental_path, vocals_path = music_separation.split_song(
+        instrumental_path, vocal_path = music_separation.split_song(
             songfile, song_files_dir
         )
         click.echo(f"Wrote instrumental track to {instrumental_path}")
