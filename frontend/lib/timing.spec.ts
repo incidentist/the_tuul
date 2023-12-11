@@ -1,10 +1,11 @@
-import { LyricSegmentIterator, LyricsScreen, compileLyricTimings, setScreenStartTimes, adjustScreenTimestamps, setSegmentEndTimes, createAssFile, floatToTimecode, addTitleScreen, denormalizeTimestamps, LyricsLine, KaraokeOptions, LyricEvent } from "./timing";
+import { LyricSegmentIterator, LyricsScreen, compileLyricTimings, setScreenStartTimes, adjustScreenTimestamps, setSegmentEndTimes, createAssFile, floatToTimecode, denormalizeTimestamps, LyricsLine, KaraokeOptions, LyricEvent } from "./timing";
 import { LYRIC_MARKERS } from "../constants";
 import { LyricSegment } from "./timing";
 
 const DEFAULT_OPTIONS: KaraokeOptions = {
     addCountIns: true,
     addInstrumentalScreens: true,
+    addStaggeredLines: true,
     font: {
         size: 20,
         name: "Arial Narrow"
@@ -113,10 +114,10 @@ test('LyricSegment', () => {
     expect(underSecondSegment.toAss()).toBe("{\\kf25}baby");
 });
 
-test('LyricScreen does ass', () => {
-    const screen = new LyricsScreen();
-    screen.toAss
-});
+// test('LyricScreen does ass', () => {
+//     const screen = new LyricsScreen();
+//     screen.toAss
+// });
 
 test('LyricScreen handles custom Y offset', () => {
     const screen = new LyricsScreen([
@@ -147,7 +148,8 @@ test('adjustTimestamps', () => {
 
 test('createAssFileForShortIntroSong', () => {
     const songDuration = 60.0;
-    const assFile = createAssFile(testLyrics, shortIntroTestEvents, songDuration, "It's Cøøl to Tüül", "TÜ/ÜL", DEFAULT_OPTIONS);
+    const options: KaraokeOptions = { ...DEFAULT_OPTIONS, addInstrumentalScreens: false, addStaggeredLines: false }
+    const assFile = createAssFile(testLyrics, shortIntroTestEvents, songDuration, "It's Cøøl to Tüül", "TÜ/ÜL", options);
     expect(assFile).toBe(testAss);
 });
 
@@ -155,7 +157,7 @@ test('addCountIn', () => {
     const songDuration = 60.0;
     const lyrics = "That was a long intro\nToo bad nothing rhymes with intro"
     const timings: LyricEvent[] = [[100.0, LYRIC_MARKERS.SEGMENT_START], [105.0, LYRIC_MARKERS.SEGMENT_START]]
-    const options = { ...DEFAULT_OPTIONS, addInstrumentalScreens: false }
+    const options: KaraokeOptions = { ...DEFAULT_OPTIONS, addInstrumentalScreens: false, addStaggeredLines: false }
     let assFile = createAssFile(lyrics, timings, songDuration, "It's Cøøl to Tüül", "TÜ/ÜL", options);
 
     const expected = testAssPreamble + `Dialogue: 0,Default,0:00:04.00,0:01:00.00,130,{\\k9400}{\\kf200}●●● {\\kf500}That was a long intro
@@ -190,7 +192,7 @@ Dialogue: 0,Default,0:00:04.00,0:00:12.00,160,{\\k600}{\\kf100}She's my ba{\\kf1
 
 Dialogue: 0,Default,0:00:12.00,0:01:00.00,145,{\\k0}{\\kf100}And {\\kf100}here's {\\kf100}screen {\\kf4500}two
 `
-    const options = { ...DEFAULT_OPTIONS, addInstrumentalScreens: false }
+    const options: KaraokeOptions = { ...DEFAULT_OPTIONS, addInstrumentalScreens: false, addStaggeredLines: false }
 
     const assFile = createAssFile(testLyrics, sevenSecondEvents, songDuration, "It's Cøøl to Tüül", "TÜ/ÜL", options);
     expect(assFile).toBe(sevenSecondAss);

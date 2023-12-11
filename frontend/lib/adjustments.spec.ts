@@ -6,6 +6,7 @@ import { LYRIC_MARKERS } from "../constants";
 const DEFAULT_OPTIONS: KaraokeOptions = {
     addCountIns: true,
     addInstrumentalScreens: true,
+    addStaggeredLines: true,
     font: {
         size: 22,
         name: "Arial Narrow"
