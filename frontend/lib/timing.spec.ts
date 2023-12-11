@@ -1,7 +1,6 @@
 import { LyricSegmentIterator, LyricsScreen, compileLyricTimings, setScreenStartTimes, adjustScreenTimestamps, setSegmentEndTimes, createAssFile, floatToTimecode, addTitleScreen, denormalizeTimestamps, LyricsLine, KaraokeOptions, LyricEvent } from "./timing";
 import { LYRIC_MARKERS } from "../constants";
 import { LyricSegment } from "./timing";
-import fs from 'fs';
 
 const DEFAULT_OPTIONS: KaraokeOptions = {
     addCountIns: true,
@@ -16,6 +15,8 @@ const DEFAULT_OPTIONS: KaraokeOptions = {
         secondary: { red: 0, green: 255, blue: 255 }
     }
 }
+
+const DEFAULT_FONT_SIZE = 22;
 
 export const testLyrics = "Be bop_a lu bop\nShe's my ba/by\n\nAnd_here's_screen_two"
 const testEvents: LyricEvent[] = [
@@ -116,6 +117,19 @@ test('LyricScreen does ass', () => {
     const screen = new LyricsScreen();
     screen.toAss
 });
+
+test('LyricScreen handles custom Y offset', () => {
+    const screen = new LyricsScreen([
+        new LyricsLine([new LyricSegment("one", 1.0)]),
+        new LyricsLine([new LyricSegment("two", 2.0)])
+    ])
+
+    expect(screen.getLineY(0, DEFAULT_FONT_SIZE)).toBe(127);
+
+    screen.customFirstLineTopMargin = 50;
+    expect(screen.getLineY(0, DEFAULT_FONT_SIZE)).toBe(50);
+    expect(screen.getLineY(1, DEFAULT_FONT_SIZE)).toBe(83);
+})
 
 test('setScreenStartTimes', () => {
     const screens = compileLyricTimings(testLyrics, testEvents);

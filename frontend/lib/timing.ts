@@ -150,6 +150,8 @@ export class LyricsScreen {
   startTimestamp?: Timestamp;
   // Seconds to delay the start of the audio. Only valid on the title screen and first lyrics screen.
   audioDelay: number = 0.0;
+  // For staggered timings, we might need to adjust the top margin of the first line
+  customFirstLineTopMargin?: number = null;
 
   constructor(lines: LyricsLine[] = [], audioDelay = 0.0) {
     this.lines = lines;
@@ -163,15 +165,27 @@ export class LyricsScreen {
     return this.lines[this.lines.length - 1].endTimestamp;
   }
 
+  get singStart(): Timestamp {
+    return this.lines[0].timestamp;
+  }
+
+  get singEnd(): Timestamp {
+    return this.lines[this.lines.length - 1].endTimestamp;
+  }
+
   get segments(): LyricSegment[] {
     return this.lines.flatMap(l => l.segments);
   }
 
   getLineY(lineInScreen: number, fontSize: number): number {
-    const screenMiddle = VIDEO_SIZE.height / 2;
     const lineCount = this.lines.length;
     const lineHeight = fontSize * 1.5;
-    return screenMiddle - (lineCount * lineHeight / 2) + (lineInScreen * lineHeight)
+    let firstLineTopMargin = this.customFirstLineTopMargin;
+    if (firstLineTopMargin === null) {
+      const screenMiddle = VIDEO_SIZE.height / 2;
+      firstLineTopMargin = screenMiddle - (lineCount * lineHeight / 2)
+    }
+    return firstLineTopMargin + (lineInScreen * lineHeight)
   }
 
   toAssEvents(formatParams: Object) {
@@ -208,6 +222,10 @@ export class LyricsScreen {
 export class LyricsLine {
 
   segments: LyricSegment[];
+  // Times to start/end display of the line, as opposed to animation.
+  // If none, screen start/end times will be used.
+  displayStartTime?: Timestamp = null;
+  displayEndTime?: Timestamp = null;
 
   constructor(segments: LyricSegment[] = []) {
     this.segments = segments;

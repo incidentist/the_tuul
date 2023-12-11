@@ -1,7 +1,21 @@
-import { addTitleScreen, addInstrumentalScreens } from "./adjustments";
+import { addTitleScreen, addInstrumentalScreens, displayQuickLinesEarly } from "./adjustments";
 import { compileLyricTimings, createAssFile, denormalizeTimestamps, LyricEvent, LyricSegment, LyricsLine, LyricsScreen, KaraokeOptions } from "./timing";
 import { testLyrics, shortIntroTestEvents } from "./timing.spec";
 import { LYRIC_MARKERS } from "../constants";
+
+const DEFAULT_OPTIONS: KaraokeOptions = {
+    addCountIns: true,
+    addInstrumentalScreens: true,
+    font: {
+        size: 22,
+        name: "Arial Narrow"
+    },
+    color: {
+        background: null,
+        primary: null,
+        secondary: null
+    }
+}
 
 const DEFAULT_ASS_OPTIONS = {
     "Fontsize": 20,
@@ -72,3 +86,23 @@ Dialogue: 0,Default,0:00:30.00,0:00:31.00,145,{\\k0}{\\kf100}screen three
     expect(screens.map((s) => s.toAssEvents(DEFAULT_ASS_OPTIONS)).join("")).toBe(ass);
 
 });
+
+test('fast lines display early', () => {
+    const screens = [
+        new LyricsScreen(), // ignored title screen
+        new LyricsScreen([
+            new LyricsLine([new LyricSegment("one", 1.0)]),
+            new LyricsLine([new LyricSegment("two", 2.0)])
+        ]),
+        new LyricsScreen([
+            new LyricsLine([new LyricSegment("three", 3.0)]),
+            new LyricsLine([new LyricSegment("four", 4.0)])
+        ])
+    ]
+    screens[1].startTimestamp = 0;
+    const denormalizedScreens = denormalizeTimestamps(screens, 4);
+    const adjustedScreens = displayQuickLinesEarly(denormalizedScreens, DEFAULT_OPTIONS)
+    expect(adjustedScreens[1].lines[0].customDisplayEndTime).toBe(2.5)
+    expect(adjustedScreens[2].lines[0].customDisplayStartTime).toBe(2.75)
+
+})
