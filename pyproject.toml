@@ -7,7 +7,6 @@ license = "MIT"
 
 [tool.poetry.dependencies]
 python = ">=3.11,<3.12"
-pydub = "^0.25.1"
 Django = "^4.2.7"
 djangorestframework = "^3.14.0"
 click = "^8.1.7"

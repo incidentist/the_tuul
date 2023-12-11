@@ -5,7 +5,7 @@ from typing import Tuple
 MODELS_DIR = Path.cwd() / "pretrained_models"
 
 
-def split_song(songfile: Path, song_dir: Path) -> Tuple[str, str]:
+def split_song(songfile: Path, song_dir: Path) -> Tuple[Path, Path]:
     """
     Split song into instrumental and vocal tracks.
     Returns paths to accompaniment and vocal tracks.
@@ -16,8 +16,8 @@ def split_song(songfile: Path, song_dir: Path) -> Tuple[str, str]:
         logging.warning(
             "Spleeter not found. I assume we're testing. Gonna use the original song."
         )
-        return str(
-            songfile.rename(song_dir.joinpath("accompaniment.wav"))
+        return songfile.rename(
+            song_dir.joinpath("accompaniment.wav")
         ), song_dir.joinpath("vocals.wav")
 
     separator = Separator(
