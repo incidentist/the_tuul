@@ -137,7 +137,10 @@ export function displayQuickLinesEarly(screens: LyricsScreen[], displayOptions: 
             + ((lineAfterEarlyRemovals.endTimestamp - lineAfterEarlyRemovals.timestamp) * .5)
         const earlyDisplayTime = lineAfterEarlyRemovals.timestamp
             + ((lineAfterEarlyRemovals.endTimestamp - lineAfterEarlyRemovals.timestamp) * .75)
-        earlyRemovalLines.forEach(line => { line.customDisplayEndTime = earlyRemovalTime; });
+        earlyRemovalLines.forEach(line => {
+            line.customDisplayEndTime = earlyRemovalTime;
+            line.fadeOutDuration = (earlyDisplayTime - earlyRemovalTime) / 2
+        });
 
         // TODO what if nextScreen.length == 2 and screen.length == 3?
         const earlyDisplayLines = nextScreen.lines.slice(0, earlyRemovalLines.length);
@@ -146,7 +149,10 @@ export function displayQuickLinesEarly(screens: LyricsScreen[], displayOptions: 
             nextScreen.customFirstLineTopMargin = screen.getLineY(0, displayOptions.font.size);
         }
 
-        earlyDisplayLines.forEach((line, i) => { line.customDisplayStartTime = earlyDisplayTime })
+        earlyDisplayLines.forEach((line, i) => {
+            line.customDisplayStartTime = earlyDisplayTime;
+            line.fadeInDuration = (earlyDisplayTime - earlyRemovalTime) / 2;
+        })
     }
     return screens;
 }

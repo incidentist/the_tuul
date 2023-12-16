@@ -39,6 +39,7 @@ interface AssEvent {
 //
 
 type Color = [number, number, number, number] // RGBA?
+type Seconds = number;
 
 function toHex(n: number) { return n.toString(16).toUpperCase().padStart(2, "0") }
 
@@ -221,6 +222,8 @@ export class LyricsLine {
   // If none, screen start/end times will be used.
   customDisplayStartTime?: Timestamp = null;
   customDisplayEndTime?: Timestamp = null;
+  fadeInDuration: Seconds = 0.0;
+  fadeOutDuration: Seconds = 0.0;
 
   constructor(segments: LyricSegment[] = []) {
     this.segments = segments;
@@ -272,7 +275,7 @@ export class LyricsLine {
       line += s.toAss()
       previousEnd = s.endTimestamp;
     }
-    return line;
+    return this.addAssFades(line);
   }
 
   toAssEvent(screenStart: Timestamp, screenEnd: Timestamp, style: string, topMargin: number): string {
@@ -292,6 +295,13 @@ export class LyricsLine {
       Text: this.decorateAssLine(this.segments, displayStart)
     }
     return `${e.type}: ` + ["Layer", "Style", "Start", "End", "MarginV", "Text"].map(k => e[k]).join(",");
+  }
+
+  addAssFades(assLine: string): string {
+    if (this.fadeInDuration == 0 && this.fadeOutDuration == 0) {
+      return assLine;
+    }
+    return `{\\fad(${Math.floor(this.fadeInDuration * 1000)},${Math.floor(this.fadeOutDuration * 1000)})}` + assLine
   }
 
   adjustTimestamps(adjustment: number): LyricsLine {
