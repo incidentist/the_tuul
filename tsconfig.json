@@ -3,7 +3,8 @@
         "target": "es2021",
         "baseUrl": "./",
         "sourceMap": true,
-        "moduleResolution": "nodenext",
+        "moduleResolution": "NodeNext",
+        "module": "NodeNext",
         "paths": {
             "@/*": [
                 "./frontend/*",

@@ -30,6 +30,19 @@
             v-model="videoOptions.addInstrumentalScreens"
           ></b-switch
         ></b-field>
+        <b-field horizontal>
+          <template #label>
+            Show Fast Lines Early
+            <b-tooltip
+              label="Show the first few lines of a screen early if it starts right after the previous screen ends"
+            >
+              <b-icon size="is-small" icon="question-circle"></b-icon>
+            </b-tooltip> </template
+          ><b-switch
+            expanded
+            v-model="videoOptions.addStaggeredLines"
+          ></b-switch
+        ></b-field>
         <b-collapse :open="false">
           <template #trigger="props">
             <a aria-controls="contentIdForA11y4" :aria-expanded="props.open">
@@ -151,6 +164,7 @@ export default defineComponent({
       videoOptions: {
         addCountIns: true,
         addInstrumentalScreens: true,
+        addStaggeredLines: true,
         font: {
           size: 20,
           name: "Arial Narrow",
