@@ -10,7 +10,7 @@
       <b-button
         v-if="isMobile"
         icon="help"
-        icon-right="question-circle"
+        icon-right="circle-question"
         :type="isShowingHelp ? 'is-primary' : ''"
         @click="isShowingHelp = !isShowingHelp"
       />

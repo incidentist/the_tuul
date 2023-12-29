@@ -23,6 +23,7 @@
   },
   "homepage": "https://github.com/incidentist/karaoke_video_tools#readme",
   "dependencies": {
+    "@fortawesome/fontawesome-free": "^6.5.1",
     "audiobuffer-to-wav": "^1.0.0",
     "buefy": "^0.9.25",
     "libass-wasm": "^4.1.0",

@@ -14,7 +14,7 @@
             <b-tooltip
               label="Add count-in dots so you know when to start singing"
             >
-              <b-icon size="is-small" icon="question-circle"></b-icon>
+              <b-icon size="is-small" icon="circle-question"></b-icon>
             </b-tooltip>
           </template>
           <b-switch expanded v-model="videoOptions.addCountIns"></b-switch
@@ -23,7 +23,7 @@
           <template #label>
             Add Instrumental Breaks
             <b-tooltip label="Add screens that count down long instrumentals">
-              <b-icon size="is-small" icon="question-circle"></b-icon>
+              <b-icon size="is-small" icon="circle-question"></b-icon>
             </b-tooltip> </template
           ><b-switch
             expanded
@@ -36,7 +36,7 @@
             <b-tooltip
               label="Show the first few lines of a screen early if it starts right after the previous screen ends"
             >
-              <b-icon size="is-small" icon="question-circle"></b-icon>
+              <b-icon size="is-small" icon="circle-question"></b-icon>
             </b-tooltip> </template
           ><b-switch
             expanded
@@ -95,14 +95,19 @@
     </div>
 
     <div class="submit-button-container">
-      <b-message :active="isSubmitting" type="is-success" has-icon icon="magic">
+      <b-message
+        :active="isSubmitting"
+        type="is-success"
+        has-icon
+        icon="wand-magic-sparkles"
+      >
         Creating your karaoke video. This might take a few minutes.
       </b-message>
       <b-message
         :active="Boolean(submitError)"
         type="is-danger"
         has-icon
-        icon="exclamation-circle"
+        icon="circle-exclamation"
       >
         There was a problem making your video: {{ submitError }}. Try again? Or
         email me?
