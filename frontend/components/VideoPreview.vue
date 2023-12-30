@@ -66,13 +66,25 @@ export default defineComponent({
     // SubtitleOctopus expects font names to be lowercase
     const fontMap = _.mapKeys(this.fonts, (_, key) => key.toLowerCase());
     // Create a subtitle renderer and tie it to our player and canvas
-    console.log(fontMap);
+    // console.log(fontMap);
+    const workerUrl = new URL(
+      "libass-wasm/dist/js/subtitles-octopus-worker.js",
+      import.meta.url
+    ); // Link to WebAssembly-based file "libassjs-worker.js"
+    const workerObjectUrl = URL.createObjectURL(
+      new Blob([`importScripts("${workerUrl.toString()}")`], {
+        type: "application/javascript",
+      })
+    );
+    console.log(workerUrl.toString());
     var options = {
       debug: false,
       canvas: canvas,
       subContent: this.subtitles,
       lazyFileLoading: true,
       availableFonts: fontMap,
+      // workerUrl: require("!!file-loader?name=[name].[ext]!libass-wasm/dist/subtitles-octopus-worker.js"),
+      // workerUrl: workerUrl,
       workerUrl: "/static/subtitles-octopus-worker.js", // Link to WebAssembly-based file "libassjs-worker.js"
       legacyWorkerUrl: "/static/subtitles-octopus-worker-legacy.js", // Link to non-WebAssembly worker
     };
