@@ -95,6 +95,18 @@
     </div>
 
     <div class="submit-button-container">
+      <div class="buttons">
+        <b-button
+          expanded
+          size="is-large"
+          type="is-primary"
+          :loading="isSubmitting"
+          @click="createVideo"
+          :disabled="!enabled && !isSubmitting"
+        >
+          Create Video
+        </b-button>
+      </div>
       <b-message
         :active="isSubmitting"
         type="is-success"
@@ -112,18 +124,6 @@
         There was a problem making your video: {{ submitError }}. Try again? Or
         email me?
       </b-message>
-      <div class="buttons">
-        <b-button
-          expanded
-          size="is-large"
-          type="is-primary"
-          :loading="isSubmitting"
-          @click="createMpeg"
-          :disabled="!enabled && !isSubmitting"
-        >
-          Create Video
-        </b-button>
-      </div>
     </div>
   </b-tab-item>
 </template>
@@ -135,8 +135,12 @@ import { createAssFile, createScreens, KaraokeOptions } from "@/lib/timing";
 import { API_HOSTNAME } from "@/constants";
 import VideoPreview from "@/components/VideoPreview.vue";
 import Color from "buefy/src/utils/color";
-import { createFFmpeg, fetchFile } from "@ffmpeg/ffmpeg";
-import { readFileAsync } from "@/lib/util";
+// ffmpeg v11
+import { createFFmpeg } from "@ffmpeg/ffmpeg";
+// ffmpeg v12
+// import { FFmpeg } from "@ffmpeg/ffmpeg";
+import { fetchFile, toBlobURL } from "@ffmpeg/util";
+import jszip from "jszip";
 
 const fonts = {
   "Andale Mono": "/static/fonts/AndaleMono.ttf",
@@ -251,6 +255,35 @@ export default defineComponent({
     saveSettings(settings: Object) {
       localStorage.videoOptions = JSON.stringify(settings);
     },
+    async createVideo() {
+      this.isSubmitting = true;
+      const accompanimentDataUrl = await this.separateTrack(this.songFile);
+      await this.createMpegV11(accompanimentDataUrl, this.videoOptions);
+      this.isSubmitting = false;
+    },
+    async separateTrack(songFile): Promise<string> {
+      // Separate the track and return a blob url of the accompaniment stem data
+      const formData = new FormData();
+      formData.append("songFile", songFile);
+      const url = `${API_HOSTNAME}/separate_track`;
+      const response = await fetch(url, {
+        method: "POST",
+        body: formData,
+      });
+      const zipContents = await response.blob();
+      console.log("Unzipping...");
+      const zip = await jszip.loadAsync(zipContents);
+      const contents = await zip.file("accompaniment.wav").async("blob");
+      const accompanimentUrl = URL.createObjectURL(contents);
+      console.log("Got accompaniment: ", accompanimentUrl);
+
+      return accompanimentUrl;
+    },
+    // async unzipTracks(zipData: Buffer, ffmpeg: FFmpeg) {
+    //   const zip = await jszip.loadAsync(zipData);
+    //   const contents = await zip.file("accompaniment.wav").async("uint8array");
+    //   ffmpeg.writeFile("accompaniment.wav", contents);
+    // },
     async submitTimings() {
       this.isSubmitting = true;
       const formData = new FormData();
@@ -276,8 +309,14 @@ export default defineComponent({
       }
       this.isSubmitting = false;
     },
-    async createMpeg() {
+    async createMpegV11(
+      accompanimentDataUrl: string,
+      videoOptions: KaraokeOptions
+    ) {
+      // Create the video using ffmpeg.wasm v0.11
       const songFileName = "stuff.mp3";
+      const backgroundColor =
+        "0x" + videoOptions.color.background.toString().substring(1);
       this.isSubmitting = true;
       const ffmpeg = createFFmpeg({ log: true });
       await ffmpeg.load();
@@ -285,32 +324,93 @@ export default defineComponent({
       await ffmpeg.FS(
         "writeFile",
         songFileName,
-        new Uint8Array(await readFileAsync(this.songFile))
+        new Uint8Array(await fetchFile(accompanimentDataUrl))
       );
       // Write the subtitle font to the filesystem
       await ffmpeg.FS(
         "writeFile",
-        "Arial Narrow.ttf",
-        await fetchFile("http://localhost:8000/static/ArialNarrow.ttf")
+        "/tmp/Arial Narrow.ttf",
+        await fetchFile("http://localhost:8000/static/fonts/ArialNarrow.ttf")
       );
       await ffmpeg.FS("writeFile", "subtitles.ass", this.subtitles);
       await ffmpeg.run(
         "-f",
         "lavfi",
         "-i",
-        "color=c=black:s=1280x720:r=20",
+        `color=c=${backgroundColor}:s=1280x720:r=20`,
         "-i",
         songFileName,
         // Add subtitles
         "-vf",
-        "ass=subtitles.ass:fontsdir=./",
+        "ass=subtitles.ass:fontsdir=/tmp",
         "-shortest",
         "-y",
         "karaoke.mp4"
       );
-
-      // video is a Uint8Array
       const video = await ffmpeg.FS("readFile", "karaoke.mp4");
+      return this.sendVideo(video);
+    },
+    // async createMpeg(accompanimentDataUrl: string) {
+    //   const songFileName = "stuff.wav";
+    //   this.isSubmitting = true;
+    //   console.log("creating ffmpeg...");
+    //   const ffmpeg = new FFmpeg();
+    //   console.log("loading ffffmpeg...");
+    //   const baseURL = "https://unpkg.com/@ffmpeg/core-mt@0.12.6/dist/esm";
+    //   ffmpeg.on("log", (msg) => console.log(msg));
+    //   await ffmpeg.load({
+    //     // coreURL: await toBlobURL(
+    //     //   `${baseURL}/ffmpeg-core.js`,
+    //     //   "text/javascript"
+    //     // ),
+    //     // wasmURL: await toBlobURL(
+    //     //   `${baseURL}/ffmpeg-core.wasm`,
+    //     //   "application/wasm"
+    //     // ),
+    //     // workerURL: await toBlobURL(
+    //     //   `${baseURL}/ffmpeg-core.worker.js`,
+    //     //   "text/javascript"
+    //     // ),
+    //     // classWorkerURL: await toBlobURL(
+    //     //   `${baseURL}/ffmpeg-core.worker.js`,
+    //     //   "text/javascript"
+    //     // ),
+    //     // classWorkerURL: "http://localhost:8000/static/ffmpeg.worker.js",
+    //   });
+    //   // Write audio to ffmpeg-wasm's filesystem
+    //   console.log("Fetching accompaniment...");
+    //   await ffmpeg.writeFile(
+    //     songFileName,
+    //     new Uint8Array(await fetchFile(accompanimentDataUrl))
+    //   );
+    //   // Write the subtitle font to the filesystem
+    //   console.log("Fetching font...");
+    //   await ffmpeg.writeFile(
+    //     "Arial Narrow.ttf",
+    //     await fetchFile("http://localhost:8000/static/ArialNarrow.ttf")
+    //   );
+    //   await ffmpeg.writeFile("subtitles.ass", this.subtitles);
+    //   console.log("Creating video for real...");
+    //   await ffmpeg.exec([
+    //     "-f",
+    //     "lavfi",
+    //     "-i",
+    //     "color=c=black:s=1280x720:r=20",
+    //     "-i",
+    //     songFileName,
+    //     // Add subtitles
+    //     "-vf",
+    //     "ass=subtitles.ass:fontsdir=./",
+    //     "-shortest",
+    //     "-y",
+    //     "karaoke.mp4",
+    //   ]);
+
+    //   // video is a Uint8Array
+    //   const video = await ffmpeg.readFile("karaoke.mp4");
+    //   this.sendVideo(video);
+    // },
+    async sendVideo(video: Uint8Array) {
       const anchor = document.createElement("a");
       const filename = this.zipFileName;
 

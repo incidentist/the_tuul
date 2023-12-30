@@ -8,12 +8,14 @@ import structlog
 
 from django.core.files.storage import FileSystemStorage
 from django.http import FileResponse
+from django.core.files import File
 from django.views.generic.base import TemplateView
 from rest_framework.response import Response
 from rest_framework.request import Request
 from rest_framework.views import APIView
 
 from karaoke import make_karaoke_video
+from karaoke import music_separation
 
 logger = structlog.get_logger(__name__)
 
@@ -22,8 +24,47 @@ class Index(TemplateView):
     template_name = "index.html"
 
 
+class SeparateTrack(APIView):
+    def post(self, request: Request, format: str | None = None) -> Response:
+        """Return a zip containing vocal and accompaniment splits of songFile"""
+        song_file = request.data.get("songFile")
+        logger.info(
+            "separate_tracks",
+            song_size=len(song_file),
+        )
+        with tempfile.TemporaryDirectory() as song_files_dir:
+            song_files_dir_path = Path(song_files_dir)
+            song_file_path = self.setup_song_files_dir(song_files_dir, song_file)
+            accompaniment_path, vocal_path = music_separation.split_song(
+                song_file_path, song_files_dir_path
+            )
+            zip_path = song_files_dir_path / "split_song.zip"
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                zip_file.write(
+                    accompaniment_path,
+                    "accompaniment.wav",
+                )
+                zip_file.write(
+                    vocal_path,
+                    "vocals.wav",
+                )
+
+            logger.info("zip_complete", path=zip_path)
+            response = FileResponse(zip_path.open("rb"), as_attachment=True)
+            return response
+
+    def setup_song_files_dir(self, files_dir: str, song_file: File) -> Path:
+        """Copy song file to the temp dir.
+
+        Return song file path.
+        """
+        fs = FileSystemStorage(files_dir)
+        song_file_name = fs.save(song_file.name, content=song_file)
+        return Path(fs.location, song_file_name)
+
+
 class GenerateVideo(APIView):
-    def post(self, request: Request, format=None):
+    def post(self, request: Request, format=None) -> Response:
         lyrics: str = request.data.get("lyrics")
         timings: str = request.data.get("timings")
         song_file = request.data.get("songFile")

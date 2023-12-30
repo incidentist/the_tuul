@@ -20,6 +20,7 @@ import views
 
 urlpatterns = [
     path("", views.Index.as_view()),
+    path("separate_track", views.SeparateTrack.as_view(), name="separate_track"),
     path("generate_video", views.GenerateVideo.as_view(), name="generate_video"),
     # path("admin/", admin.site.urls),
 ]
