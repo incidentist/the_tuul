@@ -1,8 +1,9 @@
-import { adjustScreenTimestamps, LyricSegment, LyricsScreen, LyricsLine, Timestamp, denormalizeTimestamps } from "./timing";
+import { adjustScreenTimestamps, LyricSegment, LyricsScreen, LyricsLine, Timestamp, denormalizeTimestamps, KaraokeOptions } from "./timing";
 import { TITLE_SCREEN_DURATION as TITLE_SCREEN_DURATION, INSTRUMENTAL_SCREEN_THRESHOLD } from "../constants";
 import * as _ from "lodash";
 
 const FIRST_SCREEN_QUICK_START_THRESHOLD: Timestamp = 1.0
+const SCREEN_QUICK_START_THRESHOLD: Timestamp = 2.0
 const COUNT_IN_THRESHOLD: Timestamp = 5.0
 const COUNT_IN_DURATION: Timestamp = 2.0
 
@@ -114,4 +115,44 @@ export function addTitleScreen(screens: LyricsScreen[], title: string, artist: s
     const screensWithTitle = adjustedLyricScreens.slice()
     screensWithTitle.unshift(denormalizedScreen);
     return screensWithTitle;
+}
+
+export function displayQuickLinesEarly(screens: LyricsScreen[], displayOptions: KaraokeOptions): LyricsScreen[] {
+    // If the lyrics on the next screen start right away, display the first few lines early
+    // Skip the title screen and the last screen.
+    for (let i = 1; i < screens.length - 1; i++) {
+        const screen = screens[i];
+        const nextScreen = screens[i + 1];
+        if (nextScreen.singStart - screen.singEnd > SCREEN_QUICK_START_THRESHOLD) {
+            continue;
+        }
+        if (screen.lines.length < 2) {
+            continue;
+        }
+
+        const earlyRemovalLines = screen.lines.slice(0, Math.min(2, screen.lines.length - 1));
+        const lineAfterEarlyRemovals = screen.lines[earlyRemovalLines.length];
+        // Remove earlyRemovalLines when the line after them is halfway done singing
+        const earlyRemovalTime = lineAfterEarlyRemovals.timestamp
+            + ((lineAfterEarlyRemovals.endTimestamp - lineAfterEarlyRemovals.timestamp) * .5)
+        const earlyDisplayTime = lineAfterEarlyRemovals.timestamp
+            + ((lineAfterEarlyRemovals.endTimestamp - lineAfterEarlyRemovals.timestamp) * .75)
+        earlyRemovalLines.forEach(line => {
+            line.customDisplayEndTime = earlyRemovalTime;
+            line.fadeOutDuration = (earlyDisplayTime - earlyRemovalTime) / 2
+        });
+
+        // TODO what if nextScreen.length == 2 and screen.length == 3?
+        const earlyDisplayLines = nextScreen.lines.slice(0, earlyRemovalLines.length);
+        // Adjust y positions so they don't overwrite remaining lines
+        if (screen.getLineY(0, displayOptions.font.size) < nextScreen.getLineY(0, displayOptions.font.size)) {
+            nextScreen.customFirstLineTopMargin = screen.getLineY(0, displayOptions.font.size);
+        }
+
+        earlyDisplayLines.forEach((line, i) => {
+            line.customDisplayStartTime = earlyDisplayTime;
+            line.fadeInDuration = (earlyDisplayTime - earlyRemovalTime) / 2;
+        })
+    }
+    return screens;
 }

@@ -1,5 +1,5 @@
 import { LYRIC_MARKERS, VIDEO_SIZE, TITLE_SCREEN_DURATION } from "../constants";
-import { addQuickStartCountIn, addScreenCountIns, addTitleScreen, addInstrumentalScreens } from "./adjustments";
+import { addQuickStartCountIn, addScreenCountIns, addTitleScreen, addInstrumentalScreens, displayQuickLinesEarly } from "./adjustments";
 import * as _ from "lodash";
 import { isNumber } from "lodash";
 import { Color as BuefyColor } from "buefy/src/utils/color";
@@ -8,6 +8,7 @@ import { Color as BuefyColor } from "buefy/src/utils/color";
 export interface KaraokeOptions {
   addCountIns: boolean,
   addInstrumentalScreens: boolean,
+  addStaggeredLines: boolean,
   font: {
     size: number,
     name: string
@@ -38,6 +39,7 @@ interface AssEvent {
 //
 
 type Color = [number, number, number, number] // RGBA?
+type Seconds = number;
 
 function toHex(n: number) { return n.toString(16).toUpperCase().padStart(2, "0") }
 
@@ -107,16 +109,9 @@ export class LyricSegmentIterator {
     return segments;
   }
 
-  [Symbol.iterator]() {
-    let index = 0;
-    return {
-      next: () => {
-        if (index < this.segments.length) {
-          return { value: this.segments[index++], done: false };
-        } else {
-          return { done: true };
-        }
-      }
+  *[Symbol.iterator](): IterableIterator<Segment> {
+    for (let s of this.segments) {
+      yield s;
     }
   }
 }
@@ -150,6 +145,8 @@ export class LyricsScreen {
   startTimestamp?: Timestamp;
   // Seconds to delay the start of the audio. Only valid on the title screen and first lyrics screen.
   audioDelay: number = 0.0;
+  // For staggered timings, we might need to adjust the top margin of the first line
+  customFirstLineTopMargin?: number = null;
 
   constructor(lines: LyricsLine[] = [], audioDelay = 0.0) {
     this.lines = lines;
@@ -163,15 +160,27 @@ export class LyricsScreen {
     return this.lines[this.lines.length - 1].endTimestamp;
   }
 
+  get singStart(): Timestamp {
+    return this.lines[0].timestamp;
+  }
+
+  get singEnd(): Timestamp {
+    return this.lines[this.lines.length - 1].endTimestamp;
+  }
+
   get segments(): LyricSegment[] {
     return this.lines.flatMap(l => l.segments);
   }
 
   getLineY(lineInScreen: number, fontSize: number): number {
-    const screenMiddle = VIDEO_SIZE.height / 2;
     const lineCount = this.lines.length;
     const lineHeight = fontSize * 1.5;
-    return screenMiddle - (lineCount * lineHeight / 2) + (lineInScreen * lineHeight)
+    let firstLineTopMargin = this.customFirstLineTopMargin;
+    if (firstLineTopMargin === null) {
+      const screenMiddle = VIDEO_SIZE.height / 2;
+      firstLineTopMargin = screenMiddle - (lineCount * lineHeight / 2)
+    }
+    return firstLineTopMargin + (lineInScreen * lineHeight)
   }
 
   toAssEvents(formatParams: Object) {
@@ -209,6 +218,13 @@ export class LyricsLine {
 
   segments: LyricSegment[];
 
+  // Times to start/end display of the line, as opposed to animation.
+  // If none, screen start/end times will be used.
+  customDisplayStartTime?: Timestamp = null;
+  customDisplayEndTime?: Timestamp = null;
+  fadeInDuration: Seconds = 0.0;
+  fadeOutDuration: Seconds = 0.0;
+
   constructor(segments: LyricSegment[] = []) {
     this.segments = segments;
   }
@@ -235,18 +251,20 @@ export class LyricsLine {
     this.segments.unshift(newSegment);
   }
 
-  decorateAssLine(segments: LyricSegment[], screenStartTimestamp: Timestamp): string {
+  decorateAssLine(segments: LyricSegment[], displayStartTime: Timestamp): string {
     // Decorate the line with karaoke tags
     // An ASS line starts with {k<digits>} which is centiseconds within the current
-    // screen to start animating.
+    // line to start animating.
     // That is followed by {\kf<digits>} which is how long to animate the text
     // following the tag.
-    let startTime = Math.floor((this.timestamp - screenStartTimestamp) * 100);
-    if (startTime < 0) {
-      console.error(`Negative line startTime: ${this}: ${startTime}`);
-      startTime = 0;
+
+    // Delay between line display and start of line animation
+    let singStartDelay = Math.floor((this.timestamp - displayStartTime) * 100);
+    if (singStartDelay < 0) {
+      console.error(`Negative line startTime: ${this}: ${singStartDelay}`);
+      singStartDelay = 0;
     }
-    let line = `{\\k${startTime}}`;
+    let line = `{\\k${singStartDelay}}`;
     let previousEnd = null;
     for (const s of segments) {
       if (previousEnd !== null && previousEnd < s.timestamp) {
@@ -257,7 +275,7 @@ export class LyricsLine {
       line += s.toAss()
       previousEnd = s.endTimestamp;
     }
-    return line;
+    return this.addAssFades(line);
   }
 
   toAssEvent(screenStart: Timestamp, screenEnd: Timestamp, style: string, topMargin: number): string {
@@ -265,16 +283,25 @@ export class LyricsLine {
       console.error("NaN value for line", this, screenStart, screenEnd);
       throw Error("NaN value for timestamp");
     }
+    const displayStart = this.customDisplayStartTime || screenStart;
+    const displayEnd = this.customDisplayEndTime || screenEnd;
     const e: AssEvent = {
       type: "Dialogue",
       Layer: 0,
       Style: style,
-      Start: floatToTimecode(screenStart),
-      End: floatToTimecode(screenEnd),
+      Start: floatToTimecode(displayStart),
+      End: floatToTimecode(displayEnd),
       MarginV: topMargin,
-      Text: this.decorateAssLine(this.segments, screenStart)
+      Text: this.decorateAssLine(this.segments, displayStart)
     }
     return `${e.type}: ` + ["Layer", "Style", "Start", "End", "MarginV", "Text"].map(k => e[k]).join(",");
+  }
+
+  addAssFades(assLine: string): string {
+    if (this.fadeInDuration == 0 && this.fadeOutDuration == 0) {
+      return assLine;
+    }
+    return `{\\fad(${Math.floor(this.fadeInDuration * 1000)},${Math.floor(this.fadeOutDuration * 1000)})}` + assLine
   }
 
   adjustTimestamps(adjustment: number): LyricsLine {
@@ -427,6 +454,9 @@ export function createScreens(lyrics: string, lyricEvents: LyricEvent[], songDur
     screens = addScreenCountIns(screens);
   }
   screens = addTitleScreen(screens, title, artist);
+  if (options.addStaggeredLines) {
+    screens = displayQuickLinesEarly(screens, options);
+  }
   if (options.addInstrumentalScreens) {
     screens = addInstrumentalScreens(screens);
   }

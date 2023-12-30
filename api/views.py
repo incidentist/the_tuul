@@ -10,6 +10,7 @@ from django.core.files.storage import FileSystemStorage
 from django.http import FileResponse
 from django.views.generic.base import TemplateView
 from rest_framework.response import Response
+from rest_framework.request import Request
 from rest_framework.views import APIView
 
 from karaoke import make_karaoke_video
@@ -22,7 +23,7 @@ class Index(TemplateView):
 
 
 class GenerateVideo(APIView):
-    def post(self, request, format=None):
+    def post(self, request: Request, format=None):
         lyrics: str = request.data.get("lyrics")
         timings: str = request.data.get("timings")
         song_file = request.data.get("songFile")
@@ -85,7 +86,7 @@ class GenerateVideo(APIView):
 
     def setup_song_files_dir(
         self, files_dir, song_file, lyrics, timings
-    ) -> Tuple[Path, Path, Path]:
+    ) -> tuple[Path, ...]:
         """Copy song components to the temp dir.
 
         Return component paths.
