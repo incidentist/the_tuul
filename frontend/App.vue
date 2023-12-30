@@ -16,6 +16,20 @@
         <b-navbar-item>
           <div class="buttons">
             <b-button
+              v-if="DONATE_URL"
+              tag="a"
+              :href="DONATE_URL"
+              type="is-text"
+              target="_blank"
+            >
+              <b-icon
+                icon="circle-dollar-to-slot"
+                size="is-large"
+                title="Buy Me A Coffee"
+              >
+              </b-icon
+            ></b-button>
+            <b-button
               tag="a"
               href="https://github.com/incidentist/the_tuul"
               type="is-text"
@@ -50,6 +64,7 @@
 <script lang="ts">
 import { defineComponent } from "vue";
 import { isMobile } from "@/lib/device";
+import { DONATE_URL } from "@/constants";
 import HelpTab from "@/components/HelpTab.vue";
 import SongInfoTab from "@/components/SongInfoTab.vue";
 import LyricInputTab from "@/components/LyricInputTab.vue";
@@ -66,6 +81,7 @@ export default defineComponent({
   },
   data() {
     return {
+      DONATE_URL,
       lyricText: "",
       // Object containing song info: file, artist, title
       songInfo: { file: null, artist: null, title: null, duration: null },

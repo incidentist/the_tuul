@@ -24,7 +24,7 @@ module.exports = {
         new webpack.ProvidePlugin({
             Vue: 'Vue'
         }),
-        new webpack.EnvironmentPlugin({ 'API_HOSTNAME': "" })
+        new webpack.EnvironmentPlugin({ 'API_HOSTNAME': "", 'DONATE_URL': 'https://ko-fi.com/incidentist' })
     ],
     module: {
         rules: [{
