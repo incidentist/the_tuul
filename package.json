@@ -27,6 +27,9 @@
     "audiobuffer-to-wav": "^1.0.0",
     "buefy": "^0.9.25",
     "libass-wasm": "^4.1.0",
+    "@ffmpeg/core": "^0.11.0",
+    "@ffmpeg/ffmpeg": "^0.11.6",
+    "jszip": "^3.10.1",
     "lodash": "^4.17.21",
     "vue": "^2.7.14"
   },
