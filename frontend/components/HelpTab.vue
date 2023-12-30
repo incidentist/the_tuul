@@ -60,6 +60,14 @@
         </li>
       </ul>
       <h3>What's New</h3>
+      <h5>December 29, 2023</h5>
+      <ul>
+        <li>
+          <strong>Early Lyric Display</strong> - When the first line on a screen
+          comes right after the last line on the previous screen, the line will
+          appear early.
+        </li>
+      </ul>
       <h5>November 19, 2023</h5>
       <ul>
         <li>
@@ -108,16 +116,6 @@
           <strong>Count-ins</strong> - The Tüül now adds automatic count-ins
           after long instrumental breaks. It also adds a count-in for songs
           where the vocals start right away.
-        </li>
-      </ul>
-      <h5>Dec 28, 2022</h5>
-      <ul>
-        <li>
-          <strong>New lyric tools</strong> - Marking up lyrics is faster now,
-          with a button that converts spaces to underscores and a "magic
-          slashes" mode: when you add a slash to a word to divide syllables, it
-          applies that slash to every instance of the word. This speeds up the
-          process of marking every syllable in a song.
         </li>
       </ul>
     </div>
