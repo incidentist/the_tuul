@@ -118,7 +118,7 @@
           size="is-large"
           type="is-primary"
           :loading="isSubmitting"
-          @click="submitTimings"
+          @click="createMpeg"
           :disabled="!enabled && !isSubmitting"
         >
           Create Video
@@ -135,6 +135,8 @@ import { createAssFile, createScreens, KaraokeOptions } from "@/lib/timing";
 import { API_HOSTNAME } from "@/constants";
 import VideoPreview from "@/components/VideoPreview.vue";
 import Color from "buefy/src/utils/color";
+import { createFFmpeg, fetchFile } from "@ffmpeg/ffmpeg";
+import { readFileAsync } from "@/lib/util";
 
 const fonts = {
   "Andale Mono": "/static/fonts/AndaleMono.ttf",
@@ -273,6 +275,49 @@ export default defineComponent({
         this.submitError = e;
       }
       this.isSubmitting = false;
+    },
+    async createMpeg() {
+      const songFileName = "stuff.mp3";
+      this.isSubmitting = true;
+      const ffmpeg = createFFmpeg({ log: true });
+      await ffmpeg.load();
+      // Write audio to ffmpeg-wasm's filesystem
+      await ffmpeg.FS(
+        "writeFile",
+        songFileName,
+        new Uint8Array(await readFileAsync(this.songFile))
+      );
+      // Write the subtitle font to the filesystem
+      await ffmpeg.FS(
+        "writeFile",
+        "Arial Narrow.ttf",
+        await fetchFile("http://localhost:8000/static/ArialNarrow.ttf")
+      );
+      await ffmpeg.FS("writeFile", "subtitles.ass", this.subtitles);
+      await ffmpeg.run(
+        "-f",
+        "lavfi",
+        "-i",
+        "color=c=black:s=1280x720:r=20",
+        "-i",
+        songFileName,
+        // Add subtitles
+        "-vf",
+        "ass=subtitles.ass:fontsdir=./",
+        "-shortest",
+        "-y",
+        "karaoke.mp4"
+      );
+
+      // video is a Uint8Array
+      const video = await ffmpeg.FS("readFile", "karaoke.mp4");
+      const anchor = document.createElement("a");
+      const filename = this.zipFileName;
+
+      anchor.style.display = "none";
+      anchor.href = URL.createObjectURL(new Blob([video]));
+      anchor.download = filename;
+      anchor.click();
     },
     async saveZipFile(response) {
       console.log(response);
