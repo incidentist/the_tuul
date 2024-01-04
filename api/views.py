@@ -1,10 +1,13 @@
 import io
+import json
 import tempfile
 from pathlib import Path
 from typing import Tuple
 import zipfile
 
 import structlog
+
+import pytube
 
 from django.core.files.storage import FileSystemStorage
 from django.http import FileResponse
@@ -61,6 +64,60 @@ class SeparateTrack(APIView):
         fs = FileSystemStorage(files_dir)
         song_file_name = fs.save(song_file.name, content=song_file)
         return Path(fs.location, song_file_name)
+
+
+class DownloadYouTubeVideo(APIView):
+    """
+    Download a YouTube video as audio and video streams and return them as a zip.
+    """
+
+    def get(self, request: Request, format: str | None = None) -> Response:
+        """Return a zip containing vocal and accompaniment splits of songFile, and song metadata"""
+        youtube_url = request.query_params.get("url")
+        logger.info(
+            "download_youtube_video",
+            youtube_url=youtube_url,
+            request=request.query_params,
+        )
+        if not youtube_url:
+            return Response({"error": "No url provided."})
+        with tempfile.TemporaryDirectory() as song_files_dir:
+            song_files_dir_path = Path(song_files_dir)
+
+            metadata, audio_path, video_path = self.get_youtube_streams(
+                youtube_url, song_files_dir_path
+            )
+            logger.info("metadata", metadata=str(metadata))
+            (song_files_dir_path / "title.txt").write_text(str(metadata))
+            zip_path = song_files_dir_path / "youtube_video.zip"
+            with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zip_file:
+                zip_file.write(
+                    audio_path,
+                    "audio.mp4",
+                )
+                zip_file.write(
+                    video_path,
+                    "video.mp4",
+                )
+                zip_file.write(song_files_dir_path / "title.txt", "metadata.txt")
+
+            logger.info("zip_complete", path=zip_path)
+            response = FileResponse(zip_path.open("rb"), as_attachment=True)
+            return response
+
+    def get_youtube_streams(
+        self, youtube_url: str, song_files_dir: Path
+    ) -> Tuple[str, Path, Path]:
+        """Download audio and video streams from YouTube URL.
+
+        Return audio and video paths.
+        """
+        youtube = pytube.YouTube(youtube_url)
+        audio_stream = youtube.streams.filter(only_audio=True).first()
+        video_stream = youtube.streams.filter(only_video=True).first()
+        audio_path = audio_stream.download(song_files_dir, "audio")
+        video_path = video_stream.download(song_files_dir, "video")
+        return youtube.title, Path(audio_path), Path(video_path)
 
 
 class GenerateVideo(APIView):
