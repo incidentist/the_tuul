@@ -86,7 +86,13 @@ export default defineComponent({
       DONATE_URL,
       lyricText: "",
       // Object containing song info: file, artist, title
-      songInfo: { file: null, artist: null, title: null, duration: null },
+      songInfo: {
+        file: null,
+        artist: null,
+        title: null,
+        duration: null,
+        youtubeUrl: null,
+      },
       isSubmitting: false,
       // Array of lyric timings
       timings: null,

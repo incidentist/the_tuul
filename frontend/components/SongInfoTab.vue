@@ -13,6 +13,14 @@
           </span>
         </b-upload>
       </b-field>
+      <b-field label="YouTube Video URL">
+        <b-input type="text" v-model="youtubeUrl" />
+        <b-button
+          label="Load"
+          @click="loadYouTubeUrl"
+          :loading="isLoadingYouTube"
+        />
+      </b-field>
       <b-field label="Song Artist">
         <b-input v-model="artist" @input="onTextChange" />
       </b-field>
@@ -27,6 +35,7 @@
 import { defineComponent } from "vue";
 // jsmediatags can't be installed via npm when used in-browser: https://github.com/aadsm/jsmediatags#browser
 const jsmediatags = require("@/jsmediatags.min.js");
+import { fetchYouTubeVideo } from "@/lib/video";
 
 export default defineComponent({
   props: {
@@ -35,9 +44,11 @@ export default defineComponent({
   data() {
     return {
       songFile: this.value.file,
+      youtubeUrl: this.value.youtubeUrl,
       artist: this.value.artist,
       title: this.value.title,
       duration: this.value.duration,
+      isLoadingYouTube: false,
     };
   },
   computed: {
@@ -47,12 +58,13 @@ export default defineComponent({
         artist: this.artist,
         title: this.title,
         duration: this.duration,
+        youtubeUrl: this.youtubeUrl,
       };
     },
   },
   methods: {
-    async songDuration(songFile) {
-      const p = new Promise(async (resolve, reject) => {
+    async songDuration(songFile: File): Promise<number> {
+      const p = new Promise<number>(async (resolve, reject) => {
         const audio = document.createElement("audio");
         audio.addEventListener(
           "loadedmetadata",
@@ -62,12 +74,14 @@ export default defineComponent({
           },
           false
         );
+        audio.addEventListener("error", reject);
         const reader = new FileReader();
-        reader.addEventListener(
-          "load",
-          (e) => (audio.src = e.target.result.toString())
-        );
-        reader.readAsDataURL(await this.songInfo.file);
+        reader.addEventListener("load", (e) => {
+          console.log("loaded", e.target.result);
+          audio.src = e.target.result.toString();
+        });
+        reader.addEventListener("error", reject);
+        reader.readAsDataURL(songFile);
       });
       return p;
     },
@@ -77,7 +91,7 @@ export default defineComponent({
         async onSuccess(tag) {
           self.artist = tag.tags.artist;
           self.title = tag.tags.title;
-          self.duration = await self.songDuration(this.songFile);
+          self.duration = await self.songDuration(self.songFile);
           self.$emit("input", self.songInfo);
         },
         onFailure(error) {
@@ -87,6 +101,24 @@ export default defineComponent({
       });
     },
     onTextChange(e) {
+      this.$emit("input", this.songInfo);
+    },
+    async loadYouTubeUrl() {
+      this.isLoadingYouTube = true;
+      try {
+        const [audioBlob, videoBlob, metadata] = await fetchYouTubeVideo(
+          this.youtubeUrl
+        );
+        this.songFile = new File([audioBlob], "audio.mp4", {
+          type: "audio/mp4",
+        });
+        this.title = metadata;
+        console.log(audioBlob, videoBlob, metadata);
+        this.duration = await this.songDuration(this.songFile);
+      } catch (e) {
+        console.error(e);
+      }
+      this.isLoadingYouTube = false;
       this.$emit("input", this.songInfo);
     },
   },

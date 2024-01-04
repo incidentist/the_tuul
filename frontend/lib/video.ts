@@ -1,6 +1,7 @@
 import { createFFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
 import { KaraokeOptions } from "@/lib/timing";
+import jszip from "jszip";
 // Functions related to video file creation
 
 async function createVideo(
@@ -52,4 +53,19 @@ async function createVideo(
     return video;
 }
 
-export default { createVideo }
+export async function fetchYouTubeVideo(url: string): Promise<[Blob, Blob, string]> {
+    const apiPath = "/download_video?url=" + url;
+    const response = await fetch(apiPath);
+    const zipContents = await response.blob();
+    const zip = await jszip.loadAsync(zipContents);
+    const [audio, video, metadata] = await Promise.all([
+        zip.file("audio.mp4").async("blob"),
+        zip.file("video.mp4").async("blob"),
+        zip.file("metadata.txt").async("string")
+    ]);
+
+    // TODO return blob URLs instead
+    return [audio, video, metadata];
+}
+
+export default { createVideo, fetchYouTubeVideo }
