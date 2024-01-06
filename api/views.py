@@ -109,14 +109,17 @@ class DownloadYouTubeVideo(APIView):
         self, youtube_url: str, song_files_dir: Path
     ) -> Tuple[str, Path, Path]:
         """Download audio and video streams from YouTube URL.
-
+        Video has max resolution of 1080p.
         Return audio and video paths.
         """
         youtube = pytube.YouTube(youtube_url)
         audio_stream = youtube.streams.filter(only_audio=True).first()
-        video_stream = youtube.streams.filter(only_video=True).first()
+        video_stream = youtube.streams.filter(only_video=True, res="1080p").first()
+        if not video_stream:
+            video_stream = youtube.streams.filter(only_video=True).first()
         audio_path = audio_stream.download(song_files_dir, "audio")
         video_path = video_stream.download(song_files_dir, "video")
+        logger.info("video_stream", video_stream=video_stream)
         return youtube.title, Path(audio_path), Path(video_path)
 
 
