@@ -92,6 +92,7 @@ export default defineComponent({
         title: null,
         duration: null,
         youtubeUrl: null,
+        videoBlob: null,
       },
       isSubmitting: false,
       // Array of lyric timings

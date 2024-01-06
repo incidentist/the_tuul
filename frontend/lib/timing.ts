@@ -423,8 +423,10 @@ function createSubtitles(screens: LyricsScreen[], formatParams: Object): string 
     ...formatParams
   };
 
-  for (const key of ["PrimaryColour", "SecondaryColour"]) {
-    displayParams[key] = colorToString(displayParams[key]);
+  for (const key of ["PrimaryColour", "SecondaryColour", "OutlineColour"]) {
+    if (key in displayParams) {
+      displayParams[key] = colorToString(displayParams[key]);
+    }
   }
 
   const styleKeys = Object.keys(displayParams).join(", ");
@@ -468,11 +470,16 @@ export function createAssFile(lyrics: string, lyricEvents: LyricEvent[], songDur
   const screensWithTitle = createScreens(lyrics, lyricEvents, songDuration, title, artist, options);
   const primaryColor = options.color.primary;
   const secondaryColor = options.color.secondary;
+  const outlineColor = options.color.background;
 
   return createSubtitles(screensWithTitle, {
     "Fontname": options.font.name,
     "Fontsize": options.font.size,
     "PrimaryColour": [primaryColor.red, primaryColor.green, primaryColor.blue, 0],
-    "SecondaryColour": [secondaryColor.red, secondaryColor.green, secondaryColor.blue, 0]
+    "SecondaryColour": [secondaryColor.red, secondaryColor.green, secondaryColor.blue, 0],
+    "OutlineColour": [outlineColor.red, outlineColor.green, outlineColor.blue, 0],
+    "BorderStyle": 1,
+    "Outline": 1,
+    "Shadow": 0,
   });
 }

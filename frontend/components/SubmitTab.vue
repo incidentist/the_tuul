@@ -90,6 +90,7 @@
           :audio-delay="audioDelay"
           :fonts="fonts"
           :background-color="videoOptions.color.background.toString()"
+          :video-blob="videoBlob"
         />
       </div>
     </div>
@@ -200,6 +201,9 @@ export default defineComponent({
     songFile() {
       return this.songInfo.file;
     },
+    videoBlob() {
+      return this.songInfo.videoBlob;
+    },
     subtitles(): string {
       if (!this.enabled) {
         return "";
@@ -259,6 +263,7 @@ export default defineComponent({
       const accompanimentDataUrl = await audio.separateTrack(this.songFile);
       const videoFile: Uint8Array = await video.createVideo(
         accompanimentDataUrl,
+        this.videoBlob,
         this.subtitles,
         this.audioDelay,
         this.videoOptions,

@@ -49,6 +49,7 @@ export default defineComponent({
       title: this.value.title,
       duration: this.value.duration,
       isLoadingYouTube: false,
+      videoBlob: null,
     };
   },
   computed: {
@@ -59,6 +60,7 @@ export default defineComponent({
         title: this.title,
         duration: this.duration,
         youtubeUrl: this.youtubeUrl,
+        videoBlob: this.videoBlob,
       };
     },
   },
@@ -77,7 +79,6 @@ export default defineComponent({
         audio.addEventListener("error", reject);
         const reader = new FileReader();
         reader.addEventListener("load", (e) => {
-          console.log("loaded", e.target.result);
           audio.src = e.target.result.toString();
         });
         reader.addEventListener("error", reject);
@@ -113,8 +114,8 @@ export default defineComponent({
           type: "audio/mp4",
         });
         this.title = metadata;
-        console.log(audioBlob, videoBlob, metadata);
         this.duration = await this.songDuration(this.songFile);
+        this.videoBlob = videoBlob;
       } catch (e) {
         console.error(e);
       }

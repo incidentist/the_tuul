@@ -6,6 +6,7 @@ import jszip from "jszip";
 
 async function createVideo(
     accompanimentDataUrl: string,
+    videoBlob: Blob = null,
     subtitles: string,
     audioDelay: number = 0,
     videoOptions: KaraokeOptions,
@@ -15,6 +16,12 @@ async function createVideo(
     const songFileName = "stuff.mp3";
     const backgroundColor =
         "0x" + videoOptions.color.background.toString().substring(1);
+    let videoParams = [
+        "-f",
+        "lavfi",
+        "-i",
+        `color=c=${backgroundColor}:s=1280x720:r=20`,
+    ];
     const audioDelayMs = audioDelay * 1000;
     const ffmpeg = createFFmpeg({ log: true });
     await ffmpeg.load();
@@ -31,11 +38,19 @@ async function createVideo(
         await fetchFile(fontMap[videoOptions.font.name])
     );
     await ffmpeg.FS("writeFile", "subtitles.ass", subtitles);
+    if (videoBlob) {
+        await ffmpeg.FS(
+            "writeFile",
+            "video.mp4",
+            new Uint8Array(await videoBlob.arrayBuffer())
+        );
+        videoParams = [
+            "-i",
+            "video.mp4"
+        ]
+    }
     await ffmpeg.run(
-        "-f",
-        "lavfi",
-        "-i",
-        `color=c=${backgroundColor}:s=1280x720:r=20`,
+        ...videoParams,
         "-i",
         songFileName,
         // Set audio delay if needed
