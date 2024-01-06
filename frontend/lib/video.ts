@@ -2,6 +2,7 @@ import { createFFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
 import { KaraokeOptions } from "@/lib/timing";
 import jszip from "jszip";
+import { get } from "lodash";
 // Functions related to video file creation
 
 async function createVideo(
@@ -10,6 +11,7 @@ async function createVideo(
     subtitles: string,
     audioDelay: number = 0,
     videoOptions: KaraokeOptions,
+    metadata: Object,
     fontMap: Record<string, string>
 ): Promise<Uint8Array> {
     // Create the video using ffmpeg.wasm v0.11
@@ -22,6 +24,7 @@ async function createVideo(
         "-i",
         `color=c=${backgroundColor}:s=1280x720:r=20`,
     ];
+    const videoMetadata = ffmpegMetadataArgs(videoOptions);
     const audioDelayMs = audioDelay * 1000;
     const ffmpeg = createFFmpeg({ log: true });
     await ffmpeg.load();
@@ -62,6 +65,7 @@ async function createVideo(
         "ass=subtitles.ass:fontsdir=/tmp",
         "-shortest",
         "-y",
+        ...videoMetadata,
         "karaoke.mp4"
     );
     const video = await ffmpeg.FS("readFile", "karaoke.mp4");
@@ -81,6 +85,18 @@ export async function fetchYouTubeVideo(url: string): Promise<[Blob, Blob, strin
 
     // TODO return blob URLs instead
     return [audio, video, metadata];
+}
+
+function ffmpegMetadataArgs(metadata: any) {
+    let ffmpegArgs = []
+    if (metadata.artist) {
+        ffmpegArgs.push('-metadata', `artist=${metadata.artist}`);
+    }
+    if (metadata.title) {
+        ffmpegArgs.push('-metadata', `title=${metadata.title}`);
+    }
+    ffmpegArgs.push('-metadata', `description=Karaoke version created by the-tuul.com`);
+    return ffmpegArgs;
 }
 
 export default { createVideo, fetchYouTubeVideo }

@@ -267,6 +267,11 @@ export default defineComponent({
         this.subtitles,
         this.audioDelay,
         this.videoOptions,
+        {
+          artist: this.songInfo.artist,
+          title: this.songInfo.title,
+          duration: this.songFile.duration,
+        },
         fonts
       );
       this.zipAndSendFiles(videoFile);
