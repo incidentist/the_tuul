@@ -1,8 +1,7 @@
 import { createFFmpeg } from "@ffmpeg/ffmpeg";
-import { fetchFile, toBlobURL } from "@ffmpeg/util";
+import { fetchFile } from "@ffmpeg/util";
 import { KaraokeOptions } from "@/lib/timing";
 import jszip from "jszip";
-import { get } from "lodash";
 // Functions related to video file creation
 
 async function createVideo(
@@ -24,7 +23,7 @@ async function createVideo(
         "-i",
         `color=c=${backgroundColor}:s=1280x720:r=20`,
     ];
-    const videoMetadata = ffmpegMetadataArgs(videoOptions);
+    const videoMetadata = ffmpegMetadataArgs(metadata);
     const audioDelayMs = audioDelay * 1000;
     const ffmpeg = createFFmpeg({ log: true });
     await ffmpeg.load();
@@ -72,7 +71,7 @@ async function createVideo(
     return video;
 }
 
-export async function fetchYouTubeVideo(url: string): Promise<[Blob, Blob, string]> {
+export async function fetchYouTubeVideo(url: string): Promise<[Blob, Blob, Object]> {
     const apiPath = "/download_video?url=" + url;
     const response = await fetch(apiPath);
     const zipContents = await response.blob();
@@ -80,11 +79,19 @@ export async function fetchYouTubeVideo(url: string): Promise<[Blob, Blob, strin
     const [audio, video, metadata] = await Promise.all([
         zip.file("audio.mp4").async("blob"),
         zip.file("video.mp4").async("blob"),
-        zip.file("metadata.txt").async("string")
+        zip.file("metadata.json").async("string").then(md => JSON.parse(md))
     ]);
 
     // TODO return blob URLs instead
     return [audio, video, metadata];
+}
+
+// Parse a YouTube video title into song artist and title
+export function parseYouTubeTitle(videoMetadata: any): [string, string] {
+    if (videoMetadata.author && videoMetadata.title) {
+        return [videoMetadata.author, videoMetadata.title];
+    }
+    return ['', videoMetadata.title];
 }
 
 function ffmpegMetadataArgs(metadata: any) {
@@ -99,4 +106,4 @@ function ffmpegMetadataArgs(metadata: any) {
     return ffmpegArgs;
 }
 
-export default { createVideo, fetchYouTubeVideo }
+export default { createVideo, fetchYouTubeVideo, parseYouTubeTitle }

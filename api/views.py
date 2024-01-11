@@ -87,8 +87,8 @@ class DownloadYouTubeVideo(APIView):
             metadata, audio_path, video_path = self.get_youtube_streams(
                 youtube_url, song_files_dir_path
             )
-            logger.info("metadata", metadata=str(metadata))
-            (song_files_dir_path / "title.txt").write_text(str(metadata))
+            logger.info("metadata", metadata=metadata)
+            (song_files_dir_path / "metadata.json").write_text(json.dumps(metadata))
             zip_path = song_files_dir_path / "youtube_video.zip"
             with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zip_file:
                 zip_file.write(
@@ -99,7 +99,7 @@ class DownloadYouTubeVideo(APIView):
                     video_path,
                     "video.mp4",
                 )
-                zip_file.write(song_files_dir_path / "title.txt", "metadata.txt")
+                zip_file.write(song_files_dir_path / "metadata.json", "metadata.json")
 
             logger.info("zip_complete", path=zip_path)
             response = FileResponse(zip_path.open("rb"), as_attachment=True)
@@ -107,7 +107,7 @@ class DownloadYouTubeVideo(APIView):
 
     def get_youtube_streams(
         self, youtube_url: str, song_files_dir: Path
-    ) -> Tuple[str, Path, Path]:
+    ) -> Tuple[dict[str, str], Path, Path]:
         """Download audio and video streams from YouTube URL.
         Video has max resolution of 1080p.
         Return audio and video paths.
@@ -120,7 +120,20 @@ class DownloadYouTubeVideo(APIView):
         audio_path = audio_stream.download(song_files_dir, "audio")
         video_path = video_stream.download(song_files_dir, "video")
         logger.info("video_stream", video_stream=video_stream)
-        return youtube.title, Path(audio_path), Path(video_path)
+        return self.assemble_metadata(youtube), Path(audio_path), Path(video_path)
+
+    def assemble_metadata(self, youtube: pytube.YouTube) -> dict[str, str]:
+        metadata = {
+            "title": youtube.title,
+            "author": youtube.author,
+            "length": youtube.length,
+            "rating": youtube.rating,
+            "views": youtube.views,
+            "keywords": youtube.keywords,
+            "description": youtube.description,
+            # **youtube.metadata,
+        }
+        return metadata
 
 
 class GenerateVideo(APIView):

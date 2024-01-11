@@ -35,7 +35,7 @@
 import { defineComponent } from "vue";
 // jsmediatags can't be installed via npm when used in-browser: https://github.com/aadsm/jsmediatags#browser
 const jsmediatags = require("@/jsmediatags.min.js");
-import { fetchYouTubeVideo } from "@/lib/video";
+import { fetchYouTubeVideo, parseYouTubeTitle } from "@/lib/video";
 
 export default defineComponent({
   props: {
@@ -113,7 +113,9 @@ export default defineComponent({
         this.songFile = new File([audioBlob], "audio.mp4", {
           type: "audio/mp4",
         });
-        this.title = metadata;
+        const parsedMetadata = parseYouTubeTitle(metadata);
+        this.artist = parsedMetadata[0];
+        this.title = parsedMetadata[1];
         this.duration = await this.songDuration(this.songFile);
         this.videoBlob = videoBlob;
       } catch (e) {
