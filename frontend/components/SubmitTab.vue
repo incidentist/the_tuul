@@ -85,6 +85,31 @@
           <b-field horizontal label="Secondary Color"
             ><b-colorpicker v-model="videoOptions.color.secondary"
           /></b-field>
+          <b-field horizontal label="Lyric Vertical Alignment"
+            ><b-radio-button
+              v-model="videoOptions.verticalAlignment"
+              :native-value="VerticalAlignment.Top"
+              type="is-primary is-light is-outlined"
+            >
+              <span>Top</span>
+            </b-radio-button>
+
+            <b-radio-button
+              v-model="videoOptions.verticalAlignment"
+              :native-value="VerticalAlignment.Middle"
+              type="is-primary is-light is-outlined"
+            >
+              <span>Middle</span>
+            </b-radio-button>
+
+            <b-radio-button
+              v-model="videoOptions.verticalAlignment"
+              :native-value="VerticalAlignment.Bottom"
+              type="is-primary is-light is-outlined"
+            >
+              Bottom
+            </b-radio-button>
+          </b-field>
         </b-collapse>
       </div>
       <div class="column is-narrow">
@@ -138,7 +163,7 @@
 <script lang="ts">
 import * as _ from "lodash";
 import { defineComponent } from "vue";
-import { createAssFile, createScreens } from "@/lib/timing";
+import { createAssFile, createScreens, VerticalAlignment } from "@/lib/timing";
 import VideoPreview from "@/components/VideoPreview.vue";
 import Color from "buefy/src/utils/color";
 import jszip from "jszip";
@@ -174,12 +199,14 @@ export default defineComponent({
   data() {
     return {
       fonts,
+      VerticalAlignment,
       isSubmitting: false,
       videoOptions: {
         addCountIns: true,
         addInstrumentalScreens: true,
         addStaggeredLines: true,
         useBackgroundVideo: this.songInfo.videoBlob != null,
+        verticalAlignment: VerticalAlignment.Middle,
         font: {
           size: 20,
           name: "Arial Narrow",
