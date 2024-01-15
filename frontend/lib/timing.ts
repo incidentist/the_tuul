@@ -9,6 +9,7 @@ export interface KaraokeOptions {
   addCountIns: boolean,
   addInstrumentalScreens: boolean,
   addStaggeredLines: boolean,
+  useBackgroundVideo: boolean,
   font: {
     size: number,
     name: string

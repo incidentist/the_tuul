@@ -7,6 +7,7 @@ const DEFAULT_OPTIONS: KaraokeOptions = {
     addCountIns: true,
     addInstrumentalScreens: true,
     addStaggeredLines: true,
+    useBackgroundVideo: false,
     font: {
         size: 22,
         name: "Arial Narrow"

@@ -4,6 +4,61 @@ import { KaraokeOptions } from "@/lib/timing";
 import jszip from "jszip";
 // Functions related to video file creation
 
+function getFfmpegParams(hasVideo: boolean, backgroundColor: string, audioDelayMs: number, metadata: Object) {
+    let videoInputArgs, filterArgs;
+    if (hasVideo) {
+        videoInputArgs = [
+            "-i",
+            "video.mp4"
+        ];
+        // When there's a background video we use filter_complex to combine the video and audio
+        filterArgs = [
+            '-filter_complex',
+            [
+                // Prepend audioDelay secs of the video's first frame
+                `[0:v]tpad=start_duration=${audioDelayMs / 1000}:start_mode=clone[padded]`,
+                // Add subtitles over that
+                "[padded]ass=subtitles.ass:fontsdir=/tmp[vout]",
+                // Add audioDelay to audio
+                `[1:a]adelay=delays=${audioDelayMs}:all=1[aout]`,
+            ].join(";"),
+            "-map",
+            "[vout]",
+            "-map",
+            "[aout]"
+        ];
+    } else {
+        videoInputArgs = [
+            "-f",
+            "lavfi",
+            "-i",
+            `color=c=${backgroundColor}:s=1280x720:r=20`,
+        ];
+        // When there's no video, things are simpler
+        filterArgs = [
+            // Add subtitles over video
+            "[0:v]ass=subtitles.ass[vout]",
+            // Add audioDelay to audio
+            "-af",
+            `adelay=delays=${audioDelayMs}:all=1`,
+            '-vf',
+            `"ass=subtitles.ass:fontsdir=/tmp",`
+        ].join(";");
+    }
+    const videoMetadata = ffmpegMetadataArgs(metadata);
+
+    return [
+        ...videoInputArgs,
+        "-i",
+        "audio.mp4",
+        ...filterArgs,
+        "-shortest",
+        "-y",
+        ...videoMetadata,
+        "karaoke.mp4"
+    ]
+}
+
 async function createVideo(
     accompanimentDataUrl: string,
     videoBlob: Blob = null,
@@ -14,16 +69,9 @@ async function createVideo(
     fontMap: Record<string, string>
 ): Promise<Uint8Array> {
     // Create the video using ffmpeg.wasm v0.11
-    const songFileName = "stuff.mp3";
+    const songFileName = "audio.mp4";
     const backgroundColor =
         "0x" + videoOptions.color.background.toString().substring(1);
-    let videoParams = [
-        "-f",
-        "lavfi",
-        "-i",
-        `color=c=${backgroundColor}:s=1280x720:r=20`,
-    ];
-    const videoMetadata = ffmpegMetadataArgs(metadata);
     const audioDelayMs = audioDelay * 1000;
     const ffmpeg = createFFmpeg({ log: true });
     await ffmpeg.load();
@@ -46,26 +94,10 @@ async function createVideo(
             "video.mp4",
             new Uint8Array(await videoBlob.arrayBuffer())
         );
-        videoParams = [
-            "-i",
-            "video.mp4"
-        ]
     }
+    const ffmpegParams = getFfmpegParams(Boolean(videoBlob), backgroundColor, audioDelayMs, metadata);
     await ffmpeg.run(
-        ...videoParams,
-        "-i",
-        songFileName,
-        // Set audio delay if needed
-        // https://ffmpeg.org/ffmpeg-filters.html#adelay
-        "-af",
-        `adelay=delays=${audioDelayMs}:all=1`,
-        // Add subtitles
-        "-vf",
-        "ass=subtitles.ass:fontsdir=/tmp",
-        "-shortest",
-        "-y",
-        ...videoMetadata,
-        "karaoke.mp4"
+        ...ffmpegParams
     );
     const video = await ffmpeg.FS("readFile", "karaoke.mp4");
     return video;
