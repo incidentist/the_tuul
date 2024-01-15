@@ -43,6 +43,12 @@
             v-model="videoOptions.addStaggeredLines"
           ></b-switch
         ></b-field>
+        <b-field v-if="videoBlob" horizontal label="Use Background Video">
+          <b-switch
+            expanded
+            v-model="videoOptions.useBackgroundVideo"
+          ></b-switch
+        ></b-field>
         <b-collapse :open="false">
           <template #trigger="props">
             <a aria-controls="contentIdForA11y4" :aria-expanded="props.open">
@@ -90,7 +96,7 @@
           :audio-delay="audioDelay"
           :fonts="fonts"
           :background-color="videoOptions.color.background.toString()"
-          :video-blob="videoBlob"
+          :video-blob="videoOptions.useBackgroundVideo ? videoBlob : null"
         />
       </div>
     </div>
@@ -173,6 +179,7 @@ export default defineComponent({
         addCountIns: true,
         addInstrumentalScreens: true,
         addStaggeredLines: true,
+        useBackgroundVideo: this.songInfo.videoBlob != null,
         font: {
           size: 20,
           name: "Arial Narrow",
@@ -263,7 +270,7 @@ export default defineComponent({
       const accompanimentDataUrl = await audio.separateTrack(this.songFile);
       const videoFile: Uint8Array = await video.createVideo(
         accompanimentDataUrl,
-        this.videoBlob,
+        this.videoOptions.useBackgroundVideo ? this.videoBlob : null,
         this.subtitles,
         this.audioDelay,
         this.videoOptions,
