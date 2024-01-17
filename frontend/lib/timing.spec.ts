@@ -60,7 +60,7 @@ Dialogue: 0,Default,0:00:00.00,0:00:04.00,130,{\\k0}{\\kf200}It's Cøøl to Tü�
 Dialogue: 0,Default,0:00:00.00,0:00:04.00,160,{\\k200}{\\kf200}TÜ/ÜL
 `
 
-const testAss = testAssPreamble + `Dialogue: 0,Default,0:00:04.00,0:00:11.00,130,{\\k0}{\\kf200}●●● {\\kf100}Be bop {\\kf100}{\\kf100}a lu bop
+const testAss = testAssPreamble + `Dialogue: 0,Default,0:00:04.00,0:00:11.00,130,{\\k0}{\\kf200}*** {\\kf100}Be bop {\\kf100}{\\kf100}a lu bop
 
 Dialogue: 0,Default,0:00:04.00,0:00:11.00,160,{\\k500}{\\kf100}She's my ba{\\kf100}by
 
@@ -177,7 +177,7 @@ test('addCountIn', () => {
     const options: KaraokeOptions = { ...DEFAULT_OPTIONS, addInstrumentalScreens: false, addStaggeredLines: false }
     let assFile = createAssFile(lyrics, timings, songDuration, "It's Cøøl to Tüül", "TÜ/ÜL", options);
 
-    const expected = testAssPreamble + `Dialogue: 0,Default,0:00:04.00,0:01:00.00,130,{\\k9400}{\\kf200}●●● {\\kf500}That was a long intro
+    const expected = testAssPreamble + `Dialogue: 0,Default,0:00:04.00,0:01:00.00,130,{\\k9400}{\\kf200}*** {\\kf500}That was a long intro
 
 Dialogue: 0,Default,0:00:04.00,0:01:00.00,160,{\\k10100}{\\kf-4500}Too bad nothing rhymes with intro
 `
@@ -202,7 +202,7 @@ test('addCountInToSevenSecondIntro', () => {
         [14.0, LYRIC_MARKERS.SEGMENT_START],
         [15.0, LYRIC_MARKERS.SEGMENT_START],
     ]
-    const sevenSecondAss = testAssPreamble + `Dialogue: 0,Default,0:00:04.00,0:00:12.00,130,{\\k150}{\\kf200}●●● {\\kf100}Be bop {\\kf50}{\\kf100}a lu bop
+    const sevenSecondAss = testAssPreamble + `Dialogue: 0,Default,0:00:04.00,0:00:12.00,130,{\\k150}{\\kf200}*** {\\kf100}Be bop {\\kf50}{\\kf100}a lu bop
 
 Dialogue: 0,Default,0:00:04.00,0:00:12.00,160,{\\k600}{\\kf100}She's my ba{\\kf100}by
 
