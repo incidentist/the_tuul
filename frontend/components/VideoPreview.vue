@@ -3,13 +3,21 @@
     <b-message type="is-info">
       Audio in this preview includes vocals, but the finished video won't.
     </b-message>
-    <canvas
-      class="subtitle-canvas"
-      ref="subtitleCanvas"
-      width="320"
-      height="240"
-      :style="{ backgroundColor }"
-    ></canvas>
+    <div class="video-container">
+      <video
+        class="background-video"
+        v-if="videoBlob"
+        ref="video"
+        :src="videoDataUrl"
+      />
+      <canvas
+        class="subtitle-canvas"
+        ref="subtitleCanvas"
+        :style="{
+          backgroundColor: videoBlob ? 'transparent' : backgroundColor,
+        }"
+      ></canvas>
+    </div>
     <audio
       ref="player"
       controls
@@ -54,6 +62,10 @@ export default defineComponent({
       type: String,
       default: "#000000",
     },
+    videoBlob: {
+      type: Blob,
+      required: false,
+    },
   },
   data() {
     return {
@@ -66,13 +78,25 @@ export default defineComponent({
     // SubtitleOctopus expects font names to be lowercase
     const fontMap = _.mapKeys(this.fonts, (_, key) => key.toLowerCase());
     // Create a subtitle renderer and tie it to our player and canvas
-    console.log(fontMap);
+    // console.log(fontMap);
+    const workerUrl = new URL(
+      "libass-wasm/dist/js/subtitles-octopus-worker.js",
+      import.meta.url
+    ); // Link to WebAssembly-based file "libassjs-worker.js"
+    const workerObjectUrl = URL.createObjectURL(
+      new Blob([`importScripts("${workerUrl.toString()}")`], {
+        type: "application/javascript",
+      })
+    );
+    console.log(workerUrl.toString());
     var options = {
       debug: false,
       canvas: canvas,
       subContent: this.subtitles,
       lazyFileLoading: true,
       availableFonts: fontMap,
+      // workerUrl: require("!!file-loader?name=[name].[ext]!libass-wasm/dist/subtitles-octopus-worker.js"),
+      // workerUrl: workerUrl,
       workerUrl: "/static/subtitles-octopus-worker.js", // Link to WebAssembly-based file "libassjs-worker.js"
       legacyWorkerUrl: "/static/subtitles-octopus-worker-legacy.js", // Link to non-WebAssembly worker
     };
@@ -86,6 +110,14 @@ export default defineComponent({
     },
     songFile(newSongFile: Blob) {
       this.updateAudio(newSongFile, this.audioDelay);
+    },
+  },
+  computed: {
+    videoDataUrl() {
+      if (this.videoBlob) {
+        return URL.createObjectURL(this.videoBlob);
+      }
+      return null;
     },
   },
   methods: {
@@ -153,16 +185,25 @@ export default defineComponent({
     },
 
     onAudioTimeUpdate() {
-      this.subtitleManager.setCurrentTime(this.$refs.player.currentTime);
+      const currentTime = this.$refs.player.currentTime;
+      this.subtitleManager.setCurrentTime(currentTime);
+      if (this.$refs.video) {
+        this.$refs.video.currentTime = Math.max(
+          0,
+          currentTime - this.audioDelay
+        );
+      }
     },
     // These listeners call some internal libass-wasm functions that dramatically
     // improve rendering performance
     onAudioPlaying() {
       this.subtitleManager.setIsPaused(false, this.$refs.player.currentTime);
+      // this.$refs.video?.play();
     },
 
     onAudioPause() {
       this.subtitleManager.setIsPaused(true, this.$refs.player.currentTime);
+      // this.$refs.video?.pause();
     },
     onAudioSeeking() {
       this.$refs.player.removeEventListener(
@@ -182,9 +223,16 @@ export default defineComponent({
       var currentTime = this.$refs.player.currentTime;
 
       this.subtitleManager.setCurrentTime(currentTime);
+      if (this.$refs.video) {
+        this.$refs.video.currentTime = Math.max(
+          0,
+          currentTime - this.audioDelay
+        );
+      }
     },
     onAudioWaiting() {
       this.subtitleManager.setIsPaused(true, this.$refs.player.currentTime);
+      // this.$refs.video?.pause();
     },
   },
 });
@@ -193,5 +241,27 @@ export default defineComponent({
 .preview-container {
   text-align: center;
   width: 320px;
+}
+
+.video-container {
+  position: relative;
+  height: 240px;
+}
+
+.background-video {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.subtitle-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
 }
 </style>

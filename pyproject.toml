@@ -16,6 +16,7 @@ django-webpack-loader = "^2.0.1"
 audio-separator = "^0.8.0"
 django-cors-headers = "^4.3.1"
 django-structlog = "^6.0.0"
+pytube = "^15.0.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.12.0"

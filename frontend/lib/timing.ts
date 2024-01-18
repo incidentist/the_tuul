@@ -9,6 +9,8 @@ export interface KaraokeOptions {
   addCountIns: boolean,
   addInstrumentalScreens: boolean,
   addStaggeredLines: boolean,
+  useBackgroundVideo: boolean,
+  verticalAlignment: VerticalAlignment,
   font: {
     size: number,
     name: string
@@ -18,6 +20,10 @@ export interface KaraokeOptions {
     primary: BuefyColor,
     secondary: BuefyColor
   }
+}
+
+export enum VerticalAlignment {
+  Top, Middle, Bottom
 }
 
 interface Segment {
@@ -172,21 +178,33 @@ export class LyricsScreen {
     return this.lines.flatMap(l => l.segments);
   }
 
-  getLineY(lineInScreen: number, fontSize: number): number {
+  getLineY(lineInScreen: number, fontSize: number, alignment: VerticalAlignment = VerticalAlignment.Middle): number {
+    // Get the Y coordinate of the top of the given line in the screen
+    // Pad screen with 1 line height
     const lineCount = this.lines.length;
     const lineHeight = fontSize * 1.5;
     let firstLineTopMargin = this.customFirstLineTopMargin;
     if (firstLineTopMargin === null) {
-      const screenMiddle = VIDEO_SIZE.height / 2;
-      firstLineTopMargin = screenMiddle - (lineCount * lineHeight / 2)
+      switch (alignment) {
+        case VerticalAlignment.Top:
+          firstLineTopMargin = lineHeight;
+          break;
+        case VerticalAlignment.Middle:
+          const screenMiddle = VIDEO_SIZE.height / 2;
+          firstLineTopMargin = screenMiddle - (lineCount * lineHeight / 2)
+          break;
+        case VerticalAlignment.Bottom:
+          firstLineTopMargin = VIDEO_SIZE.height - ((lineCount + 1) * lineHeight);
+          break;
+      }
     }
     return firstLineTopMargin + (lineInScreen * lineHeight)
   }
 
-  toAssEvents(formatParams: Object) {
+  toAssEvents(formatParams: Object, videoOptions: KaraokeOptions) {
     const styleName = "Default";
     const self = this;
-    return this.lines.map((l, i) => l.toAssEvent(self.startTimestamp, self.endTimestamp, styleName, self.getLineY(i, formatParams["Fontsize"]))).join("\n") + "\n";
+    return this.lines.map((l, i) => l.toAssEvent(self.startTimestamp, self.endTimestamp, styleName, self.getLineY(i, formatParams["Fontsize"], videoOptions.verticalAlignment))).join("\n") + "\n";
   }
 
   adjustTimestamps(adjustment: number): LyricsScreen {
@@ -404,7 +422,7 @@ export function denormalizeTimestamps(screens: LyricsScreen[], songDuration: num
   return setScreenStartTimes(setSegmentEndTimes(screens, songDuration));
 }
 
-function createSubtitles(screens: LyricsScreen[], formatParams: Object): string {
+function createSubtitles(screens: LyricsScreen[], options: KaraokeOptions, formatParams: Object): string {
 
   const displayParams = {
     Name: "Default",
@@ -423,8 +441,10 @@ function createSubtitles(screens: LyricsScreen[], formatParams: Object): string 
     ...formatParams
   };
 
-  for (const key of ["PrimaryColour", "SecondaryColour"]) {
-    displayParams[key] = colorToString(displayParams[key]);
+  for (const key of ["PrimaryColour", "SecondaryColour", "OutlineColour"]) {
+    if (key in displayParams) {
+      displayParams[key] = colorToString(displayParams[key]);
+    }
   }
 
   const styleKeys = Object.keys(displayParams).join(", ");
@@ -441,7 +461,7 @@ Style: ${styleValues}
 Format: Layer, Style, Start, End, MarginV, Text
 `
   for (const screen of screens) {
-    assText += screen.toAssEvents(displayParams)
+    assText += screen.toAssEvents(displayParams, options)
   }
   return assText;
 }
@@ -468,11 +488,16 @@ export function createAssFile(lyrics: string, lyricEvents: LyricEvent[], songDur
   const screensWithTitle = createScreens(lyrics, lyricEvents, songDuration, title, artist, options);
   const primaryColor = options.color.primary;
   const secondaryColor = options.color.secondary;
+  const outlineColor = options.color.background;
 
-  return createSubtitles(screensWithTitle, {
+  return createSubtitles(screensWithTitle, options, {
     "Fontname": options.font.name,
     "Fontsize": options.font.size,
     "PrimaryColour": [primaryColor.red, primaryColor.green, primaryColor.blue, 0],
-    "SecondaryColour": [secondaryColor.red, secondaryColor.green, secondaryColor.blue, 0]
+    "SecondaryColour": [secondaryColor.red, secondaryColor.green, secondaryColor.blue, 0],
+    "OutlineColour": [outlineColor.red, outlineColor.green, outlineColor.blue, 0],
+    "BorderStyle": 1,
+    "Outline": 1,
+    "Shadow": 0,
   });
 }

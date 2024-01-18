@@ -1,5 +1,6 @@
 // See webpack.common.js for process.env setup
 export const API_HOSTNAME = process.env.API_HOSTNAME;
+// export const API_HOSTNAME = import.meta.env.API_HOSTNAME
 export const DONATE_URL = process.env.DONATE_URL;
 
 export const KEY_CODES = {

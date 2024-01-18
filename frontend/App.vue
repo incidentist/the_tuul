@@ -70,8 +70,10 @@ import SongInfoTab from "@/components/SongInfoTab.vue";
 import LyricInputTab from "@/components/LyricInputTab.vue";
 import SongTimingTab from "@/components/SongTimingTab.vue";
 import SubmitTab from "@/components/SubmitTab.vue";
+// import mountedHarness from "@/mountedHarness";
 
 export default defineComponent({
+  // mixins: [mountedHarness],
   components: {
     HelpTab,
     SongInfoTab,
@@ -84,7 +86,14 @@ export default defineComponent({
       DONATE_URL,
       lyricText: "",
       // Object containing song info: file, artist, title
-      songInfo: { file: null, artist: null, title: null, duration: null },
+      songInfo: {
+        file: null,
+        artist: null,
+        title: null,
+        duration: null,
+        youtubeUrl: null,
+        videoBlob: null,
+      },
       isSubmitting: false,
       // Array of lyric timings
       timings: null,
