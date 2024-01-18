@@ -77,7 +77,7 @@ class DownloadYouTubeVideo(APIView):
         logger.info(
             "download_youtube_video",
             youtube_url=youtube_url,
-            request=request.query_params,
+            request=request.query_params.dict(),
         )
         if not youtube_url:
             return Response({"error": "No url provided."})
