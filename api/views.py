@@ -10,7 +10,7 @@ import structlog
 import pytube
 
 from django.core.files.storage import FileSystemStorage
-from django.http import FileResponse
+from django.http import FileResponse, StreamingHttpResponse
 from django.core.files import File
 from django.views.generic.base import TemplateView
 from rest_framework.response import Response
@@ -21,6 +21,20 @@ from karaoke import make_karaoke_video
 from karaoke import music_separation
 
 logger = structlog.get_logger(__name__)
+
+
+def streamed_response(file_path: Path) -> StreamingHttpResponse:
+    """Return a streaming response for the given file path."""
+    f = file_path.open("rb")
+
+    def streaming_content():
+        while True:
+            data = f.read(1024 * 1024)
+            if not data:
+                break
+            yield data
+
+    return StreamingHttpResponse(streaming_content=streaming_content())
 
 
 class Index(TemplateView):
@@ -53,8 +67,7 @@ class SeparateTrack(APIView):
                 )
 
             logger.info("zip_complete", path=zip_path)
-            response = FileResponse(zip_path.open("rb"), as_attachment=True)
-            return response
+            return streamed_response(zip_path)
 
     def setup_song_files_dir(self, files_dir: str, song_file: File) -> Path:
         """Copy song file to the temp dir.
@@ -102,8 +115,7 @@ class DownloadYouTubeVideo(APIView):
                 zip_file.write(song_files_dir_path / "metadata.json", "metadata.json")
 
             logger.info("zip_complete", path=zip_path)
-            response = FileResponse(zip_path.open("rb"), as_attachment=True)
-            return response
+            return streamed_response(zip_path)
 
     def get_youtube_streams(
         self, youtube_url: str, song_files_dir: Path
