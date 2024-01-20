@@ -43,7 +43,7 @@ function getFfmpegParams(hasVideo: boolean, backgroundColor: string, audioDelayM
             `adelay=delays=${audioDelayMs}:all=1`,
             '-vf',
             `"ass=subtitles.ass:fontsdir=/tmp",`
-        ].join(";");
+        ];
     }
     const videoMetadata = ffmpegMetadataArgs(metadata);
 
