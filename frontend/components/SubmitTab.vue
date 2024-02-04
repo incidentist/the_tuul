@@ -124,6 +124,11 @@
           Create Video
         </b-button>
       </div>
+      <source-file-download-links
+        :lyrics="lyricText"
+        :timings="timings"
+        :subtitles="subtitles"
+      />
     </div>
   </b-tab-item>
 </template>
@@ -134,6 +139,7 @@ import { defineComponent } from "vue";
 import { createAssFile, createScreens, KaraokeOptions } from "@/lib/timing";
 import { API_HOSTNAME } from "@/constants";
 import VideoPreview from "@/components/VideoPreview.vue";
+import SourceFileDownloadLinks from "@/components/SourceFileDownloadLinks.vue";
 import Color from "buefy/src/utils/color";
 
 const fonts = {
@@ -152,7 +158,7 @@ const fonts = {
 };
 
 export default defineComponent({
-  components: { VideoPreview },
+  components: { VideoPreview, SourceFileDownloadLinks },
   props: {
     songInfo: Object,
     lyricText: String,
