@@ -33,10 +33,14 @@ interface Segment {
 interface AssEvent {
   type: string,
   Layer: number,
-  Style: string,
   Start: string,
   End: string,
+  Style: string,
+  Name: string,
+  MarginL: number,
+  MarginR: number,
   MarginV: number,
+  Effect: string,
   Text: string
 }
 
@@ -198,7 +202,7 @@ export class LyricsScreen {
           break;
       }
     }
-    return firstLineTopMargin + (lineInScreen * lineHeight)
+    return Math.round(firstLineTopMargin + (lineInScreen * lineHeight))
   }
 
   toAssEvents(formatParams: Object, videoOptions: KaraokeOptions) {
@@ -306,13 +310,17 @@ export class LyricsLine {
     const e: AssEvent = {
       type: "Dialogue",
       Layer: 0,
-      Style: style,
       Start: floatToTimecode(displayStart),
       End: floatToTimecode(displayEnd),
+      Style: style,
+      Name: "Singer",
+      MarginL: 0,
+      MarginR: 0,
       MarginV: topMargin,
+      Effect: "",
       Text: this.decorateAssLine(this.segments, displayStart)
     }
-    return `${e.type}: ` + ["Layer", "Style", "Start", "End", "MarginV", "Text"].map(k => e[k]).join(",");
+    return `${e.type}: ` + ["Layer", "Start", "End", "Style", "Name", "MarginL", "MarginR", "MarginV", "Effect", "Text"].map(k => e[k]).join(",");
   }
 
   addAssFades(assLine: string): string {
@@ -426,25 +434,33 @@ function createSubtitles(screens: LyricsScreen[], options: KaraokeOptions, forma
 
   const displayParams = {
     Name: "Default",
-    Alignment: 8,
     Fontname: "Arial Narrow",
     Fontsize: 20,
     PrimaryColour: [255, 0, 255, 255],
     SecondaryColour: [0, 255, 255, 255],
+    OutlineColour: [0, 0, 0, 255],
+    BackColour: [0, 0, 0, 0],
     Bold: -1,
+    Italic: 0,
+    Underline: 0,
+    StrikeOut: 0,
     ScaleX: 100,
     ScaleY: 100,
     Spacing: 0,
+    Angle: 0,
+    BorderStyle: 1,
+    Outline: 0,
+    Shadow: 0,
+    Alignment: 8,
     MarginL: 0,
     MarginR: 0,
+    MarginV: 0,
     Encoding: 0,
     ...formatParams
   };
 
-  for (const key of ["PrimaryColour", "SecondaryColour", "OutlineColour"]) {
-    if (key in displayParams) {
-      displayParams[key] = colorToString(displayParams[key]);
-    }
+  for (const key of ["PrimaryColour", "SecondaryColour", "OutlineColour", "BackColour"]) {
+    displayParams[key] = colorToString(displayParams[key]);
   }
 
   const styleKeys = Object.keys(displayParams).join(", ");
@@ -458,7 +474,7 @@ Format: ${styleKeys}
 Style: ${styleValues}
 
 [Events]
-Format: Layer, Style, Start, End, MarginV, Text
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 `
   for (const screen of screens) {
     assText += screen.toAssEvents(displayParams, options)

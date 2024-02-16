@@ -139,6 +139,11 @@
           Create Video
         </b-button>
       </div>
+      <source-file-download-links
+        :lyrics="lyricText"
+        :timings="timings"
+        :subtitles="subtitles"
+      />
       <b-message
         :active="isSubmitting"
         type="is-success"
@@ -165,6 +170,7 @@ import * as _ from "lodash";
 import { defineComponent } from "vue";
 import { createAssFile, createScreens, VerticalAlignment } from "@/lib/timing";
 import VideoPreview from "@/components/VideoPreview.vue";
+import SourceFileDownloadLinks from "@/components/SourceFileDownloadLinks.vue";
 import Color from "buefy/src/utils/color";
 import jszip from "jszip";
 import audio from "@/lib/audio";
@@ -186,7 +192,7 @@ const fonts = {
 };
 
 export default defineComponent({
-  components: { VideoPreview },
+  components: { VideoPreview, SourceFileDownloadLinks },
   props: {
     songInfo: Object,
     lyricText: String,
