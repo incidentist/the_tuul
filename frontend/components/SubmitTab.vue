@@ -127,6 +127,7 @@
     </div>
 
     <div class="submit-button-container">
+      <video-creation-progress-indicator v-if="isSubmitting" />
       <div class="buttons">
         <b-button
           expanded
@@ -171,6 +172,7 @@ import { defineComponent } from "vue";
 import { createAssFile, createScreens, VerticalAlignment } from "@/lib/timing";
 import VideoPreview from "@/components/VideoPreview.vue";
 import SourceFileDownloadLinks from "@/components/SourceFileDownloadLinks.vue";
+import VideoCreationProgressIndicator from "@/components/VideoCreationProgressIndicator.vue";
 import Color from "buefy/src/utils/color";
 import jszip from "jszip";
 import audio from "@/lib/audio";
@@ -192,7 +194,11 @@ const fonts = {
 };
 
 export default defineComponent({
-  components: { VideoPreview, SourceFileDownloadLinks },
+  components: {
+    VideoPreview,
+    SourceFileDownloadLinks,
+    VideoCreationProgressIndicator,
+  },
   props: {
     songInfo: Object,
     lyricText: String,
