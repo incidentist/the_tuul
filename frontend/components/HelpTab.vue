@@ -60,6 +60,18 @@
         </li>
       </ul>
       <h3>What's New</h3>
+      <h5>0.8.1 - February 4, 2024</h5>
+      <ul>
+        <li>
+          <strong>Early Lyric Display</strong> - When the first line on a screen
+          comes right after the last line on the previous screen, the line will
+          appear early.
+        </li>
+        <li>
+          <strong>Subtitle Compatibility</strong> - Subtitles can now be opened
+          in Aegisub and other subtitle editors.
+        </li>
+      </ul>
       <h5>December 29, 2023</h5>
       <ul>
         <li>
@@ -108,14 +120,6 @@
           instrumental breaks. You can turn this on or off before you submit the
           video, in case you added your own screens for this. You can also turn
           count-ins on or off.
-        </li>
-      </ul>
-      <h5>Feb 28, 2023</h5>
-      <ul>
-        <li>
-          <strong>Count-ins</strong> - The Tüül now adds automatic count-ins
-          after long instrumental breaks. It also adds a count-in for songs
-          where the vocals start right away.
         </li>
       </ul>
     </div>
