@@ -36,13 +36,11 @@ function getFfmpegParams(hasVideo: boolean, backgroundColor: string, audioDelayM
         ];
         // When there's no video, things are simpler
         filterArgs = [
-            // Add subtitles over video
-            "[0:v]ass=subtitles.ass[vout]",
             // Add audioDelay to audio
             "-af",
             `adelay=delays=${audioDelayMs}:all=1`,
             '-vf',
-            `"ass=subtitles.ass:fontsdir=/tmp",`
+            `ass=subtitles.ass:fontsdir=/tmp`
         ];
     }
     const videoMetadata = ffmpegMetadataArgs(metadata);
