@@ -127,24 +127,6 @@
     </div>
 
     <div class="submit-button-container">
-      <video-creation-progress-indicator v-if="isSubmitting" />
-      <div class="buttons">
-        <b-button
-          expanded
-          size="is-large"
-          type="is-primary"
-          :loading="isSubmitting"
-          @click="createVideo"
-          :disabled="!enabled && !isSubmitting"
-        >
-          Create Video
-        </b-button>
-      </div>
-      <source-file-download-links
-        :lyrics="lyricText"
-        :timings="timings"
-        :subtitles="subtitles"
-      />
       <b-message
         :active="isSubmitting"
         type="is-success"
@@ -162,6 +144,28 @@
         There was a problem making your video: {{ submitError }}. Try again? Or
         email me?
       </b-message>
+      <video-creation-progress-indicator
+        v-if="isSubmitting"
+        :phase="creationPhase"
+        :progress="videoProgress"
+      />
+      <div class="buttons">
+        <b-button
+          expanded
+          size="is-large"
+          type="is-primary"
+          :loading="isSubmitting"
+          @click="createVideo"
+          :disabled="!enabled && !isSubmitting"
+        >
+          Create Video
+        </b-button>
+      </div>
+      <source-file-download-links
+        :lyrics="lyricText"
+        :timings="timings"
+        :subtitles="subtitles"
+      />
     </div>
   </b-tab-item>
 </template>
@@ -177,6 +181,7 @@ import Color from "buefy/src/utils/color";
 import jszip from "jszip";
 import audio from "@/lib/audio";
 import video from "@/lib/video";
+import { CreationPhase } from "@/types";
 
 const fonts = {
   "Andale Mono": "/static/fonts/AndaleMono.ttf",
@@ -213,6 +218,8 @@ export default defineComponent({
       fonts,
       VerticalAlignment,
       isSubmitting: false,
+      creationPhase: CreationPhase.NotStarted,
+      videoProgress: 0,
       videoOptions: {
         addCountIns: true,
         addInstrumentalScreens: true,
@@ -286,6 +293,15 @@ export default defineComponent({
       }
       return "karaoke.mp4";
     },
+    videoDuration(): number {
+      return this.songInfo.duration + this.audioDelay;
+    },
+    videoFps(): number {
+      return this.videoOptions.useBackgroundVideo ? 30 : 20;
+    },
+    ffmpegLogParser() {
+      return video.getProgressParser(this.videoFps, this.videoDuration);
+    },
   },
   methods: {
     loadSettings(): Object {
@@ -305,23 +321,38 @@ export default defineComponent({
       localStorage.videoOptions = JSON.stringify(settings);
     },
     async createVideo() {
-      this.isSubmitting = true;
-      const accompanimentDataUrl = await audio.separateTrack(this.songFile);
-      const videoFile: Uint8Array = await video.createVideo(
-        accompanimentDataUrl,
-        this.videoOptions.useBackgroundVideo ? this.videoBlob : null,
-        this.subtitles,
-        this.audioDelay,
-        this.videoOptions,
-        {
-          artist: this.songInfo.artist,
-          title: this.songInfo.title,
-          duration: this.songFile.duration,
-        },
-        fonts
-      );
-      this.zipAndSendFiles(videoFile);
-      this.isSubmitting = false;
+      let self = this;
+      try {
+        this.isSubmitting = true;
+        this.creationPhase = CreationPhase.SeparatingVocals;
+        this.videoProgress = 0;
+        const accompanimentDataUrl = await audio.separateTrack(this.songFile);
+        this.creationPhase = CreationPhase.CreatingVideo;
+        const videoFile: Uint8Array = await video.createVideo(
+          accompanimentDataUrl,
+          this.videoOptions.useBackgroundVideo ? this.videoBlob : null,
+          this.subtitles,
+          this.audioDelay,
+          this.videoOptions,
+          {
+            artist: this.songInfo.artist,
+            title: this.songInfo.title,
+            duration: this.songInfo.duration,
+          },
+          fonts,
+          (logParams) => {
+            let progress = this.ffmpegLogParser(logParams);
+            console.log(logParams, progress);
+            self.videoProgress = progress;
+          }
+        );
+        this.zipAndSendFiles(videoFile);
+      } catch (e) {
+        this.submitError = e.message;
+      } finally {
+        this.isSubmitting = false;
+        this.creationPhase = CreationPhase.NotStarted;
+      }
     },
 
     async sendZipFile(zipFile: Blob) {

@@ -1,4 +1,4 @@
-import { createFFmpeg } from "@ffmpeg/ffmpeg";
+import { LogCallback, createFFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile } from "@ffmpeg/util";
 import { KaraokeOptions } from "@/lib/timing";
 import jszip from "jszip";
@@ -57,6 +57,25 @@ function getFfmpegParams(hasVideo: boolean, backgroundColor: string, audioDelayM
     ]
 }
 
+function getProgressParser(fps: number, videoDuration: number): LogCallback {
+    // Return a function that can parse logs and return the current progress as a 0-1 float.
+    let totalFrames = fps * videoDuration;
+    var framesFinished = 0;
+    return ({ type, message }) => {
+        if (totalFrames == 0) {
+            return 0;
+        }
+        if (message.startsWith("frame=")) {
+            const match = message.match(/frame=\s*(\d+)/);
+            if (match.length > 0) {
+                framesFinished = parseFloat(match[1]);
+            }
+        }
+        let progress = framesFinished / totalFrames;
+        return Math.min(progress, 1);
+    }
+}
+
 async function createVideo(
     accompanimentDataUrl: string,
     videoBlob: Blob = null,
@@ -64,7 +83,8 @@ async function createVideo(
     audioDelay: number = 0,
     videoOptions: KaraokeOptions,
     metadata: Object,
-    fontMap: Record<string, string>
+    fontMap: Record<string, string>,
+    logCallback?: LogCallback
 ): Promise<Uint8Array> {
     // Create the video using ffmpeg.wasm v0.11
     const songFileName = "audio.mp4";
@@ -93,6 +113,10 @@ async function createVideo(
             new Uint8Array(await videoBlob.arrayBuffer())
         );
     }
+    if (logCallback) {
+        ffmpeg.setLogger(logCallback);
+    }
+
     const ffmpegParams = getFfmpegParams(Boolean(videoBlob), backgroundColor, audioDelayMs, metadata);
     await ffmpeg.run(
         ...ffmpegParams
@@ -136,4 +160,4 @@ function ffmpegMetadataArgs(metadata: any) {
     return ffmpegArgs;
 }
 
-export default { createVideo, fetchYouTubeVideo, parseYouTubeTitle }
+export default { createVideo, fetchYouTubeVideo, parseYouTubeTitle, getProgressParser }
