@@ -195,7 +195,7 @@ const fonts = {
   "Times New Roman": "/static/fonts/TimesNewRoman.ttf",
   Trebuchet: "/static/fonts/Trebuchet.ttf",
   Verdana: "/static/fonts/Verdana.ttf",
-  "Liberation Sans": "/static/default.woff2",
+  "Liberation Sans": "/static/fonts/LiberationSans.ttf",
 };
 
 export default defineComponent({
