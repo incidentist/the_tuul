@@ -1,22 +1,28 @@
 <template>
   <b-tab-item label="Song File" icon="file-audio" class="help-tab">
     <div class="container">
-      <h2 class="title">Choose a Song File</h2>
-      <b-field class="file is-primary" :class="{ 'has-name': !!songFile }">
-        <b-upload v-model="songFile" @input="onFileChange" class="file-label">
-          <span class="file-cta">
-            <b-icon class="file-icon" icon="file-audio"></b-icon>
-            <span class="file-label">Click to upload</span>
-          </span>
-          <span class="file-name" v-if="songFile">
-            {{ songFile.name }}
-          </span>
-        </b-upload>
+      <h2 class="title">Get Your Song Ready</h2>
+      <b-field label="Choose a file from your computer:">
+        <b-field class="file is-primary" :class="{ 'has-name': !!songFile }">
+          <!-- <b-input type="text" :value="songFile && songFile.name" disabled /> -->
+
+          <b-upload v-model="songFile" @input="onFileChange" class="file-label">
+            <span class="file-cta">
+              <b-icon class="file-icon" icon="file-audio"></b-icon>
+              <span class="file-label">Click to upload</span>
+            </span>
+            <span class="file-name" v-if="songFile">
+              {{ songFile?.name }}
+            </span>
+          </b-upload>
+        </b-field>
       </b-field>
-      <b-field label="YouTube Video URL">
+      <b-field label="Or paste a YouTube video URL:">
         <b-input type="text" v-model="youtubeUrl" />
         <b-button
           label="Load"
+          :type="youtubeUrl ? 'is-primary' : 'is-light'"
+          :disabled="!youtubeUrl"
           @click="loadYouTubeUrl"
           :loading="isLoadingYouTube"
         />

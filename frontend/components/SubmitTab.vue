@@ -128,14 +128,6 @@
 
     <div class="submit-button-container">
       <b-message
-        :active="isSubmitting"
-        type="is-success"
-        has-icon
-        icon="wand-magic-sparkles"
-      >
-        Creating your karaoke video. This might take a few minutes.
-      </b-message>
-      <b-message
         :active="Boolean(submitError)"
         type="is-danger"
         has-icon
@@ -148,6 +140,8 @@
         v-if="isSubmitting"
         :phase="creationPhase"
         :progress="videoProgress"
+        :elapsed-time="elapsedSubmissionTime"
+        :song-duration="songInfo.duration"
       />
       <div class="buttons">
         <b-button
@@ -179,9 +173,10 @@ import SourceFileDownloadLinks from "@/components/SourceFileDownloadLinks.vue";
 import VideoCreationProgressIndicator from "@/components/VideoCreationProgressIndicator.vue";
 import Color from "buefy/src/utils/color";
 import jszip from "jszip";
-import audio from "@/lib/audio";
+import audio, { separateTrack } from "@/lib/audio";
 import video from "@/lib/video";
 import { CreationPhase } from "@/types";
+import { useMusicSeparationStore } from "@/stores/musicSeparation";
 
 const fonts = {
   "Andale Mono": "/static/fonts/AndaleMono.ttf",
@@ -204,6 +199,12 @@ export default defineComponent({
     SourceFileDownloadLinks,
     VideoCreationProgressIndicator,
   },
+  setup() {
+    const musicSeparationStore = useMusicSeparationStore();
+    return {
+      musicSeparationStore,
+    };
+  },
   props: {
     songInfo: Object,
     lyricText: String,
@@ -218,6 +219,7 @@ export default defineComponent({
       fonts,
       VerticalAlignment,
       isSubmitting: false,
+      elapsedSubmissionTime: null,
       creationPhase: CreationPhase.NotStarted,
       videoProgress: 0,
       videoOptions: {
@@ -320,13 +322,24 @@ export default defineComponent({
     saveSettings(settings: Object) {
       localStorage.videoOptions = JSON.stringify(settings);
     },
+    async separateTrack(songFile: File) {
+      if (this.musicSeparationStore.musicSeparationResult == null) {
+        await this.musicSeparationStore.startSeparation(this.songFile);
+      }
+      return await this.musicSeparationStore.result;
+    },
     async createVideo() {
       let self = this;
+      this.isSubmitting = true;
+      const submissionStartTime = new Date();
+      const elapsedTimeInterval = setInterval(() => {
+        this.elapsedSubmissionTime =
+          new Date().getTime() - submissionStartTime.getTime();
+      }, 1000);
       try {
-        this.isSubmitting = true;
         this.creationPhase = CreationPhase.SeparatingVocals;
         this.videoProgress = 0;
-        const accompanimentDataUrl = await audio.separateTrack(this.songFile);
+        const accompanimentDataUrl = await this.separateTrack(this.songFile);
         this.creationPhase = CreationPhase.CreatingVideo;
         const videoFile: Uint8Array = await video.createVideo(
           accompanimentDataUrl,
@@ -348,9 +361,12 @@ export default defineComponent({
         );
         this.zipAndSendFiles(videoFile);
       } catch (e) {
+        console.error(e);
         this.submitError = e.message;
       } finally {
         this.isSubmitting = false;
+        clearInterval(elapsedTimeInterval);
+        this.elapsedSubmissionTime = null;
         this.creationPhase = CreationPhase.NotStarted;
       }
     },

@@ -1,6 +1,6 @@
 {
   "name": "the-tuul",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "Create a decent karaoke video from any song in about 10 minutes.",
   "main": "index.ts",
   "scripts": {
@@ -32,6 +32,7 @@
     "jszip": "^3.10.1",
     "libass-wasm": "^4.1.0",
     "lodash": "^4.17.21",
+    "pinia": "^2.1.7",
     "vue": "^2.7.14"
   },
   "devDependencies": {
