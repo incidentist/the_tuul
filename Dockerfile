@@ -19,11 +19,14 @@ WORKDIR $APP_HOME
 RUN apt-get update \
     && apt-get install -y ffmpeg \
     && pip install "poetry==$POETRY_VERSION"
-
 COPY ./poetry.lock ./pyproject.toml ./
 
-RUN poetry config virtualenvs.create false \
-    && poetry install --no-dev --no-interaction
+RUN apt-get install -y build-essential \
+    && poetry config virtualenvs.create false \
+    && poetry install --no-dev --no-interaction \
+    && apt-get remove -y gcc \
+    && apt-get autoremove -y \
+    && rm /var/lib/apt/lists/*_*
 
 # Copy local code to the container image.
 COPY api .
