@@ -4,7 +4,7 @@ import { API_HOSTNAME } from "@/constants";
 // Functions for working with audio files and streams
 
 
-export async function separateTrack(songFile): Promise<string> {
+export async function separateTrack(songFile: File): Promise<string> {
     // Separate the track and return a blob url of the accompaniment stem data
     const formData = new FormData();
     formData.append("songFile", songFile);

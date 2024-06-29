@@ -179,9 +179,10 @@ import SourceFileDownloadLinks from "@/components/SourceFileDownloadLinks.vue";
 import VideoCreationProgressIndicator from "@/components/VideoCreationProgressIndicator.vue";
 import Color from "buefy/src/utils/color";
 import jszip from "jszip";
-import audio from "@/lib/audio";
+import audio, { separateTrack } from "@/lib/audio";
 import video from "@/lib/video";
 import { CreationPhase } from "@/types";
+import { useMusicSeparationStore } from "@/stores/musicSeparation";
 
 const fonts = {
   "Andale Mono": "/static/fonts/AndaleMono.ttf",
@@ -203,6 +204,12 @@ export default defineComponent({
     VideoPreview,
     SourceFileDownloadLinks,
     VideoCreationProgressIndicator,
+  },
+  setup() {
+    const musicSeparationStore = useMusicSeparationStore();
+    return {
+      musicSeparationStore,
+    };
   },
   props: {
     songInfo: Object,
@@ -320,13 +327,19 @@ export default defineComponent({
     saveSettings(settings: Object) {
       localStorage.videoOptions = JSON.stringify(settings);
     },
+    async separateTrack(songFile: File) {
+      if (this.musicSeparationStore.musicSeparationResult == null) {
+        await this.musicSeparationStore.startSeparation(this.songFile);
+      }
+      return await this.musicSeparationStore.result;
+    },
     async createVideo() {
       let self = this;
       try {
         this.isSubmitting = true;
         this.creationPhase = CreationPhase.SeparatingVocals;
         this.videoProgress = 0;
-        const accompanimentDataUrl = await audio.separateTrack(this.songFile);
+        const accompanimentDataUrl = await this.separateTrack(this.songFile);
         this.creationPhase = CreationPhase.CreatingVideo;
         const videoFile: Uint8Array = await video.createVideo(
           accompanimentDataUrl,
@@ -348,6 +361,7 @@ export default defineComponent({
         );
         this.zipAndSendFiles(videoFile);
       } catch (e) {
+        console.error(e);
         this.submitError = e.message;
       } finally {
         this.isSubmitting = false;
