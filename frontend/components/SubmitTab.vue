@@ -128,14 +128,6 @@
 
     <div class="submit-button-container">
       <b-message
-        :active="isSubmitting"
-        type="is-success"
-        has-icon
-        icon="wand-magic-sparkles"
-      >
-        Creating your karaoke video. This might take a few minutes.
-      </b-message>
-      <b-message
         :active="Boolean(submitError)"
         type="is-danger"
         has-icon
@@ -148,6 +140,8 @@
         v-if="isSubmitting"
         :phase="creationPhase"
         :progress="videoProgress"
+        :elapsed-time="elapsedSubmissionTime"
+        :song-duration="songInfo.duration"
       />
       <div class="buttons">
         <b-button
@@ -225,6 +219,7 @@ export default defineComponent({
       fonts,
       VerticalAlignment,
       isSubmitting: false,
+      elapsedSubmissionTime: null,
       creationPhase: CreationPhase.NotStarted,
       videoProgress: 0,
       videoOptions: {
@@ -335,8 +330,13 @@ export default defineComponent({
     },
     async createVideo() {
       let self = this;
+      this.isSubmitting = true;
+      const submissionStartTime = new Date();
+      const elapsedTimeInterval = setInterval(() => {
+        this.elapsedSubmissionTime =
+          new Date().getTime() - submissionStartTime.getTime();
+      }, 1000);
       try {
-        this.isSubmitting = true;
         this.creationPhase = CreationPhase.SeparatingVocals;
         this.videoProgress = 0;
         const accompanimentDataUrl = await this.separateTrack(this.songFile);
@@ -365,6 +365,8 @@ export default defineComponent({
         this.submitError = e.message;
       } finally {
         this.isSubmitting = false;
+        clearInterval(elapsedTimeInterval);
+        this.elapsedSubmissionTime = null;
         this.creationPhase = CreationPhase.NotStarted;
       }
     },

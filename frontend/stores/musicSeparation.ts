@@ -20,7 +20,6 @@ export const useMusicSeparationStore = defineStore('musicSeparation', () => {
 
         try {
             result.value = separateTrack(inputData);
-            console.log("Separation started", result.value);
             await result.value;
         } catch (err) {
             console.error(err);
