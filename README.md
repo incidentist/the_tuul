@@ -14,3 +14,8 @@ This is a Django app. Run it like so:
 
 Load up http://localhost:8000 and follow the instructions!
 
+## Build
+To build the Docker image:
+
+`> docker buildx build . --tag the_tuul:local
+

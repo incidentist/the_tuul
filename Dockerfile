@@ -1,40 +1,62 @@
 # Use an official lightweight Python image.
 # https://hub.docker.com/_/python
-FROM python:3.11-slim
+FROM python:3.11-slim AS builder
 
 ENV APP_HOME=/app
 # Setting this ensures print statements and log messages
 # promptly appear in Cloud Logging.
 ENV PYTHONUNBUFFERED=TRUE \
-    POETRY_VERSION=1.7.1 \
-    # make poetry install to this location
-    POETRY_HOME="/opt/poetry" 
+    POETRY_VERSION=1.8.3 \
+    POETRY_VIRTUALENVS_IN_PROJECT=1 \
+    POETRY_VIRTUALENVS_CREATE=1 \
+    POETRY_CACHE_DIR=/tmp/poetry_cache
 WORKDIR $APP_HOME
 
 # prepend poetry and venv to path
 # ENV PATH "$POETRY_HOME/bin:$PATH"
 
-
 # Install dependencies.
 RUN apt-get update \
-    && apt-get install -y ffmpeg \
-    && pip install "poetry==$POETRY_VERSION"
+    && apt-get install -y --no-install-recommends ffmpeg build-essential \
+    && pip install "poetry==$POETRY_VERSION" \
+    && poetry config virtualenvs.create false
+
 COPY ./poetry.lock ./pyproject.toml ./
 
-RUN apt-get install -y build-essential \
-    && poetry config virtualenvs.create false \
-    && poetry install --no-dev --no-interaction \
-    && apt-get remove -y gcc \
+RUN poetry install --without dev --no-root --no-interaction --no-ansi
+
+#
+# RUNTIME IMAGE
+#
+
+# Note that this image does not use poetry at all
+
+FROM python:3.11-slim as runner
+
+ENV APP_HOME=/app \
+    PYTHONUNBUFFERED=TRUE \
+    VIRTUAL_ENV=/app/.venv \
+    PATH="/app/.venv/bin:$PATH" \
+    # Service must listen to $PORT environment variable.
+    # This default value facilitates local development.
+    PORT=8080
+
+WORKDIR $APP_HOME
+
+# Copy installed dependencies from builder
+COPY --from=builder $VIRTUAL_ENV $VIRTUAL_ENV
+
+# Install runtime dependencies
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && apt-get remove -y build-essential \
     && apt-get autoremove -y \
-    && rm /var/lib/apt/lists/*_*
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy local code to the container image.
 COPY api .
-RUN poetry run ./manage.py collectstatic --noinput
+RUN ./manage.py collectstatic --noinput
 
-# Service must listen to $PORT environment variable.
-# This default value facilitates local development.
-ENV PORT 8080
 EXPOSE $PORT
 
 # Run the web service on container startup. Here we use the gunicorn

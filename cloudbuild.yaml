@@ -18,7 +18,7 @@ steps:
       ]
   # Build the container image
   - name: "gcr.io/cloud-builders/docker"
-    args: ["build", "-t", "gcr.io/$PROJECT_ID/$_CLOUD_RUN_APP_NAME", "."]
+    args: ["buildx", "build", "-t", "gcr.io/$PROJECT_ID/$_CLOUD_RUN_APP_NAME", "."]
   # Push the container image to Container Registry
   - id: "container_push"
     name: "gcr.io/cloud-builders/docker"
