@@ -14,7 +14,7 @@ steps:
     args:
       [
         "-c",
-        "docker pull ${$_DOCKER_IMAGE}:latest || exit 0",
+        "docker pull ${_DOCKER_IMAGE}:latest || exit 0",
       ]
   # Build the container image
   - name: "gcr.io/cloud-builders/docker"
@@ -71,6 +71,8 @@ substitutions:
   _CLOUD_RUN_HEAVY_DUTY_APP_NAME: "the-tuul-heavy-duty"
   _CLOUD_RUN_REGION: "us-central1"
   _API_HOSTNAME: "https://separate.the-tuul.com"
-  _DOCKER_IMAGE: "${_CLOUD_RUN_REGION}-docker.pkg.dev/$PROJECT_ID/$_CLOUD_RUN_APP_NAME/the_tuul"
+  _DOCKER_IMAGE: "${_CLOUD_RUN_REGION}-docker.pkg.dev/${PROJECT_ID}/${_CLOUD_RUN_APP_NAME}/the_tuul"
 images:
   - gcr.io/$PROJECT_ID/$_CLOUD_RUN_APP_NAME
+options:
+  dynamicSubstitutions: true
