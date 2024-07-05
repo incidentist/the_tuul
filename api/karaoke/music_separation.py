@@ -9,7 +9,7 @@ DEFAULT_MODEL = "UVR_MDXNET_KARA_2.onnx"
 
 AVAILABLE_MODELS = [
     "UVR_MDXNET_KARA_2.onnx",  # Keeps background vocals
-    "UVR-MDX-NET-Inst_HQ_3.onnx",  # Removes background vocals
+    "model_mel_band_roformer_ep_3005_sdr_11.4360.ckpt",  # Removes background vocals
 ]
 
 
