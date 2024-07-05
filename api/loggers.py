@@ -36,7 +36,7 @@ class CloudLoggingFormatter:
                 del event_dict[key]
 
         http_request = {}
-        if "request" in event_dict:
+        if "request" in event_dict and isinstance(event_dict["request"], str):
             components = event_dict["request"].split(" ")
             http_request["requestMethod"] = components[0]
             http_request["requestUrl"] = components[1]

@@ -1,5 +1,5 @@
 import { addTitleScreen, addInstrumentalScreens, displayQuickLinesEarly } from "./adjustments";
-import { compileLyricTimings, createAssFile, denormalizeTimestamps, LyricEvent, LyricSegment, LyricsLine, LyricsScreen, KaraokeOptions } from "./timing";
+import { compileLyricTimings, createAssFile, denormalizeTimestamps, LyricEvent, LyricSegment, LyricsLine, LyricsScreen, KaraokeOptions, VerticalAlignment } from "./timing";
 import { testLyrics, shortIntroTestEvents } from "./timing.spec";
 import { LYRIC_MARKERS } from "../constants";
 
@@ -7,6 +7,8 @@ const DEFAULT_OPTIONS: KaraokeOptions = {
     addCountIns: true,
     addInstrumentalScreens: true,
     addStaggeredLines: true,
+    useBackgroundVideo: false,
+    verticalAlignment: VerticalAlignment.Middle,
     font: {
         size: 22,
         name: "Arial Narrow"
@@ -30,7 +32,7 @@ Dialogue: 0,0:00:00.00,0:00:04.00,Default,Singer,0,0,160,,{\\k200}{\\kf200}The T
     const screens = denormalizeTimestamps(compileLyricTimings(testLyrics, shortIntroTestEvents), 60.0);
     const screensWithTitle = addTitleScreen(screens, "Tüülin' Around", "The Tüüls");
     expect(screensWithTitle.length).toBe(3);
-    expect(screensWithTitle[0].toAssEvents(DEFAULT_ASS_OPTIONS)).toBe(titleScreenAss);
+    expect(screensWithTitle[0].toAssEvents(DEFAULT_ASS_OPTIONS, DEFAULT_OPTIONS)).toBe(titleScreenAss);
     expect(screensWithTitle[0].audioDelay).toBe(4);
 });
 
@@ -53,7 +55,7 @@ test('addInstrumentalScreen', () => {
 Dialogue: 0,0:00:02.00,0:00:20.00,Default,Singer,0,0,145,,{\\k0}{\\kf1800}||||||||||||||||||||||||||||||||||
 Dialogue: 0,0:00:20.00,0:00:21.00,Default,Singer,0,0,145,,{\\k0}{\\kf100}screen two
 `
-    expect(screens.map((s) => s.toAssEvents(DEFAULT_ASS_OPTIONS)).join("")).toBe(ass);
+    expect(screens.map((s) => s.toAssEvents(DEFAULT_ASS_OPTIONS, DEFAULT_OPTIONS)).join("")).toBe(ass);
     const instrumentalScreen: LyricsScreen = screens[1];
     expect(instrumentalScreen.startTimestamp).toBeTruthy();
 
@@ -84,7 +86,7 @@ Dialogue: 0,0:00:20.00,0:00:21.00,Default,Singer,0,0,145,,{\\k0}{\\kf100}screen 
 Dialogue: 0,0:00:21.00,0:00:30.00,Default,Singer,0,0,145,,{\\k0}{\\kf900}||||||||||||||||||||||||||||||||||
 Dialogue: 0,0:00:30.00,0:00:31.00,Default,Singer,0,0,145,,{\\k0}{\\kf100}screen three
 `
-    expect(screens.map((s) => s.toAssEvents(DEFAULT_ASS_OPTIONS)).join("")).toBe(ass);
+    expect(screens.map((s) => s.toAssEvents(DEFAULT_ASS_OPTIONS, DEFAULT_OPTIONS)).join("")).toBe(ass);
 
 });
 

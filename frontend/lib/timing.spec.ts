@@ -1,4 +1,4 @@
-import { LyricSegmentIterator, LyricsScreen, compileLyricTimings, setScreenStartTimes, adjustScreenTimestamps, setSegmentEndTimes, createAssFile, floatToTimecode, denormalizeTimestamps, LyricsLine, KaraokeOptions, LyricEvent } from "./timing";
+import { LyricSegmentIterator, LyricsScreen, compileLyricTimings, setScreenStartTimes, adjustScreenTimestamps, setSegmentEndTimes, createAssFile, floatToTimecode, LyricsLine, KaraokeOptions, LyricEvent, VerticalAlignment } from "./timing";
 import { LYRIC_MARKERS } from "../constants";
 import { LyricSegment } from "./timing";
 
@@ -6,6 +6,8 @@ const DEFAULT_OPTIONS: KaraokeOptions = {
     addCountIns: true,
     addInstrumentalScreens: true,
     addStaggeredLines: true,
+    useBackgroundVideo: false,
+    verticalAlignment: VerticalAlignment.Middle,
     font: {
         size: 20,
         name: "Arial Narrow"
@@ -131,6 +133,21 @@ test('LyricScreen handles custom Y offset', () => {
     expect(screen.getLineY(0, DEFAULT_FONT_SIZE)).toBe(50);
     expect(screen.getLineY(1, DEFAULT_FONT_SIZE)).toBe(83);
 })
+
+test('LyricScreen respects vertical alignment', () => {
+    const screen = new LyricsScreen([
+        new LyricsLine([new LyricSegment("one", 1.0)]),
+        new LyricsLine([new LyricSegment("two", 2.0)])
+    ])
+
+    expect(screen.getLineY(0, DEFAULT_FONT_SIZE)).toBe(127);
+    expect(screen.getLineY(0, DEFAULT_FONT_SIZE, VerticalAlignment.Top)).toBe(33);
+    expect(screen.getLineY(0, DEFAULT_FONT_SIZE, VerticalAlignment.Bottom)).toBe(320 - (33 * 3));
+
+    expect(screen.getLineY(1, DEFAULT_FONT_SIZE)).toBe(127 + 33);
+    expect(screen.getLineY(1, DEFAULT_FONT_SIZE, VerticalAlignment.Top)).toBe(33 * 2);
+    expect(screen.getLineY(1, DEFAULT_FONT_SIZE, VerticalAlignment.Bottom)).toBe(320 - (33 * 2));
+});
 
 test('setScreenStartTimes', () => {
     const screens = compileLyricTimings(testLyrics, testEvents);

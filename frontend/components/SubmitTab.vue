@@ -43,6 +43,12 @@
             v-model="videoOptions.addStaggeredLines"
           ></b-switch
         ></b-field>
+        <b-field v-if="videoBlob" horizontal label="Use Background Video">
+          <b-switch
+            expanded
+            v-model="videoOptions.useBackgroundVideo"
+          ></b-switch
+        ></b-field>
         <b-collapse :open="false">
           <template #trigger="props">
             <a aria-controls="contentIdForA11y4" :aria-expanded="props.open">
@@ -79,6 +85,31 @@
           <b-field horizontal label="Secondary Color"
             ><b-colorpicker v-model="videoOptions.color.secondary"
           /></b-field>
+          <b-field horizontal label="Lyric Vertical Alignment"
+            ><b-radio-button
+              v-model="videoOptions.verticalAlignment"
+              :native-value="VerticalAlignment.Top"
+              type="is-primary is-light is-outlined"
+            >
+              <span>Top</span>
+            </b-radio-button>
+
+            <b-radio-button
+              v-model="videoOptions.verticalAlignment"
+              :native-value="VerticalAlignment.Middle"
+              type="is-primary is-light is-outlined"
+            >
+              <span>Middle</span>
+            </b-radio-button>
+
+            <b-radio-button
+              v-model="videoOptions.verticalAlignment"
+              :native-value="VerticalAlignment.Bottom"
+              type="is-primary is-light is-outlined"
+            >
+              Bottom
+            </b-radio-button>
+          </b-field>
         </b-collapse>
       </div>
       <div class="column is-narrow">
@@ -90,19 +121,12 @@
           :audio-delay="audioDelay"
           :fonts="fonts"
           :background-color="videoOptions.color.background.toString()"
+          :video-blob="videoOptions.useBackgroundVideo ? videoBlob : null"
         />
       </div>
     </div>
 
     <div class="submit-button-container">
-      <b-message
-        :active="isSubmitting"
-        type="is-success"
-        has-icon
-        icon="wand-magic-sparkles"
-      >
-        Creating your karaoke video. This might take a few minutes.
-      </b-message>
       <b-message
         :active="Boolean(submitError)"
         type="is-danger"
@@ -112,13 +136,20 @@
         There was a problem making your video: {{ submitError }}. Try again? Or
         email me?
       </b-message>
+      <video-creation-progress-indicator
+        v-if="isSubmitting"
+        :phase="creationPhase"
+        :progress="videoProgress"
+        :elapsed-time="elapsedSubmissionTime"
+        :song-duration="songInfo.duration"
+      />
       <div class="buttons">
         <b-button
           expanded
           size="is-large"
           type="is-primary"
           :loading="isSubmitting"
-          @click="submitTimings"
+          @click="createVideo"
           :disabled="!enabled && !isSubmitting"
         >
           Create Video
@@ -136,11 +167,16 @@
 <script lang="ts">
 import * as _ from "lodash";
 import { defineComponent } from "vue";
-import { createAssFile, createScreens, KaraokeOptions } from "@/lib/timing";
-import { API_HOSTNAME } from "@/constants";
+import { createAssFile, createScreens, VerticalAlignment } from "@/lib/timing";
 import VideoPreview from "@/components/VideoPreview.vue";
 import SourceFileDownloadLinks from "@/components/SourceFileDownloadLinks.vue";
+import VideoCreationProgressIndicator from "@/components/VideoCreationProgressIndicator.vue";
 import Color from "buefy/src/utils/color";
+import jszip from "jszip";
+import audio, { separateTrack } from "@/lib/audio";
+import video from "@/lib/video";
+import { CreationPhase } from "@/types";
+import { useMusicSeparationStore } from "@/stores/musicSeparation";
 
 const fonts = {
   "Andale Mono": "/static/fonts/AndaleMono.ttf",
@@ -154,11 +190,21 @@ const fonts = {
   "Times New Roman": "/static/fonts/TimesNewRoman.ttf",
   Trebuchet: "/static/fonts/Trebuchet.ttf",
   Verdana: "/static/fonts/Verdana.ttf",
-  "Liberation Sans": "/static/default.woff2",
+  "Liberation Sans": "/static/fonts/LiberationSans.ttf",
 };
 
 export default defineComponent({
-  components: { VideoPreview, SourceFileDownloadLinks },
+  components: {
+    VideoPreview,
+    SourceFileDownloadLinks,
+    VideoCreationProgressIndicator,
+  },
+  setup() {
+    const musicSeparationStore = useMusicSeparationStore();
+    return {
+      musicSeparationStore,
+    };
+  },
   props: {
     songInfo: Object,
     lyricText: String,
@@ -171,11 +217,17 @@ export default defineComponent({
   data() {
     return {
       fonts,
+      VerticalAlignment,
       isSubmitting: false,
+      elapsedSubmissionTime: null,
+      creationPhase: CreationPhase.NotStarted,
+      videoProgress: 0,
       videoOptions: {
         addCountIns: true,
         addInstrumentalScreens: true,
         addStaggeredLines: true,
+        useBackgroundVideo: this.songInfo.videoBlob != null,
+        verticalAlignment: VerticalAlignment.Middle,
         font: {
           size: 20,
           name: "Arial Narrow",
@@ -203,6 +255,9 @@ export default defineComponent({
   computed: {
     songFile() {
       return this.songInfo.file;
+    },
+    videoBlob() {
+      return this.songInfo.videoBlob;
     },
     subtitles(): string {
       if (!this.enabled) {
@@ -232,10 +287,22 @@ export default defineComponent({
       return _.sum(_.map(screens, "audioDelay"));
     },
     zipFileName(): string {
+      return `${this.videoFileName}.zip`;
+    },
+    videoFileName(): string {
       if (this.songInfo.artist && this.songInfo.title) {
-        return `${this.songInfo.artist} - ${this.songInfo.title} [karaoke].mp4.zip`;
+        return `${this.songInfo.artist} - ${this.songInfo.title} [karaoke].mp4`;
       }
-      return "karaoke.mp4.zip";
+      return "karaoke.mp4";
+    },
+    videoDuration(): number {
+      return this.songInfo.duration + this.audioDelay;
+    },
+    videoFps(): number {
+      return this.videoOptions.useBackgroundVideo ? 30 : 20;
+    },
+    ffmpegLogParser() {
+      return video.getProgressParser(this.videoFps, this.videoDuration);
     },
   },
   methods: {
@@ -255,44 +322,73 @@ export default defineComponent({
     saveSettings(settings: Object) {
       localStorage.videoOptions = JSON.stringify(settings);
     },
-    async submitTimings() {
+    async separateTrack(songFile: File) {
+      if (this.musicSeparationStore.musicSeparationResult == null) {
+        await this.musicSeparationStore.startSeparation(this.songFile);
+      }
+      return await this.musicSeparationStore.result;
+    },
+    async createVideo() {
+      let self = this;
       this.isSubmitting = true;
-      const formData = new FormData();
-      formData.append("lyrics", this.lyricText);
-      formData.append("timings", JSON.stringify(this.timings));
-      formData.append("songFile", this.songFile);
-      formData.append("songArtist", this.songInfo.artist);
-      formData.append("songTitle", this.songInfo.title);
-      formData.append("subtitles", this.subtitles);
-      formData.append("audioDelay", this.audioDelay);
-      formData.append("backgroundColor", this.videoOptions.color.background);
-
-      const url = `${API_HOSTNAME}/generate_video`;
+      const submissionStartTime = new Date();
+      const elapsedTimeInterval = setInterval(() => {
+        this.elapsedSubmissionTime =
+          new Date().getTime() - submissionStartTime.getTime();
+      }, 1000);
       try {
-        const response = await fetch(url, {
-          method: "POST",
-          body: formData,
-        });
-        await this.saveZipFile(response);
+        this.creationPhase = CreationPhase.SeparatingVocals;
+        this.videoProgress = 0;
+        const accompanimentDataUrl = await this.separateTrack(this.songFile);
+        this.creationPhase = CreationPhase.CreatingVideo;
+        const videoFile: Uint8Array = await video.createVideo(
+          accompanimentDataUrl,
+          this.videoOptions.useBackgroundVideo ? this.videoBlob : null,
+          this.subtitles,
+          this.audioDelay,
+          this.videoOptions,
+          {
+            artist: this.songInfo.artist,
+            title: this.songInfo.title,
+            duration: this.songInfo.duration,
+          },
+          fonts,
+          (logParams) => {
+            let progress = this.ffmpegLogParser(logParams);
+            console.log(logParams, progress);
+            self.videoProgress = progress;
+          }
+        );
+        this.zipAndSendFiles(videoFile);
       } catch (e) {
         console.error(e);
-        this.submitError = e;
+        this.submitError = e.message;
+      } finally {
+        this.isSubmitting = false;
+        clearInterval(elapsedTimeInterval);
+        this.elapsedSubmissionTime = null;
+        this.creationPhase = CreationPhase.NotStarted;
       }
-      this.isSubmitting = false;
     },
-    async saveZipFile(response) {
-      console.log(response);
+
+    async sendZipFile(zipFile: Blob) {
+      const anchor = document.createElement("a");
       const filename = this.zipFileName;
-      const blob = await response.blob();
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const anchor = document.createElement("a");
-        anchor.style.display = "none";
-        anchor.href = URL.createObjectURL(blob);
-        anchor.download = filename;
-        anchor.click();
-      };
-      reader.readAsDataURL(blob);
+
+      anchor.style.display = "none";
+      anchor.href = URL.createObjectURL(zipFile);
+      anchor.download = filename;
+      anchor.click();
+    },
+    async zipAndSendFiles(videoBlob: Uint8Array) {
+      var zip = new jszip();
+      zip.file(this.videoFileName, videoBlob);
+      zip.file("subtitles.ass", this.subtitles);
+      zip.file("lyrics.txt", this.lyricText);
+      zip.file("timings.json", JSON.stringify(this.timings));
+
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+      this.sendZipFile(zipBlob);
     },
   },
 });

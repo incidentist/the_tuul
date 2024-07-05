@@ -7,7 +7,7 @@ const SCREEN_QUICK_START_THRESHOLD: Timestamp = 2.0
 const COUNT_IN_THRESHOLD: Timestamp = 5.0
 const COUNT_IN_DURATION: Timestamp = 2.0
 
-const COUNT_IN_SEGMENT_TEXT = "●●● "
+const COUNT_IN_SEGMENT_TEXT = "*** "
 
 export function addQuickStartCountIn(screens: LyricsScreen[]): LyricsScreen[] {
     const firstSegment = screens[0].lines[0].segments[0];

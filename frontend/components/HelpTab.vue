@@ -31,11 +31,11 @@
       <p>If you need to take a break, hit the Pause button.</p>
       <p>
         <strong>Step 4: Create The Video.</strong> After you've given an Enter
-        press to the last lyric in the song, watch the preview and click the
-        <code>Submit</code> button. Wait maybe 5 minutes. Eventually you'll be
-        asked to download a zip file. Inside that zip is an
-        <code>.mp4</code> file which is your karaoke video! The zip file also
-        includes generated <code>subtitles.ass</code> and
+        press to the last lyric in the song, you can watch the preview, fiddle
+        with fonts and colors, and click the <code>Submit</code> button. Wait
+        5-10 minutes. Eventually you'll be asked to download a zip file. Inside
+        that zip is an <code>.mp4</code> file which is your karaoke video! The
+        zip file also includes generated <code>subtitles.ass</code> and
         <code>timings.json</code> files that were used to make your video. You
         can ignore them unless you
         <a @click="onDevLinkClick">know what you're doing</a>.
@@ -60,6 +60,22 @@
         </li>
       </ul>
       <h3>What's New</h3>
+      <h5>0.9 - July 4, 2024</h5>
+      <ul>
+        <li>
+          <strong>YouTube videos</strong> - You can now import a YouTube video
+          instead of uploading a file. The video will be included in the final
+          karaoke video, or you can disable `Use Background Video` on the
+          preview page to just use the audio. Including the video will make the
+          creation process take longer.
+        </li>
+        <li>
+          <strong>Local Video Creation</strong> - After the instrumental track
+          is created, the actual video creation process is done on your computer
+          instead of in the cloud. This is going to allow for some cool stuff in
+          the future.
+        </li>
+      </ul>
       <h5>0.8.1 - February 4, 2024</h5>
       <ul>
         <li>
@@ -111,15 +127,6 @@
           <strong>Video Preview</strong> - You can now see what your video will
           look like before you create it. Unlike the finished video, the preview
           has vocals in it so you can see how well the timing matches up.
-        </li>
-      </ul>
-      <h5>June 19, 2023</h5>
-      <ul>
-        <li>
-          <strong>Instrumentals</strong> - The Tüül now adds a screen for long
-          instrumental breaks. You can turn this on or off before you submit the
-          video, in case you added your own screens for this. You can also turn
-          count-ins on or off.
         </li>
       </ul>
     </div>

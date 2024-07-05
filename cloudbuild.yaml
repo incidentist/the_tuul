@@ -14,15 +14,15 @@ steps:
     args:
       [
         "-c",
-        "docker pull gcr.io/$PROJECT_ID/${_CLOUD_RUN_APP_NAME}:latest || exit 0",
+        "docker pull ${_DOCKER_IMAGE}:latest || exit 0",
       ]
   # Build the container image
   - name: "gcr.io/cloud-builders/docker"
-    args: ["build", "-t", "gcr.io/$PROJECT_ID/$_CLOUD_RUN_APP_NAME", "."]
+    args: ["buildx", "build", "-t", "$_DOCKER_IMAGE", "."]
   # Push the container image to Container Registry
   - id: "container_push"
     name: "gcr.io/cloud-builders/docker"
-    args: ["push", "gcr.io/$PROJECT_ID/$_CLOUD_RUN_APP_NAME"]
+    args: ["push", "$_DOCKER_IMAGE"]
   # Deploy service for simple requests
   - waitFor:
     - container_push
@@ -34,7 +34,7 @@ steps:
         "deploy",
         "$_CLOUD_RUN_APP_NAME",
         "--image",
-        "gcr.io/$PROJECT_ID/$_CLOUD_RUN_APP_NAME",
+        "$_DOCKER_IMAGE",
         "--region",
         "$_CLOUD_RUN_REGION",
         "--concurrency=40",
@@ -54,7 +54,7 @@ steps:
         "deploy",
         "$_CLOUD_RUN_HEAVY_DUTY_APP_NAME",
         "--image",
-        "gcr.io/$PROJECT_ID/$_CLOUD_RUN_APP_NAME",
+        "$_DOCKER_IMAGE",
         "--region",
         "$_CLOUD_RUN_REGION",
         "--concurrency=1",
@@ -71,5 +71,8 @@ substitutions:
   _CLOUD_RUN_HEAVY_DUTY_APP_NAME: "the-tuul-heavy-duty"
   _CLOUD_RUN_REGION: "us-central1"
   _API_HOSTNAME: "https://separate.the-tuul.com"
+  _DOCKER_IMAGE: "${_CLOUD_RUN_REGION}-docker.pkg.dev/${PROJECT_ID}/${_CLOUD_RUN_APP_NAME}/the_tuul"
 images:
   - gcr.io/$PROJECT_ID/$_CLOUD_RUN_APP_NAME
+options:
+  dynamicSubstitutions: true

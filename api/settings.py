@@ -35,6 +35,7 @@ ALLOWED_HOSTS = ["*"]
 # Application definition
 
 INSTALLED_APPS = [
+    "whitenoise.runserver_nostatic",
     "django.contrib.staticfiles",
     "webpack_loader",
     "corsheaders",
@@ -44,6 +45,7 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "corsheaders.middleware.CorsMiddleware",
     "django.middleware.security.SecurityMiddleware",
+    "middlewares.SharedArrayBufferHeadersMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -177,14 +179,17 @@ CORS_ALLOW_ALL_ORIGINS = True
 
 # STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
-# TODO: do this right
-STATIC_ROOT = BASE_DIR / "staticroot"
-
 STATIC_URL = "/static/"
 
-STATICFILES_DIRS = [
-    BASE_DIR / "assets",
-]
+if DEBUG:
+    STATICFILES_DIRS = []
+    STATIC_ROOT = BASE_DIR / "assets"
+else:
+    STATICFILES_DIRS = [
+        BASE_DIR / "assets",
+    ]
+
+    STATIC_ROOT = BASE_DIR / "staticroot"
 
 WEBPACK_LOADER = {
     "DEFAULT": {
