@@ -1,4 +1,23 @@
 steps:
+  # Install Git LFS
+  - name: 'gcr.io/cloud-builders/git'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        apt-get update && \
+        apt-get install -y git-lfs && \
+        git lfs install
+
+  # Pull Git LFS files
+  - name: 'gcr.io/cloud-builders/git'
+    entrypoint: 'git'
+    args:
+      - '-C'
+      - '/workspace/repo'
+      - 'lfs'
+      - 'pull'
+      
   - name: "node"
     entrypoint: "npm"
     args: ["install"]
