@@ -45,15 +45,17 @@ class SeparateTrack(APIView):
     def post(self, request: Request, format: str | None = None) -> Response:
         """Return a zip containing vocal and accompaniment splits of songFile"""
         song_file = request.data.get("songFile")
+        model_name = request.data.get("modelName")
         logger.info(
             "separate_tracks",
             song_size=len(song_file),
+            model_name=model_name,
         )
         with tempfile.TemporaryDirectory() as song_files_dir:
             song_files_dir_path = Path(song_files_dir)
             song_file_path = self.setup_song_files_dir(song_files_dir, song_file)
             accompaniment_path, vocal_path = music_separation.split_song(
-                song_file_path, song_files_dir_path
+                song_file_path, song_files_dir_path, model_name=model_name
             )
             zip_path = song_files_dir_path / "split_song.zip"
             with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zip_file:

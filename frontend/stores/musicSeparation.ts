@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref } from 'vue';
 
 import { separateTrack } from '@/lib/audio';
+import { SeparationModel } from '@/types';
 
 interface SeparationResult {
     // Blob URL of the separated instrumental track
@@ -13,13 +14,13 @@ export const useMusicSeparationStore = defineStore('musicSeparation', () => {
     const result = ref<Promise<string> | null>(null);
     const error = ref<string | null>(null);
 
-    async function startSeparation(inputData: any) {
+    async function startSeparation(inputData: any, modelName: SeparationModel) {
         isProcessing.value = true;
         result.value = null;
         error.value = null;
 
         try {
-            result.value = separateTrack(inputData);
+            result.value = separateTrack(inputData, modelName);
             await result.value;
         } catch (err) {
             console.error(err);
