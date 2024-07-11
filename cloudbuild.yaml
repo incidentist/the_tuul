@@ -14,10 +14,10 @@ steps:
     entrypoint: 'git'
     args:
       - '-C'
-      - '/workspace/repo'
+      - '/workspace'
       - 'lfs'
       - 'pull'
-      
+
   - name: "node"
     entrypoint: "npm"
     args: ["install"]
