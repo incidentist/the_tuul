@@ -1,23 +1,4 @@
 steps:
-  # Install Git LFS
-  - name: 'gcr.io/cloud-builders/git'
-    entrypoint: 'bash'
-    args:
-      - '-c'
-      - |
-        apt-get update && \
-        apt-get install -y git-lfs && \
-        git lfs install
-
-  # Pull Git LFS files
-  - name: 'gcr.io/cloud-builders/git'
-    entrypoint: 'git'
-    args:
-      - '-C'
-      - '/workspace'
-      - 'lfs'
-      - 'pull'
-
   - name: "node"
     entrypoint: "npm"
     args: ["install"]
@@ -35,9 +16,13 @@ steps:
         "-c",
         "docker pull ${_DOCKER_IMAGE}:latest || exit 0",
       ]
-  # Build the container image
+  # Build the container image after pulling in large model files
   - name: "gcr.io/cloud-builders/docker"
-    args: ["buildx", "build", "-t", "$_DOCKER_IMAGE", "."]
+    script: |
+      apt-get update && apt-get install -y git-lfs
+      git lfs install
+      git lfs pull
+      docker buildx build --no-cache -t ${_DOCKER_IMAGE} .
   # Push the container image to Container Registry
   - id: "container_push"
     name: "gcr.io/cloud-builders/docker"
