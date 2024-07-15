@@ -16,7 +16,8 @@ django-webpack-loader = "^2.0.1"
 audio-separator = {extras = ["cpu"], version = "^0.17.4"}
 django-cors-headers = "^4.3.1"
 django-structlog = "^6.0.0"
-pytube = "^15.0.0"
+pytube = { git = "https://github.com/amckee/pytube.git" }
+
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.12.0"

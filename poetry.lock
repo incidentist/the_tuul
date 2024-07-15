@@ -1685,10 +1685,14 @@ version = "15.0.0"
 description = "Python 3 library for downloading YouTube Videos."
 optional = false
 python-versions = ">=3.7"
-files = [
-    {file = "pytube-15.0.0-py3-none-any.whl", hash = "sha256:07b9904749e213485780d7eb606e5e5b8e4341aa4dccf699160876da00e12d78"},
-    {file = "pytube-15.0.0.tar.gz", hash = "sha256:076052efe76f390dfa24b1194ff821d4e86c17d41cb5562f3a276a8bcbfc9d1d"},
-]
+files = []
+develop = false
+
+[package.source]
+type = "git"
+url = "https://github.com/amckee/pytube.git"
+reference = "HEAD"
+resolved_reference = "9ea8b43a561ba5050e7ab9e28b0c836e86d4f32c"
 
 [[package]]
 name = "pytz"
@@ -2252,4 +2256,4 @@ brotli = ["Brotli"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11,<3.12"
-content-hash = "00a011e7ed5d018fde2268b760442359b5db9b6dfd2b36ac57d344372a1e1f77"
+content-hash = "3f45ac48c17f16efe0fcce6aecec140ccb0479c02b3cccb599715e2f052e7a44"
