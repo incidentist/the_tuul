@@ -2,17 +2,17 @@
   <b-tab-item label="Song File" icon="file-audio" class="help-tab">
     <div class="container">
       <h2 class="title">Get Your Song Ready</h2>
-      <b-field label="Choose a file from your computer:">
+      <b-field label="Upload a file from your computer:">
         <b-field class="file is-primary" :class="{ 'has-name': !!songFile }">
           <!-- <b-input type="text" :value="songFile && songFile.name" disabled /> -->
 
           <b-upload v-model="songFile" @input="onFileChange" class="file-label">
             <span class="file-cta">
               <b-icon class="file-icon" icon="file-audio"></b-icon>
-              <span class="file-label">Click to upload</span>
+              <span class="file-label">Choose File</span>
             </span>
-            <span class="file-name" v-if="songFile">
-              {{ songFile?.name }}
+            <span class="file-name">
+              {{ songFile?.name || "No file chosen" }}
             </span>
           </b-upload>
         </b-field>
@@ -34,6 +34,36 @@
         <b-input v-model="title" @input="onTextChange" />
       </b-field>
     </div>
+
+    <b-collapse :open="false">
+      <template #trigger="props">
+        <b-button
+          type="is-text"
+          aria-controls="contentIdForA11y4"
+          :aria-expanded="props.open"
+        >
+          <span>Advanced</span>
+          <b-icon :icon="props.open ? 'angle-down' : 'angle-right'"></b-icon>
+        </b-button>
+      </template>
+      <div class="box">
+        <b-field label="Timings File">
+          <b-upload
+            v-model="timingsFile"
+            class="file-label"
+            @input="onTimingFileChange"
+          >
+            <span class="file-cta">
+              <b-icon class="file-icon" icon="upload"></b-icon>
+              <span class="file-label">Choose File</span>
+            </span>
+            <span class="file-name">
+              {{ timingsFile?.name || "No file chosen" }}
+            </span>
+          </b-upload>
+        </b-field>
+      </div>
+    </b-collapse>
   </b-tab-item>
 </template>
 
@@ -56,6 +86,7 @@ export default defineComponent({
       duration: this.value.duration,
       isLoadingYouTube: false,
       videoBlob: null,
+      timingsFile: null,
     };
   },
   computed: {
@@ -130,12 +161,16 @@ export default defineComponent({
       this.isLoadingYouTube = false;
       this.$emit("input", this.songInfo);
     },
+    onTimingFileChange(file: File) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        this.onChange("timings", JSON.parse(e.target.result.toString()));
+      };
+      reader.readAsText(file);
+    },
+    onChange(optionName: string, newValue: any) {
+      this.$emit("options-change", { [optionName]: newValue });
+    },
   },
 });
 </script>
-
-<style scoped>
-.help-tab {
-  margin: auto;
-}
-</style>

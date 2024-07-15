@@ -42,8 +42,11 @@
       </template>
     </b-navbar>
     <b-tabs expanded :vertical="!isMobile" type="is-boxed" class="main-tabs">
-      <help-tab @options-change="onOptionsChange"></help-tab>
-      <song-info-tab v-model="songInfo"></song-info-tab>
+      <help-tab></help-tab>
+      <song-info-tab
+        v-model="songInfo"
+        @options-change="onOptionsChange"
+      ></song-info-tab>
       <lyric-input-tab v-model="lyricText"></lyric-input-tab>
       <song-timing-tab
         @timings-complete="onTimingsComplete"
