@@ -2,21 +2,11 @@
   <b-tab-item label="Song File" icon="file-audio" class="help-tab">
     <div class="container">
       <h2 class="title">Get Your Song Ready</h2>
-      <b-field label="Upload a file from your computer:">
-        <b-field class="file is-primary" :class="{ 'has-name': !!songFile }">
-          <!-- <b-input type="text" :value="songFile && songFile.name" disabled /> -->
-
-          <b-upload v-model="songFile" @input="onFileChange" class="file-label">
-            <span class="file-cta">
-              <b-icon class="file-icon" icon="file-audio"></b-icon>
-              <span class="file-label">Choose File</span>
-            </span>
-            <span class="file-name">
-              {{ songFile?.name || "No file chosen" }}
-            </span>
-          </b-upload>
-        </b-field>
-      </b-field>
+      <file-upload
+        label="Upload a file from your computer:"
+        v-model="songFile"
+        @input="onSongFileChange"
+      ></file-upload>
       <b-field label="Or paste a YouTube video URL:">
         <b-input type="text" v-model="youtubeUrl" />
         <b-button
@@ -47,21 +37,16 @@
         </b-button>
       </template>
       <div class="box">
-        <b-field label="Timings File">
-          <b-upload
-            v-model="timingsFile"
-            class="file-label"
-            @input="onTimingFileChange"
-          >
-            <span class="file-cta">
-              <b-icon class="file-icon" icon="upload"></b-icon>
-              <span class="file-label">Choose File</span>
-            </span>
-            <span class="file-name">
-              {{ timingsFile?.name || "No file chosen" }}
-            </span>
-          </b-upload>
-        </b-field>
+        <file-upload
+          label="Timings File"
+          v-model="timingsFile"
+          @input="onTimingsFileChange"
+        />
+        <file-upload
+          label="Backing Track"
+          v-model="backingTrackFile"
+          @input="onBackingTrackFileChange"
+        />
       </div>
     </b-collapse>
   </b-tab-item>
@@ -73,7 +58,12 @@ import { defineComponent } from "vue";
 const jsmediatags = require("@/jsmediatags.min.js");
 import { fetchYouTubeVideo, parseYouTubeTitle } from "@/lib/video";
 
+import FileUpload from "@/components/FileUpload.vue";
+
 export default defineComponent({
+  components: {
+    FileUpload,
+  },
   props: {
     value: Object,
   },
@@ -87,6 +77,7 @@ export default defineComponent({
       isLoadingYouTube: false,
       videoBlob: null,
       timingsFile: null,
+      backingTrackFile: null,
     };
   },
   computed: {
@@ -123,7 +114,7 @@ export default defineComponent({
       });
       return p;
     },
-    onFileChange(e) {
+    onSongFileChange(e) {
       const self = this;
       jsmediatags.read(this.songFile, {
         async onSuccess(tag) {
@@ -161,12 +152,15 @@ export default defineComponent({
       this.isLoadingYouTube = false;
       this.$emit("input", this.songInfo);
     },
-    onTimingFileChange(file: File) {
+    onTimingsFileChange(file: File) {
       const reader = new FileReader();
       reader.onload = (e) => {
         this.onChange("timings", JSON.parse(e.target.result.toString()));
       };
       reader.readAsText(file);
+    },
+    onBackingTrackFileChange(file: File) {
+      this.onChange("backingTrack", file);
     },
     onChange(optionName: string, newValue: any) {
       this.$emit("options-change", { [optionName]: newValue });

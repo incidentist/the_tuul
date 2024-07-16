@@ -73,6 +73,7 @@ import SongInfoTab from "@/components/SongInfoTab.vue";
 import LyricInputTab from "@/components/LyricInputTab.vue";
 import SongTimingTab from "@/components/SongTimingTab.vue";
 import SubmitTab from "@/components/SubmitTab.vue";
+import { useMusicSeparationStore } from "@/stores/musicSeparation";
 // import mountedHarness from "@/mountedHarness";
 
 export default defineComponent({
@@ -83,6 +84,12 @@ export default defineComponent({
     LyricInputTab,
     SongTimingTab,
     SubmitTab,
+  },
+  setup() {
+    const musicSeparationStore = useMusicSeparationStore();
+    return {
+      musicSeparationStore,
+    };
   },
   data() {
     return {
@@ -123,7 +130,9 @@ export default defineComponent({
     },
     onOptionsChange(newOptions) {
       for (const key in newOptions) {
-        if (Object.hasOwnProperty.call(newOptions, key)) {
+        if (key == "backingTrack") {
+          this.musicSeparationStore.setBackingTrack(newOptions[key]);
+        } else if (Object.hasOwnProperty.call(newOptions, key)) {
           const newValue = newOptions[key];
           this[key] = newValue;
         }
