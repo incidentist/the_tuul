@@ -1,5 +1,9 @@
 <template>
-  <b-tab-item label="Song File" icon="file-audio" class="help-tab">
+  <b-tab-item
+    label="Song File"
+    icon="file-audio"
+    class="help-tab scroll-wrapper"
+  >
     <div class="container">
       <h2 class="title">Get Your Song Ready</h2>
       <file-upload
@@ -168,3 +172,9 @@ export default defineComponent({
   },
 });
 </script>
+<style scoped>
+.song-info-tab {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+</style>
