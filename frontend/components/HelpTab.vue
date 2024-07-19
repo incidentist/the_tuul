@@ -37,8 +37,8 @@
         that zip is an <code>.mp4</code> file which is your karaoke video! The
         zip file also includes generated <code>subtitles.ass</code> and
         <code>timings.json</code> files that were used to make your video. You
-        can ignore them unless you
-        <a @click="onDevLinkClick">know what you're doing</a>.
+        can upload them to the Song Info tab if you want to re-do your video
+        without re-doing the timings.
       </p>
       <h3>Some Notes</h3>
       <ul>
@@ -137,20 +137,5 @@
 import { defineComponent } from "vue";
 import AdvancedOptionsModal from "@/components/AdvancedOptionsModal.vue";
 
-export default defineComponent({
-  methods: {
-    onDevLinkClick() {
-      this.$buefy.modal.open({
-        parent: this,
-        component: AdvancedOptionsModal,
-        width: "80%",
-        events: {
-          "options-change": (e) => {
-            this.$emit("options-change", e);
-          },
-        },
-      });
-    },
-  },
-});
+export default defineComponent({});
 </script>

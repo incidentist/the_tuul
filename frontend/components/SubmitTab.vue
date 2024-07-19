@@ -344,7 +344,7 @@ export default defineComponent({
       localStorage.videoOptions = JSON.stringify(settings);
     },
     async separateTrack(songFile: File, model: string) {
-      if (this.musicSeparationStore.musicSeparationResult == null) {
+      if (this.musicSeparationStore.result == null) {
         await this.musicSeparationStore.startSeparation(songFile, model);
       }
       return await this.musicSeparationStore.result;

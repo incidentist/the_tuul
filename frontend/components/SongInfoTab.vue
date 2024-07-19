@@ -1,22 +1,16 @@
 <template>
-  <b-tab-item label="Song File" icon="file-audio" class="help-tab">
+  <b-tab-item
+    label="Song File"
+    icon="file-audio"
+    class="help-tab scroll-wrapper"
+  >
     <div class="container">
       <h2 class="title">Get Your Song Ready</h2>
-      <b-field label="Choose a file from your computer:">
-        <b-field class="file is-primary" :class="{ 'has-name': !!songFile }">
-          <!-- <b-input type="text" :value="songFile && songFile.name" disabled /> -->
-
-          <b-upload v-model="songFile" @input="onFileChange" class="file-label">
-            <span class="file-cta">
-              <b-icon class="file-icon" icon="file-audio"></b-icon>
-              <span class="file-label">Click to upload</span>
-            </span>
-            <span class="file-name" v-if="songFile">
-              {{ songFile?.name }}
-            </span>
-          </b-upload>
-        </b-field>
-      </b-field>
+      <file-upload
+        label="Upload a file from your computer:"
+        v-model="songFile"
+        @input="onSongFileChange"
+      ></file-upload>
       <b-field label="Or paste a YouTube video URL:">
         <b-input type="text" v-model="youtubeUrl" />
         <b-button
@@ -34,6 +28,31 @@
         <b-input v-model="title" @input="onTextChange" />
       </b-field>
     </div>
+
+    <b-collapse :open="false">
+      <template #trigger="props">
+        <b-button
+          type="is-text"
+          aria-controls="contentIdForA11y4"
+          :aria-expanded="props.open"
+        >
+          <span>Advanced</span>
+          <b-icon :icon="props.open ? 'angle-down' : 'angle-right'"></b-icon>
+        </b-button>
+      </template>
+      <div class="box">
+        <file-upload
+          label="Timings File"
+          v-model="timingsFile"
+          @input="onTimingsFileChange"
+        />
+        <file-upload
+          label="Backing Track"
+          v-model="backingTrackFile"
+          @input="onBackingTrackFileChange"
+        />
+      </div>
+    </b-collapse>
   </b-tab-item>
 </template>
 
@@ -43,7 +62,12 @@ import { defineComponent } from "vue";
 const jsmediatags = require("@/jsmediatags.min.js");
 import { fetchYouTubeVideo, parseYouTubeTitle } from "@/lib/video";
 
+import FileUpload from "@/components/FileUpload.vue";
+
 export default defineComponent({
+  components: {
+    FileUpload,
+  },
   props: {
     value: Object,
   },
@@ -56,6 +80,8 @@ export default defineComponent({
       duration: this.value.duration,
       isLoadingYouTube: false,
       videoBlob: null,
+      timingsFile: null,
+      backingTrackFile: null,
     };
   },
   computed: {
@@ -92,7 +118,7 @@ export default defineComponent({
       });
       return p;
     },
-    onFileChange(e) {
+    onSongFileChange(e) {
       const self = this;
       jsmediatags.read(this.songFile, {
         async onSuccess(tag) {
@@ -130,12 +156,25 @@ export default defineComponent({
       this.isLoadingYouTube = false;
       this.$emit("input", this.songInfo);
     },
+    onTimingsFileChange(file: File) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        this.onChange("timings", JSON.parse(e.target.result.toString()));
+      };
+      reader.readAsText(file);
+    },
+    onBackingTrackFileChange(file: File) {
+      this.onChange("backingTrack", file);
+    },
+    onChange(optionName: string, newValue: any) {
+      this.$emit("options-change", { [optionName]: newValue });
+    },
   },
 });
 </script>
-
 <style scoped>
-.help-tab {
-  margin: auto;
+.song-info-tab {
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 </style>
