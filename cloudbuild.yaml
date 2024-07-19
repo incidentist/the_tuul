@@ -1,5 +1,5 @@
 steps:
-  - name: "node"
+  - name: "node:21"
     entrypoint: "npm"
     args: ["install"]
   # Build the frontend
