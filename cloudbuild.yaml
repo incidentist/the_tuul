@@ -22,7 +22,7 @@ steps:
       apt-get update && apt-get install -y git-lfs
       git lfs install
       git lfs pull
-      docker buildx build --no-cache -t ${_DOCKER_IMAGE} .
+      docker buildx build --no-cache -t "${_DOCKER_IMAGE}" .
   # Push the container image to Container Registry
   - id: "container_push"
     name: "gcr.io/cloud-builders/docker"
