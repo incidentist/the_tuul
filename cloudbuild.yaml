@@ -19,10 +19,13 @@ steps:
   # Build the container image after pulling in large model files
   - name: "gcr.io/cloud-builders/docker"
     script: |
+      #!/usr/bin/env bash
       apt-get update && apt-get install -y git-lfs
       git lfs install
       git lfs pull
+      echo "Building ${_DOCKER_IMAGE}"
       docker buildx build --no-cache -t "${_DOCKER_IMAGE}" .
+    automapSubstitutions: true
   # Push the container image to Container Registry
   - id: "container_push"
     name: "gcr.io/cloud-builders/docker"
