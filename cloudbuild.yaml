@@ -8,14 +8,6 @@ steps:
     args: ["run", "build"]
     env:
       - "API_HOSTNAME=$_API_HOSTNAME"
-  - id: "container_pull"
-    name: "gcr.io/cloud-builders/docker"
-    entrypoint: "bash"
-    args:
-      [
-        "-c",
-        "docker pull ${_DOCKER_IMAGE}:latest || exit 0",
-      ]
   # Build the container image after pulling in large model files
   - name: "gcr.io/cloud-builders/docker"
     script: |
@@ -24,7 +16,7 @@ steps:
       git lfs install
       git lfs pull
       echo "Building ${_DOCKER_IMAGE}"
-      docker buildx build --no-cache -t "${_DOCKER_IMAGE}" .
+      docker buildx build -t "${_DOCKER_IMAGE}:latest" --cache-from "${_DOCKER_IMAGE}:latest" .
     automapSubstitutions: true
   # Push the container image to Container Registry
   - id: "container_push"
