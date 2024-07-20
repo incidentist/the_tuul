@@ -67,7 +67,7 @@ steps:
         "--concurrency=1",
         "--cpu=2",
         "--memory=8Gi",
-        "--timeout=1200s",
+        "--timeout=2400s",
         "--no-cpu-throttling",
         "--set-env-vars",
         "LOGGING_FORMAT=gcp"
