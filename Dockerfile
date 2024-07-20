@@ -31,7 +31,7 @@ RUN poetry install --without dev --no-root --no-interaction --no-ansi
 
 # Note that this image does not use poetry at all
 
-FROM python:3.11-slim as runner
+FROM python:3.11-slim AS runner
 
 ENV APP_HOME=/app \
     PYTHONUNBUFFERED=TRUE \
@@ -39,7 +39,8 @@ ENV APP_HOME=/app \
     PATH="/app/.venv/bin:$PATH" \
     # Service must listen to $PORT environment variable.
     # This default value facilitates local development.
-    PORT=8080
+    PORT=8080 \
+    WORKER_COUNT=1
 
 WORKDIR $APP_HOME
 
@@ -63,4 +64,4 @@ EXPOSE $PORT
 # webserver, with one worker process and 8 threads.
 # For environments with multiple CPU cores, increase the number of workers
 # to be equal to the cores available.
-CMD exec gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 8 --timeout 0 wsgi:application
+CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "--workers", "${WORKER_COUNT}", "--threads", "8", "--timeout", "0", "wsgi:application"]
