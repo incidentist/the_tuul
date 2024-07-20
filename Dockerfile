@@ -64,4 +64,4 @@ EXPOSE $PORT
 # webserver, with one worker process and 8 threads.
 # For environments with multiple CPU cores, increase the number of workers
 # to be equal to the cores available.
-CMD ["gunicorn", "--bind", "0.0.0.0:$PORT", "--workers", "${WORKER_COUNT}", "--threads", "8", "--timeout", "0", "wsgi:application"]
+CMD exec gunicorn --bind 0.0.0.0:$PORT --workers $WORKER_COUNT --threads 8 --timeout 0 wsgi:application
