@@ -184,7 +184,7 @@ const fonts = {
   "Andale Mono": "/static/fonts/AndaleMono.ttf",
   Arial: "/static/fonts/Arial.ttf",
   "Arial Narrow": "/static/fonts/ArialNarrow.ttf",
-  "Comic Sans": "/static/fonts/ComicSans.ttf",
+  "Comic Sans MS": "/static/fonts/ComicSans.ttf",
   "Courier New": "/static/fonts/CourierNew.ttf",
   Georgia: "/static/fonts/Georgia.ttf",
   Impact: "/static/fonts/Impact.ttf",
