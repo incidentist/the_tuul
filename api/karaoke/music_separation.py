@@ -1,15 +1,13 @@
 import logging
 from pathlib import Path
-from typing import Tuple
 
 MODELS_DIR = Path.cwd() / "pretrained_models"
-# Use this one to remove vocals completely
-# MODEL_NAME = "UVR-MDX-NET-Inst_HQ_3.onnx"
 DEFAULT_MODEL = "UVR_MDXNET_KARA_2.onnx"
 
 AVAILABLE_MODELS = [
     "UVR_MDXNET_KARA_2.onnx",  # Keeps background vocals
-    "model_mel_band_roformer_ep_3005_sdr_11.4360.ckpt",  # Removes background vocals
+    # "model_mel_band_roformer_ep_3005_sdr_11.4360.ckpt",
+    "UVR-MDX-NET-Inst_HQ_3.onnx",  # Removes background vocals
 ]
 
 
@@ -46,7 +44,7 @@ def split_song(
     tracks = separator.separate(str(songfile))
 
     # The order of tracks in the output is not consistent, sadly
-    if model_name == "UVR_MDXNET_KARA_2.onnx":
+    if model_name in ["UVR_MDXNET_KARA_2.onnx", "UVR-MDX-NET-Inst_HQ_3.onnx"]:
         vocals_filename, accompaniment_filename = tracks
     else:
         accompaniment_filename, vocals_filename = tracks

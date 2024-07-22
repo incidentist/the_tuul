@@ -196,8 +196,7 @@ const fonts = {
 };
 
 const BACKING_VOCALS_SEPARATOR_MODEL = "UVR_MDXNET_KARA_2.onnx";
-const NO_VOCALS_SEPARATOR_MODEL =
-  "model_mel_band_roformer_ep_3005_sdr_11.4360.ckpt";
+const NO_VOCALS_SEPARATOR_MODEL = "UVR-MDX-NET-Inst_HQ_3.onnx";
 
 export default defineComponent({
   components: {

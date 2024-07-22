@@ -12,9 +12,6 @@ steps:
   - name: "gcr.io/cloud-builders/docker"
     script: |
       #!/usr/bin/env bash
-      apt-get update && apt-get install -y git-lfs
-      git lfs install
-      git lfs pull
       echo "Building ${_DOCKER_IMAGE}"
       docker buildx build -t "${_DOCKER_IMAGE}:latest" --cache-from "${_DOCKER_IMAGE}:latest" .
     automapSubstitutions: true
