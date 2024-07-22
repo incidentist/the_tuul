@@ -69,6 +69,6 @@ substitutions:
   _API_HOSTNAME: "https://separate.the-tuul.com"
   _DOCKER_IMAGE: "${_CLOUD_RUN_REGION}-docker.pkg.dev/${PROJECT_ID}/${_CLOUD_RUN_APP_NAME}/the_tuul"
 images:
-  - gcr.io/$PROJECT_ID/$_CLOUD_RUN_APP_NAME
+  - ${_DOCKER_IMAGE}
 options:
   dynamicSubstitutions: true
