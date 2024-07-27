@@ -4,6 +4,7 @@
         "baseUrl": "./",
         "sourceMap": true,
         "moduleResolution": "Bundler",
+        "esModuleInterop": true,
         "module": "ES2022",
         "paths": {
             "@/*": [
