@@ -329,6 +329,12 @@ export default defineComponent({
     loadSettings(): Object {
       try {
         const options = JSON.parse(localStorage.videoOptions || "{}");
+        if (
+          options.vocalSeparationModel ==
+          "model_mel_band_roformer_ep_3005_sdr_11.4360.ckpt"
+        ) {
+          options.vocalSeparationModel = NO_VOCALS_SEPARATOR_MODEL;
+        }
         options.color.background = Color.parseObject(options.color.background);
         options.color.primary = Color.parseObject(options.color.primary);
         options.color.secondary = Color.parseObject(options.color.secondary);
