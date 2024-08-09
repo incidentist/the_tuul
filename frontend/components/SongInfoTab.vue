@@ -1,9 +1,12 @@
 <template>
-  <b-tab-item
-    label="Song File"
-    icon="file-audio"
-    class="help-tab scroll-wrapper"
-  >
+  <b-tab-item :class="['help-tab', 'scroll-wrapper']">
+    <template #header>
+      <b-icon v-if="!isSeparatingTrack" icon="file-audio"></b-icon>
+      <b-tooltip v-else label="Separating track" position="is-right"
+        ><b-icon icon="loader" custom-class="loader"></b-icon
+      ></b-tooltip>
+      <span> Song File</span>
+    </template>
     <div class="container">
       <h2 class="title">Get Your Song Ready</h2>
       <file-upload
@@ -27,6 +30,13 @@
       <b-field label="Song Title">
         <b-input v-model="title" @input="onTextChange" />
       </b-field>
+      <b-field
+        horizontal
+        label="Include Backing Vocals"
+        class="backing-vocals-toggle"
+      >
+        <b-switch v-model="includeBackingVocals"></b-switch
+      ></b-field>
     </div>
 
     <b-collapse :open="false">
@@ -53,15 +63,37 @@
         />
       </div>
     </b-collapse>
+    <div class="buttons" v-if="!backingTrackFile">
+      <b-tooltip
+        position="is-right"
+        :label="separatingTrackMessage"
+        :always="isSeparatingTrack"
+      >
+        <b-button
+          label="Separate Track"
+          type="is-primary"
+          :disabled="!songFile"
+          :loading="isSeparatingTrack"
+          @click="separateTrack"
+        />
+      </b-tooltip>
+    </div>
   </b-tab-item>
 </template>
 
 <script lang="ts">
 import { defineComponent } from "vue";
+import { mapStores } from "pinia";
+
 // jsmediatags can't be installed via npm when used in-browser: https://github.com/aadsm/jsmediatags#browser
 const jsmediatags = require("@/jsmediatags.min.js");
 import { fetchYouTubeVideo, parseYouTubeTitle } from "@/lib/video";
 
+import {
+  useMusicSeparationStore,
+  BACKING_VOCALS_SEPARATOR_MODEL,
+  NO_VOCALS_SEPARATOR_MODEL,
+} from "@/stores/musicSeparation";
 import FileUpload from "@/components/FileUpload.vue";
 
 export default defineComponent({
@@ -70,6 +102,10 @@ export default defineComponent({
   },
   props: {
     value: Object,
+    musicSeparationModel: {
+      type: String,
+      default: BACKING_VOCALS_SEPARATOR_MODEL,
+    },
   },
   data() {
     return {
@@ -95,6 +131,27 @@ export default defineComponent({
         videoBlob: this.videoBlob,
       };
     },
+    isSeparatingTrack() {
+      return this.musicSeparationStore.isProcessing;
+    },
+    separatingTrackMessage() {
+      if (this.isSeparatingTrack) {
+        return "Separating track...head to the Lyrics tab to keep working on the song!";
+      }
+      return "Start separating the track while you work on the song timings. It's faster!";
+    },
+    includeBackingVocals: {
+      get() {
+        return this.musicSeparationModel == BACKING_VOCALS_SEPARATOR_MODEL;
+      },
+      set(value) {
+        this.onChange(
+          "musicSeparationModel",
+          value ? BACKING_VOCALS_SEPARATOR_MODEL : NO_VOCALS_SEPARATOR_MODEL
+        );
+      },
+    },
+    ...mapStores(useMusicSeparationStore),
   },
   methods: {
     async songDuration(songFile: File): Promise<number> {
@@ -163,11 +220,18 @@ export default defineComponent({
       };
       reader.readAsText(file);
     },
+    onSeparationModelChange(model) {
+      this.onChange("separationModel", model);
+    },
     onBackingTrackFileChange(file: File) {
       this.onChange("backingTrack", file);
     },
     onChange(optionName: string, newValue: any) {
       this.$emit("options-change", { [optionName]: newValue });
+    },
+    async separateTrack() {
+      const model = this.musicSeparationModel;
+      this.musicSeparationStore.startSeparation(this.songFile, model);
     },
   },
 });
@@ -176,5 +240,11 @@ export default defineComponent({
 .song-info-tab {
   overflow-x: hidden;
   overflow-y: auto;
+}
+
+.backing-vocals-toggle :deep(.field-label) {
+  text-align: left !important;
+  flex-grow: 0 !important;
+  flex-basis: fit-content;
 }
 </style>

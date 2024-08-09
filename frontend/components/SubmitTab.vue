@@ -49,9 +49,6 @@
             v-model="videoOptions.useBackgroundVideo"
           ></b-switch
         ></b-field>
-        <b-field horizontal label="Include Backing Vocals">
-          <b-switch expanded v-model="includeBackingVocals"></b-switch
-        ></b-field>
         <b-collapse :open="false">
           <template #trigger="props">
             <a aria-controls="contentIdForA11y4" :aria-expanded="props.open">
@@ -178,7 +175,10 @@ import Color from "buefy/src/utils/color";
 import jszip from "jszip";
 import video from "@/lib/video";
 import { CreationPhase } from "@/types";
-import { useMusicSeparationStore } from "@/stores/musicSeparation";
+import {
+  useMusicSeparationStore,
+  NO_VOCALS_SEPARATOR_MODEL,
+} from "@/stores/musicSeparation";
 
 const fonts = {
   "Andale Mono": "/static/fonts/AndaleMono.ttf",
@@ -194,9 +194,6 @@ const fonts = {
   Verdana: "/static/fonts/Verdana.ttf",
   "Liberation Sans": "/static/fonts/LiberationSans.ttf",
 };
-
-const BACKING_VOCALS_SEPARATOR_MODEL = "UVR_MDXNET_KARA_2.onnx";
-const NO_VOCALS_SEPARATOR_MODEL = "UVR-MDX-NET-Inst_HQ_3.onnx";
 
 export default defineComponent({
   components: {
@@ -214,6 +211,10 @@ export default defineComponent({
     songInfo: Object,
     lyricText: String,
     timings: Array,
+    musicSeparationModel: {
+      type: String,
+      required: true,
+    },
     enabled: {
       type: Boolean,
       default: false,
@@ -233,8 +234,6 @@ export default defineComponent({
         addStaggeredLines: true,
         useBackgroundVideo: this.songInfo.videoBlob != null,
         verticalAlignment: VerticalAlignment.Middle,
-        // Include background vocals by default
-        vocalSeparationModel: BACKING_VOCALS_SEPARATOR_MODEL,
         font: {
           size: 20,
           name: "Arial Narrow",
@@ -293,19 +292,6 @@ export default defineComponent({
       );
       return _.sum(_.map(screens, "audioDelay"));
     },
-    includeBackingVocals: {
-      get() {
-        return (
-          this.videoOptions.vocalSeparationModel ==
-          BACKING_VOCALS_SEPARATOR_MODEL
-        );
-      },
-      set(value) {
-        this.videoOptions.vocalSeparationModel = value
-          ? BACKING_VOCALS_SEPARATOR_MODEL
-          : NO_VOCALS_SEPARATOR_MODEL;
-      },
-    },
     zipFileName(): string {
       return `${this.videoFileName}.zip`;
     },
@@ -356,18 +342,22 @@ export default defineComponent({
     },
     async createVideo() {
       let self = this;
+      let elapsedTimeInterval: ReturnType<typeof setInterval>;
       this.isSubmitting = true;
-      const submissionStartTime = new Date();
-      const elapsedTimeInterval = setInterval(() => {
-        this.elapsedSubmissionTime =
-          new Date().getTime() - submissionStartTime.getTime();
-      }, 1000);
       try {
         this.creationPhase = CreationPhase.SeparatingVocals;
         this.videoProgress = 0;
+        elapsedTimeInterval = setInterval(() => {
+          if (!this.musicSeparationStore.separationStartTime) {
+            return;
+          }
+          this.elapsedSubmissionTime =
+            new Date().getTime() -
+            this.musicSeparationStore.separationStartTime.getTime();
+        }, 1000);
         const accompanimentDataUrl = await this.separateTrack(
           this.songFile,
-          this.videoOptions.vocalSeparationModel
+          this.musicSeparationModel
         );
         this.creationPhase = CreationPhase.CreatingVideo;
         const videoFile: Uint8Array = await video.createVideo(
