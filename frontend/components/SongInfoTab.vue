@@ -175,7 +175,12 @@ export default defineComponent({
       });
       return p;
     },
-    onSongFileChange(e) {
+    onSongFileChange(file: File | null) {
+      if (!file) {
+        this.songFile = null;
+        this.$emit("input", this.songInfo);
+        return;
+      }
       const self = this;
       jsmediatags.read(this.songFile, {
         async onSuccess(tag) {
@@ -213,7 +218,11 @@ export default defineComponent({
       this.isLoadingYouTube = false;
       this.$emit("input", this.songInfo);
     },
-    onTimingsFileChange(file: File) {
+    onTimingsFileChange(file: File | null) {
+      if (!file) {
+        this.onChange("timings", []);
+        return;
+      }
       const reader = new FileReader();
       reader.onload = (e) => {
         this.onChange("timings", JSON.parse(e.target.result.toString()));
@@ -223,7 +232,11 @@ export default defineComponent({
     onSeparationModelChange(model) {
       this.onChange("separationModel", model);
     },
-    onBackingTrackFileChange(file: File) {
+    onBackingTrackFileChange(file: File | null) {
+      if (!file) {
+        this.onChange("backingTrack", null);
+        return;
+      }
       this.onChange("backingTrack", file);
     },
     onChange(optionName: string, newValue: any) {

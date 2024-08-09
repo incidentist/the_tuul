@@ -9,7 +9,15 @@
         {{ file?.name || "No file chosen" }}
       </span>
     </b-upload>
-  </b-field>
+    <p class="control">
+      <b-button
+        type="is-danger is-light"
+        @click="file = null"
+        v-if="file"
+        icon-left="trash-can"
+      >
+      </b-button></p
+  ></b-field>
 </template>
 
 <script lang="ts">
