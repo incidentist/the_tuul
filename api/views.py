@@ -6,8 +6,7 @@ from typing import Tuple
 import zipfile
 
 import structlog
-
-import pytube
+import pytubefix as pytube
 
 from django.core.files.storage import FileSystemStorage
 from django.http import FileResponse, StreamingHttpResponse
@@ -19,6 +18,7 @@ from rest_framework.views import APIView
 
 from karaoke import make_karaoke_video
 from karaoke import music_separation
+from helpers import youtube_helper
 
 logger = structlog.get_logger(__name__)
 
@@ -99,7 +99,7 @@ class DownloadYouTubeVideo(APIView):
         with tempfile.TemporaryDirectory() as song_files_dir:
             song_files_dir_path = Path(song_files_dir)
 
-            metadata, audio_path, video_path = self.get_youtube_streams(
+            metadata, audio_path, video_path = youtube_helper.get_youtube_streams(
                 youtube_url, song_files_dir_path
             )
             logger.info("metadata", metadata=metadata)
@@ -118,36 +118,6 @@ class DownloadYouTubeVideo(APIView):
 
             logger.info("zip_complete", path=zip_path)
             return streamed_response(zip_path)
-
-    def get_youtube_streams(
-        self, youtube_url: str, song_files_dir: Path
-    ) -> Tuple[dict[str, str], Path, Path]:
-        """Download audio and video streams from YouTube URL.
-        Video has max resolution of 1080p.
-        Return audio and video paths.
-        """
-        youtube = pytube.YouTube(youtube_url)
-        audio_stream = youtube.streams.filter(only_audio=True).first()
-        video_stream = youtube.streams.filter(only_video=True, res="1080p").first()
-        if not video_stream:
-            video_stream = youtube.streams.filter(only_video=True).first()
-        audio_path = audio_stream.download(song_files_dir, "audio")
-        video_path = video_stream.download(song_files_dir, "video")
-        logger.info("video_stream", video_stream=video_stream)
-        return self.assemble_metadata(youtube), Path(audio_path), Path(video_path)
-
-    def assemble_metadata(self, youtube: pytube.YouTube) -> dict[str, str]:
-        metadata = {
-            "title": youtube.title,
-            "author": youtube.author,
-            "length": youtube.length,
-            "rating": youtube.rating,
-            "views": youtube.views,
-            "keywords": youtube.keywords,
-            "description": youtube.description,
-            # **youtube.metadata,
-        }
-        return metadata
 
 
 class GenerateVideo(APIView):
