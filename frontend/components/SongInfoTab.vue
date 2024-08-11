@@ -14,7 +14,13 @@
         v-model="songFile"
         @input="onSongFileChange"
       ></file-upload>
-      <b-field label="Or paste a YouTube video URL:">
+      <b-field
+        label="Or paste a YouTube video URL:"
+        :type="youtubeError ? 'is-danger' : ''"
+      >
+        <template #message>
+          <span v-html="youtubeError"></span>
+        </template>
         <b-input type="text" v-model="youtubeUrl" />
         <b-button
           label="Load"
@@ -118,6 +124,7 @@ export default defineComponent({
       videoBlob: null,
       timingsFile: null,
       backingTrackFile: null,
+      youtubeError: null,
     };
   },
   computed: {
@@ -200,6 +207,7 @@ export default defineComponent({
     },
     async loadYouTubeUrl() {
       this.isLoadingYouTube = true;
+      this.youtubeError = null;
       try {
         const [audioBlob, videoBlob, metadata] = await fetchYouTubeVideo(
           this.youtubeUrl
@@ -214,6 +222,7 @@ export default defineComponent({
         this.videoBlob = videoBlob;
       } catch (e) {
         console.error(e);
+        this.youtubeError = `There was a problem downloading that video: ${e.message}. Please try again or use a service such as <a href="https://v2.youconvert.net/en/">YouConvert</a> to get the audio and add it above.`;
       }
       this.isLoadingYouTube = false;
       this.$emit("input", this.songInfo);
