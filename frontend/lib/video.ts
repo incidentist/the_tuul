@@ -4,6 +4,15 @@ import { KaraokeOptions } from "@/lib/timing";
 import jszip from "jszip";
 // Functions related to video file creation
 
+class ApiError extends Error {
+    public path: string;
+    constructor(path: string, message: string) {
+        super(message);
+        this.path = path;
+        this.name = "ApiError";
+    }
+}
+
 function getFfmpegParams(hasVideo: boolean, backgroundColor: string, audioDelayMs: number, metadata: Object) {
     let videoInputArgs, filterArgs;
     if (hasVideo) {
@@ -128,6 +137,10 @@ async function createVideo(
 export async function fetchYouTubeVideo(url: string): Promise<[Blob, Blob, Object]> {
     const apiPath = "/download_video?url=" + url;
     const response = await fetch(apiPath);
+    if (response.status !== 200) {
+        const errMsg = await response.text();
+        throw new ApiError(apiPath, errMsg);
+    }
     const zipContents = await response.blob();
     const zip = await jszip.loadAsync(zipContents);
     const [audio, video, metadata] = await Promise.all([

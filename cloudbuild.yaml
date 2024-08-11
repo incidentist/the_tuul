@@ -1,5 +1,5 @@
 steps:
-  - name: "node"
+  - name: "node:21"
     entrypoint: "npm"
     args: ["install"]
   # Build the frontend
@@ -8,17 +8,13 @@ steps:
     args: ["run", "build"]
     env:
       - "API_HOSTNAME=$_API_HOSTNAME"
-  - id: "container_pull"
-    name: "gcr.io/cloud-builders/docker"
-    entrypoint: "bash"
-    args:
-      [
-        "-c",
-        "docker pull ${_DOCKER_IMAGE}:latest || exit 0",
-      ]
-  # Build the container image
+  # Build the container image after pulling in large model files
   - name: "gcr.io/cloud-builders/docker"
-    args: ["buildx", "build", "-t", "$_DOCKER_IMAGE", "."]
+    script: |
+      #!/usr/bin/env bash
+      echo "Building ${_DOCKER_IMAGE}"
+      docker buildx build -t "${_DOCKER_IMAGE}:latest" --cache-from "${_DOCKER_IMAGE}:latest" .
+    automapSubstitutions: true
   # Push the container image to Container Registry
   - id: "container_push"
     name: "gcr.io/cloud-builders/docker"
@@ -60,7 +56,7 @@ steps:
         "--concurrency=1",
         "--cpu=2",
         "--memory=8Gi",
-        "--timeout=1200s",
+        "--timeout=2400s",
         "--no-cpu-throttling",
         "--set-env-vars",
         "LOGGING_FORMAT=gcp"
@@ -73,6 +69,6 @@ substitutions:
   _API_HOSTNAME: "https://separate.the-tuul.com"
   _DOCKER_IMAGE: "${_CLOUD_RUN_REGION}-docker.pkg.dev/${PROJECT_ID}/${_CLOUD_RUN_APP_NAME}/the_tuul"
 images:
-  - gcr.io/$PROJECT_ID/$_CLOUD_RUN_APP_NAME
+  - ${_DOCKER_IMAGE}
 options:
   dynamicSubstitutions: true

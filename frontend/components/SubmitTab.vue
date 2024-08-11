@@ -173,16 +173,18 @@ import SourceFileDownloadLinks from "@/components/SourceFileDownloadLinks.vue";
 import VideoCreationProgressIndicator from "@/components/VideoCreationProgressIndicator.vue";
 import Color from "buefy/src/utils/color";
 import jszip from "jszip";
-import audio, { separateTrack } from "@/lib/audio";
 import video from "@/lib/video";
 import { CreationPhase } from "@/types";
-import { useMusicSeparationStore } from "@/stores/musicSeparation";
+import {
+  useMusicSeparationStore,
+  NO_VOCALS_SEPARATOR_MODEL,
+} from "@/stores/musicSeparation";
 
 const fonts = {
   "Andale Mono": "/static/fonts/AndaleMono.ttf",
   Arial: "/static/fonts/Arial.ttf",
   "Arial Narrow": "/static/fonts/ArialNarrow.ttf",
-  "Comic Sans": "/static/fonts/ComicSans.ttf",
+  "Comic Sans MS": "/static/fonts/ComicSans.ttf",
   "Courier New": "/static/fonts/CourierNew.ttf",
   Georgia: "/static/fonts/Georgia.ttf",
   Impact: "/static/fonts/Impact.ttf",
@@ -209,6 +211,10 @@ export default defineComponent({
     songInfo: Object,
     lyricText: String,
     timings: Array,
+    musicSeparationModel: {
+      type: String,
+      required: true,
+    },
     enabled: {
       type: Boolean,
       default: false,
@@ -309,6 +315,12 @@ export default defineComponent({
     loadSettings(): Object {
       try {
         const options = JSON.parse(localStorage.videoOptions || "{}");
+        if (
+          options.vocalSeparationModel ==
+          "model_mel_band_roformer_ep_3005_sdr_11.4360.ckpt"
+        ) {
+          options.vocalSeparationModel = NO_VOCALS_SEPARATOR_MODEL;
+        }
         options.color.background = Color.parseObject(options.color.background);
         options.color.primary = Color.parseObject(options.color.primary);
         options.color.secondary = Color.parseObject(options.color.secondary);
@@ -322,24 +334,31 @@ export default defineComponent({
     saveSettings(settings: Object) {
       localStorage.videoOptions = JSON.stringify(settings);
     },
-    async separateTrack(songFile: File) {
-      if (this.musicSeparationStore.musicSeparationResult == null) {
-        await this.musicSeparationStore.startSeparation(this.songFile);
+    async separateTrack(songFile: File, model: string) {
+      if (this.musicSeparationStore.result == null) {
+        await this.musicSeparationStore.startSeparation(songFile, model);
       }
       return await this.musicSeparationStore.result;
     },
     async createVideo() {
       let self = this;
+      let elapsedTimeInterval: ReturnType<typeof setInterval>;
       this.isSubmitting = true;
-      const submissionStartTime = new Date();
-      const elapsedTimeInterval = setInterval(() => {
-        this.elapsedSubmissionTime =
-          new Date().getTime() - submissionStartTime.getTime();
-      }, 1000);
       try {
         this.creationPhase = CreationPhase.SeparatingVocals;
         this.videoProgress = 0;
-        const accompanimentDataUrl = await this.separateTrack(this.songFile);
+        elapsedTimeInterval = setInterval(() => {
+          if (!this.musicSeparationStore.separationStartTime) {
+            return;
+          }
+          this.elapsedSubmissionTime =
+            new Date().getTime() -
+            this.musicSeparationStore.separationStartTime.getTime();
+        }, 1000);
+        const accompanimentDataUrl = await this.separateTrack(
+          this.songFile,
+          this.musicSeparationModel
+        );
         this.creationPhase = CreationPhase.CreatingVideo;
         const videoFile: Uint8Array = await video.createVideo(
           accompanimentDataUrl,

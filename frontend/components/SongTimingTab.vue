@@ -73,34 +73,17 @@
       <div class="level-item">
         <b-field class="playback-speed" label="Speed: " horizontal>
           <b-field>
-            <b-radio-button
-              class="is-flex"
-              v-model="playbackRate"
-              :native-value="1.5"
-            >
-              1.5
-            </b-radio-button>
-            <b-radio-button
-              class="is-flex"
-              v-model="playbackRate"
-              :native-value="1.0"
-            >
-              1.0
-            </b-radio-button>
-            <b-radio-button
-              class="is-flex"
-              v-model="playbackRate"
-              :native-value="0.9"
-            >
-              0.9
-            </b-radio-button>
-            <b-radio-button
-              class="is-flex"
-              v-model="playbackRate"
-              :native-value="0.7"
-            >
-              0.7
-            </b-radio-button>
+            <template v-for="val in [0.3, 0.5, 0.7, 0.9, 1.0, 1.5]">
+              <b-radio-button
+                :key="val"
+                :size="isMobile ? 'is-small' : ''"
+                class="is-flex"
+                v-model="playbackRate"
+                :native-value="val"
+              >
+                {{ val }}
+              </b-radio-button>
+            </template>
           </b-field>
         </b-field>
       </div>
@@ -280,5 +263,7 @@ export default defineComponent({
 <style scoped>
 .playback-speed {
   display: flex;
+  flex-grow: 1;
+  padding-right: 2em;
 }
 </style>
