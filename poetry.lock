@@ -1720,13 +1720,13 @@ testing = ["argcomplete", "attrs (>=19.2.0)", "hypothesis (>=3.56)", "mock", "no
 
 [[package]]
 name = "pytubefix"
-version = "6.9.2"
+version = "6.10.2"
 description = "Python3 library for downloading YouTube Videos."
 optional = false
 python-versions = ">=3.7"
 files = [
-    {file = "pytubefix-6.9.2-py3-none-any.whl", hash = "sha256:edde6e8150ba6ade276c9f5cab79ecddce9e05551e308582b033033b1a713872"},
-    {file = "pytubefix-6.9.2.tar.gz", hash = "sha256:40bf1292ff24a0f01c5b65d748417613329938b890e1a47d1232ee855592c2b9"},
+    {file = "pytubefix-6.10.2-py3-none-any.whl", hash = "sha256:a65906f7a79d4a0f69bff2ebf732b6115850337301cd2d0705669847ebad9433"},
+    {file = "pytubefix-6.10.2.tar.gz", hash = "sha256:7930d6d2c5bc698febf39b94c400919d0c8a84adebab8c7d37a9feacbc5cfc6a"},
 ]
 
 [[package]]
@@ -2281,4 +2281,4 @@ brotli = ["brotli"]
 [metadata]
 lock-version = "2.0"
 python-versions = ">=3.11,<3.12"
-content-hash = "977c16317ae91e9eb911385348d31c3f3bc5943797500ea1b3e4136574636a21"
+content-hash = "f86f1eac106455e8ef07ea807246ab0f61138939ad90db67bc61d60af0e9a34e"
