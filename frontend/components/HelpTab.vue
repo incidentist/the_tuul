@@ -3,7 +3,9 @@
     <div class="content">
       <p>
         <strong>Step 1: Choose a music file.</strong> Click the
-        <code>Choose a song file</code> button and pick your song. Easy.
+        <code>Song File</code> tab and pick your song via a YouTube URL or local
+        file. Easy. Click `Start Separation` to start the process of creating
+        the instrumental track while you work on the rest of it.
       </p>
       <p>
         <strong>Step 2: Prepare the lyrics.</strong> Paste song lyrics into the
@@ -43,7 +45,7 @@
       <h3>Some Notes</h3>
       <ul>
         <li>
-          A video demonstration of how to use this thing is
+          A (somewhat outdated) video demonstration of how to use this thing is
           <a href="https://www.youtube.com/watch?v=f6yzza_ZZY8">here</a>.
         </li>
         <li>
@@ -60,6 +62,17 @@
         </li>
       </ul>
       <h3>What's New</h3>
+      <h5>0.10 - August 11, 2024</h5>
+      <ul>
+        <li>
+          <strong>Background Separation</strong> - Start creating the instrumental track while you work on the lyric timings. Multitasking!
+        </li>
+        <li>
+          <strong>Slower Playback</strong> - Options for even slower playback during lyric timings.
+        </li>
+        <li>
+          <strong>Bring Your Own Files</strong> - Use your own backing track, or song timings, by uploading them to the Advanced section of the Song Info tab.
+        </li>
       <h5>0.9 - July 4, 2024</h5>
       <ul>
         <li>
@@ -102,31 +115,6 @@
           <strong>Fonts and Colors</strong> - You can configure the font and
           colors of your video before you submit it. Let me know if you want a
           specific font added.
-        </li>
-      </ul>
-      <h5>October 21, 2023</h5>
-      <ul>
-        <li>
-          <strong>New Backend</strong> - We now use a higher-quality vocal
-          separation model from
-          <a href="https://ultimatevocalremover.com/">Ultimate Vocal Remover</a
-          >. It sounds better than Spleeter (our old model) and leaves in the
-          background vocals. Thanks to
-          <a href="https://github.com/beveradb">@beveradb</a> for the help!
-        </li>
-        <li>
-          <strong>Works on Mobile</strong> - The Tüül has gone handheld. Mobile
-          users should now be able to complete the entire process, thanks to
-          "Spacebar" and "Enter" buttons. Show or hide the buttons by toggling
-          the <b-icon icon="keyboard" /> button in the Song Timing tab.
-        </li>
-      </ul>
-      <h5>June 25, 2023</h5>
-      <ul>
-        <li>
-          <strong>Video Preview</strong> - You can now see what your video will
-          look like before you create it. Unlike the finished video, the preview
-          has vocals in it so you can see how well the timing matches up.
         </li>
       </ul>
     </div>
