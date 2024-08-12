@@ -65,14 +65,19 @@
       <h5>0.10 - August 11, 2024</h5>
       <ul>
         <li>
-          <strong>Background Separation</strong> - Start creating the instrumental track while you work on the lyric timings. Multitasking!
+          <strong>Background Separation</strong> - Start creating the
+          instrumental track while you work on the lyric timings. Multitasking!
         </li>
         <li>
-          <strong>Slower Playback</strong> - Options for even slower playback during lyric timings.
+          <strong>Slower Playback</strong> - Options for even slower playback
+          during lyric timings.
         </li>
         <li>
-          <strong>Bring Your Own Files</strong> - Use your own backing track, or song timings, by uploading them to the Advanced section of the Song Info tab.
+          <strong>Bring Your Own Files</strong> - Use your own backing track, or
+          song timings, by uploading them to the Advanced section of the Song
+          Info tab.
         </li>
+      </ul>
       <h5>0.9 - July 4, 2024</h5>
       <ul>
         <li>
