@@ -40,7 +40,9 @@ ENV APP_HOME=/app \
     # Service must listen to $PORT environment variable.
     # This default value facilitates local development.
     PORT=8080 \
-    WORKER_COUNT=1
+    WORKER_COUNT=1 \
+    DEBUG=False \
+    SECRET_KEY=SECRET_KEY
 
 WORKDIR $APP_HOME
 
