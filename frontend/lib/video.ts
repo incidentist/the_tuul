@@ -6,10 +6,17 @@ import jszip from "jszip";
 
 class ApiError extends Error {
     public path: string;
-    constructor(path: string, message: string) {
+    public status: number;
+
+    constructor(path: string, message: string, status?: number) {
         super(message);
         this.path = path;
         this.name = "ApiError";
+        this.status = status;
+    }
+
+    toString() {
+        return `${this.name}: ${this.message} (status: ${this.status ?? "N/A"}, path: ${this.path})`;
     }
 }
 
@@ -139,7 +146,7 @@ export async function fetchYouTubeVideo(url: string): Promise<[Blob, Blob, Objec
     const response = await fetch(apiPath);
     if (response.status !== 200) {
         const errMsg = await response.text();
-        throw new ApiError(apiPath, errMsg);
+        throw new ApiError(apiPath, errMsg, response.status);
     }
     const zipContents = await response.blob();
     const zip = await jszip.loadAsync(zipContents);

@@ -15,6 +15,7 @@ from django.views.generic.base import TemplateView
 from rest_framework.response import Response
 from rest_framework.request import Request
 from rest_framework.views import APIView
+from rest_framework import status
 
 from karaoke import make_karaoke_video
 from karaoke import music_separation
@@ -87,6 +88,7 @@ class DownloadYouTubeVideo(APIView):
     """
 
     def get(self, request: Request, format: str | None = None) -> Response:
+        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
         """Return a zip containing vocal and accompaniment splits of songFile, and song metadata"""
         youtube_url = request.query_params.get("url")
         logger.info(
@@ -204,3 +206,12 @@ class GenerateVideo(APIView):
         if artist and title:
             return f"{artist} - {title} [karaoke].mp4".replace("/", "_")
         return "karaoke.mp4"
+
+
+class LogError(APIView):
+    """Log client errors"""
+
+    def post(self, request: Request, format=None) -> Response:
+        error_data = request.data
+        logger.error("Client error", extra=error_data)
+        return Response({"success": True}, status=status.HTTP_200_OK)
