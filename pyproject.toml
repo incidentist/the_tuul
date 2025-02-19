@@ -16,7 +16,7 @@ django-webpack-loader = "^2.0.1"
 audio-separator = {extras = ["cpu"], version = "^0.18.3"}
 django-cors-headers = "^4.3.1"
 django-structlog = "^6.0.0"
-pytubefix = "^6.10.2"
+pytubefix = "^8.12.1"
 
 
 [tool.poetry.group.dev.dependencies]
