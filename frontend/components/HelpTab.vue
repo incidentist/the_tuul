@@ -62,6 +62,10 @@
         </li>
       </ul>
       <h3>What's New</h3>
+      <h5>0.11 - February 19, 2025</h5>
+      <ul>
+        <li>YouTube downloads should be fixed now.</li>
+      </ul>
       <h5>0.10 - August 11, 2024</h5>
       <ul>
         <li>
@@ -112,14 +116,6 @@
           <strong>Early Lyric Display</strong> - When the first line on a screen
           comes right after the last line on the previous screen, the line will
           appear early.
-        </li>
-      </ul>
-      <h5>November 19, 2023</h5>
-      <ul>
-        <li>
-          <strong>Fonts and Colors</strong> - You can configure the font and
-          colors of your video before you submit it. Let me know if you want a
-          specific font added.
         </li>
       </ul>
     </div>
