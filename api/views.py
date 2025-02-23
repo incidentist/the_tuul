@@ -88,7 +88,6 @@ class DownloadYouTubeVideo(APIView):
     """
 
     def get(self, request: Request, format: str | None = None) -> Response:
-        return Response(status=status.HTTP_405_METHOD_NOT_ALLOWED)
         """Return a zip containing vocal and accompaniment splits of songFile, and song metadata"""
         youtube_url = request.query_params.get("url")
         logger.info(
