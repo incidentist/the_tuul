@@ -16,6 +16,7 @@ import {
 } from "@/lib/wavesurferPlugins/OpenEndedRegionPlugin";
 import Wavesurfer from "@/components/Wavesurfer.vue";
 import SmoothAudioPlayer from "./SmoothAudioPlayer.vue";
+import { useSettingsStore } from "@/stores/settings";
 
 import { LyricEvent, adjustSegmentTiming } from "@/lib/timing";
 import { LYRIC_MARKERS } from "@/constants";
@@ -43,6 +44,12 @@ export default defineComponent({
     audioData: Blob,
     // URL to the vocal track audio file
     vocalTrack: { type: Blob, required: false },
+  },
+  setup() {
+    const settingsStore = useSettingsStore();
+    return {
+      settingsStore,
+    };
   },
   data() {
     return {
@@ -140,7 +147,7 @@ export default defineComponent({
     },
     previewNewTiming(region: Region) {
       // When a timing changes, set the playhead 5 seconds before the changed region
-      const newPlayhead = Math.max(0, region.start - 5);
+      const newPlayhead = Math.max(0, region.start - this.settingsStore.videoOptions.skipBackSecs);
       this.setAudioPlayhead(newPlayhead);
     },
     onTimeUpdate(time: number) {

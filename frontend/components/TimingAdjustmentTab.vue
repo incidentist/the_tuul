@@ -8,6 +8,15 @@
         lyric's rectangle. If you marked the end of a lyric with the Enter key,
         you can also adjust the end of it.
       </p>
+      <b-field label="Skip Back Seconds" label-position="on-border">
+        <template #label>
+          Skip Back Seconds
+          <b-tooltip label="Number of seconds to rewind when a timing is adjusted." position="is-right">
+            <b-icon icon="help-circle-outline" size="is-small" />
+          </b-tooltip>
+        </template>
+        <b-input type="number" v-model.number="settingsStore.videoOptions.skipBackSecs" min="0" />
+      </b-field>
     </div>
     <subtitle-display class="subtitle-display" v-if="songFile && adjustmentSubtitles" ref="subtitleDisplay" :subtitles="adjustmentSubtitles"
       :fonts="{}" :backgroundColor="settingsStore.videoOptions.color.background.toString()" />

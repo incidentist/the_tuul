@@ -24,10 +24,12 @@ export type VideoSettings = {
     primary: Color;
     secondary: Color;
   };
+  skipBackSecs: number;
 }
 
 // Define StoredSettings by overriding the color fields in VideoSettings
 type StoredSettings = Omit<VideoSettings, 'color'> & {
+  skipBackSecs: number;
   color: {
     background: string;
     primary: string;
@@ -53,6 +55,7 @@ const DEFAULT_SETTINGS: VideoSettings = {
     primary: Color.parse("#FF00FF"),    // magenta
     secondary: Color.parse("#00FFFF"),  // cyan
   },
+  skipBackSecs: 5,
 };
 
 export const useSettingsStore = defineStore('settings', () => {
