@@ -27,7 +27,7 @@ def get_cache_hash(model_name: str, song_file_data: bytes) -> str:
 
 
 def fetch_from_cache(
-    cache_hash: str, bucket_name: Optional[str] = None
+    cache_hash: str, bucket_name: Optional[str] = None, folder: str = "separated_tracks"
 ) -> Optional[str]:
     """
     Try to fetch a zip file from Google Cloud Storage based on the hash.
@@ -40,7 +40,7 @@ def fetch_from_cache(
     if not bucket_name:
         return None
 
-    blob_name = f"separated_tracks/{cache_hash}.zip"
+    blob_name = f"{folder}/{cache_hash}.zip"
 
     try:
         storage_client = storage.Client()
@@ -59,10 +59,8 @@ def fetch_from_cache(
                 "cache_placeholder_found", cache_hash=cache_hash, blob_name=blob_name
             )
         else:
-            logger.info(
-                "cache_hit", cache_hash=cache_hash, blob_name=blob_name
-            )
-        
+            logger.info("cache_hit", cache_hash=cache_hash, blob_name=blob_name)
+
         # Return public URL for both placeholder and completed cache
         return blob.public_url
 
@@ -80,7 +78,10 @@ def fetch_from_cache(
 
 
 def upload_to_cache(
-    cache_hash: str, zip_path: Path, bucket_name: Optional[str] = None
+    cache_hash: str,
+    zip_path: Path,
+    bucket_name: Optional[str] = None,
+    folder: str = "separated_tracks",
 ) -> bool:
     """
     Upload the zip file to Google Cloud Storage using the hash as a key.
@@ -91,7 +92,7 @@ def upload_to_cache(
     if not bucket_name:
         return False
 
-    blob_name = f"separated_tracks/{cache_hash}.zip"
+    blob_name = f"{folder}/{cache_hash}.zip"
 
     try:
         # Upload the file to GCS
@@ -121,7 +122,7 @@ def upload_to_cache(
 
 
 def create_cache_placeholder(
-    cache_hash: str, bucket_name: Optional[str] = None
+    cache_hash: str, bucket_name: Optional[str] = None, folder: str = "separated_tracks"
 ) -> Optional[str]:
     """
     Create a placeholder JSON file in GCS to indicate processing has started.
@@ -133,7 +134,7 @@ def create_cache_placeholder(
     if not bucket_name:
         return None
 
-    blob_name = f"separated_tracks/{cache_hash}.zip"
+    blob_name = f"{folder}/{cache_hash}.zip"
     placeholder_data = {"startTime": int(time.time()), "status": "processing"}
 
     try:

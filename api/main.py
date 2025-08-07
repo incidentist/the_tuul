@@ -1,4 +1,3 @@
-import json
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -69,6 +68,10 @@ class LogErrorRequest(BaseModel):
 
 class SeparationPollResponse(BaseModel):
     finishedTrackURL: str
+
+
+class DownloadPollResponse(BaseModel):
+    finishedDownloadURL: str
 
 
 def streamed_response(file_path: Path) -> StreamingResponse:
@@ -211,31 +214,43 @@ async def separate_track(
 
 
 @app.get("/download_video")
-async def download_youtube_video(url: str = Query(...)):
+async def download_youtube_video(
+    background_tasks: BackgroundTasks, youtube_url: str = Query(..., alias="url")
+):
     """Download a YouTube video as audio and video streams and return them as a zip."""
-    logger.info("download_youtube_video", youtube_url=url)
+    logger.info("download_youtube_video", youtube_url=youtube_url)
 
-    if not url:
+    if not youtube_url:
         raise HTTPException(status_code=400, detail="No url provided.")
 
+    # Extract video ID from URL using pytube
+    try:
+        video_id = youtube_helper.get_video_id(youtube_url)
+        logger.info("extracted_video_id", video_id=video_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    # Check if we have storage configured
+    if settings.SEPARATED_TRACKS_BUCKET:
+        # Generate the expected GCS URL
+        bucket_name = settings.SEPARATED_TRACKS_BUCKET
+        poll_url = f"https://storage.googleapis.com/{bucket_name}/downloaded_videos/{video_id}.zip"
+
+        # Start background task to process download
+        background_tasks.add_task(
+            youtube_helper.process_youtube_download_background, video_id, youtube_url
+        )
+
+        # Return URL immediately for client to poll
+        logger.info("returning_youtube_poll_url", video_id=video_id, poll_url=poll_url)
+        return DownloadPollResponse(finishedDownloadURL=poll_url)
+
+    # Fallback to synchronous processing if no storage configured
     with tempfile.TemporaryDirectory() as song_files_dir:
         song_files_dir_path = Path(song_files_dir)
-
-        metadata, audio_path, video_path = youtube_helper.get_youtube_streams(
-            url, song_files_dir_path
+        zip_path = youtube_helper.download_and_zip_youtube(
+            video_id, youtube_url, song_files_dir_path
         )
-        logger.info("metadata", metadata=metadata)
-        (song_files_dir_path / "metadata.json").write_text(json.dumps(metadata))
-        zip_path = zip_helper.create_zip_file(
-            song_files_dir_path / "youtube_video.zip",
-            [
-                (audio_path, "audio.mp4"),
-                (video_path, "video.mp4"),
-                (song_files_dir_path / "metadata.json", "metadata.json"),
-            ],
-        )
-
-        logger.info("zip_complete", path=zip_path)
         return streamed_response(zip_path)
 
 

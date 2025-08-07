@@ -1,4 +1,5 @@
 import json
+import tempfile
 import zipfile
 from io import BytesIO
 from pathlib import Path
@@ -153,3 +154,91 @@ def test_download_youtube_video_integration(youtube_url, youtube_fixture_dir):
                 metadata = json.load(f)
                 assert "title" in metadata
                 assert "author" in metadata
+
+
+@pytest.mark.parametrize("youtube_url", ["https://www.youtube.com/watch?v=gVw-wI1GeqI"])
+def test_download_youtube_video_async_with_storage(youtube_url):
+    """Test the YouTube download API endpoint with async flow when storage is configured."""
+    client = TestClient(app)
+    url = f"/download_video?url={youtube_url}"
+
+    # Mock the background task processing
+    with mock.patch("api.helpers.youtube_helper.process_youtube_download_background") as mock_background_task:
+        
+        # Test with storage bucket configured
+        with mock.patch("api.settings.SEPARATED_TRACKS_BUCKET", "test-bucket"):
+            response = client.get(url)
+
+            # Should return JSON with polling URL
+            assert response.status_code == 200
+            assert response.headers["content-type"] == "application/json"
+            
+            response_data = response.json()
+            assert "finishedDownloadURL" in response_data
+            expected_url = "https://storage.googleapis.com/test-bucket/downloaded_videos/gVw-wI1GeqI.zip"
+            assert response_data["finishedDownloadURL"] == expected_url
+            
+            # Verify background task was called with correct parameters
+            mock_background_task.assert_called_once_with("gVw-wI1GeqI", youtube_url)
+
+
+def test_download_youtube_video_invalid_url():
+    """Test that invalid YouTube URLs return 400 error."""
+    client = TestClient(app)
+    
+    response = client.get("/download_video?url=invalid-url")
+    
+    assert response.status_code == 400
+    assert "Invalid YouTube URL" in response.json()["detail"]
+
+
+@mock.patch("api.helpers.youtube_helper.get_youtube_streams")
+@mock.patch("api.helpers.zip_helper.create_zip_file")
+@mock.patch("api.helpers.cloud_storage.upload_to_cache")
+def test_process_youtube_download_background(
+    mock_upload_to_cache,
+    mock_create_zip_file,
+    mock_get_youtube_streams
+):
+    """Test the background task for processing YouTube downloads."""
+    video_id = "gVw-wI1GeqI"
+    youtube_url = "https://www.youtube.com/watch?v=gVw-wI1GeqI"
+    
+    # Setup mocks
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_dir_path = Path(temp_dir)
+        audio_path = temp_dir_path / "audio.mp4"
+        video_path = temp_dir_path / "video.mp4"
+        zip_path = temp_dir_path / "youtube_video.zip"
+        
+        # Create test files
+        audio_path.write_bytes(b"audio content")
+        video_path.write_bytes(b"video content")
+        zip_path.write_bytes(b"zip content")
+        
+        # Mock return values
+        mock_metadata = {"title": "Test Video", "author": "Test Author"}
+        mock_get_youtube_streams.return_value = (mock_metadata, audio_path, video_path)
+        mock_create_zip_file.return_value = zip_path
+        mock_upload_to_cache.return_value = True
+        
+        # Call the background function
+        youtube_helper.process_youtube_download_background(video_id, youtube_url)
+        
+        # Verify the function calls
+        mock_get_youtube_streams.assert_called_once()
+        mock_create_zip_file.assert_called_once()
+        
+        # Verify upload was called with correct parameters
+        mock_upload_to_cache.assert_called_once_with(
+            video_id, zip_path, folder="downloaded_videos"
+        )
+        
+        # Verify the zip file was created with correct files
+        create_zip_call = mock_create_zip_file.call_args
+        files_to_zip = create_zip_call[0][1]  # Second argument is the files list
+        file_names = [item[1] for item in files_to_zip]  # Extract target filenames
+        
+        assert "audio.mp4" in file_names
+        assert "video.mp4" in file_names
+        assert "metadata.json" in file_names

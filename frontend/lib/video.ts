@@ -176,6 +176,43 @@ async function createVideo(
     return videoData;
 }
 
+interface DownloadPollResponse {
+    finishedDownloadURL: string;
+}
+
+async function pollForVideoResult(url: string): Promise<Blob> {
+    const POLL_INTERVAL = 10000; // 10 seconds
+    while (true) {
+        let response: Response;
+        try {
+            response = await fetch(url, {
+                cache: 'no-cache'
+            });
+        } catch (error) {
+            console.error('pollForVideoResult fetch failed:', {
+                url,
+                error: error.message,
+                errorType: error.constructor.name,
+                stack: error.stack
+            });
+            throw error;
+        }
+
+        // For video downloads, a 404 means it's still processing
+        if (response.status === 404) {
+            await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL));
+            continue;
+        }
+
+        if (response.status !== 200) {
+            const errMsg = await response.text();
+            throw new ApiError(url, errMsg, response.status);
+        }
+
+        return await response.blob();
+    }
+}
+
 export async function fetchYouTubeVideo(url: string): Promise<[Blob, Blob, Object]> {
     const apiPath = "/download_video?url=" + url;
     const response = await fetch(apiPath);
@@ -183,7 +220,19 @@ export async function fetchYouTubeVideo(url: string): Promise<[Blob, Blob, Objec
         const errMsg = await response.text();
         throw new ApiError(apiPath, errMsg, response.status);
     }
-    const zipContents = await response.blob();
+
+    const contentType = response.headers.get("content-type");
+
+    let zipContents: Blob;
+
+    // The endpoint can return either a JSON response with a URL to poll for results or a direct ZIP file response
+    if (contentType?.includes("application/json")) {
+        const jsonResponse: DownloadPollResponse = await response.json();
+        zipContents = await pollForVideoResult(jsonResponse.finishedDownloadURL);
+    } else {
+        zipContents = await response.blob();
+    }
+
     const zip = await jszip.loadAsync(zipContents);
     const [audio, video, metadata] = await Promise.all([
         zip.file("audio.mp4").async("blob"),
