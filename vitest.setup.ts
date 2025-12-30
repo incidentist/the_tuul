@@ -22,3 +22,15 @@ vi.mock('libass-wasm', () => {
         })
     };
 });
+
+// Mock AudioContext for tests
+global.AudioContext = vi.fn().mockImplementation(() => ({
+    createBuffer: vi.fn(),
+    createBufferSource: vi.fn(),
+    decodeAudioData: vi.fn().mockResolvedValue({
+        duration: 180,
+        numberOfChannels: 2,
+        sampleRate: 44100,
+    }),
+    destination: {},
+})) as any;
