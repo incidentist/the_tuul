@@ -37,7 +37,7 @@
           </template>
           <b-field horizontal label="Font">
             <b-select v-model="videoOptions.font.name">
-              <option v-for="(path, name) in fonts" :key="path" :value="name"
+              <option v-for="name in fontNames" :key="name" :value="name"
                 :selected="name == videoOptions.font.name">
                 {{ name }}
               </option>
@@ -112,19 +112,9 @@ import { useSettingsStore } from "@/stores/settings";
 import { useTimingsStore } from "@/stores/timings";
 import { useLyricsStore } from "@/stores/lyrics";
 
-const fonts = {
-  "Andale Mono": "/static/fonts/AndaleMono.ttf",
-  Arial: "/static/fonts/Arial.ttf",
-  "Arial Narrow": "/static/fonts/ArialNarrow.ttf",
-  "Comic Sans MS": "/static/fonts/ComicSans.ttf",
-  "Courier New": "/static/fonts/CourierNew.ttf",
-  Georgia: "/static/fonts/Georgia.ttf",
-  Impact: "/static/fonts/Impact.ttf",
-  "Metal Mania": "/static/fonts/MetalMania.ttf",
-  "Times New Roman": "/static/fonts/TimesNewRoman.ttf",
-  Trebuchet: "/static/fonts/Trebuchet.ttf",
-  Verdana: "/static/fonts/Verdana.ttf",
-  "Liberation Sans": "/static/fonts/LiberationSans.ttf",
+type FontOption = {
+  name: string;
+  path: string;
 };
 
 export default defineComponent({
@@ -156,7 +146,8 @@ export default defineComponent({
   },
   data() {
     return {
-      fonts,
+      fonts: {} as Record<string, string>,
+      fontNames: [] as string[],
       VerticalAlignment,
       isSubmitting: false,
       elapsedSubmissionTime: null,
@@ -165,11 +156,12 @@ export default defineComponent({
       submitError: null,
     };
   },
-  mounted() {
+  async mounted() {
     // Initialize useBackgroundVideo based on whether the song has a video
     if (this.mediaStore.videoBlob != null) {
       this.videoOptions.useBackgroundVideo = true;
     }
+    await this.loadFonts();
   },
 
   computed: {
@@ -235,6 +227,36 @@ export default defineComponent({
     },
   },
   methods: {
+    async loadFonts() {
+      try {
+        const response = await fetch("/api/fonts");
+        if (!response.ok) {
+          throw new Error(`Failed to fetch fonts: ${response.status}`);
+        }
+        const data = await response.json();
+        const options = (data?.fonts || []) as FontOption[];
+
+        this.fonts = options.reduce((acc, option) => {
+          if (option?.name && option?.path) {
+            acc[option.name] = option.path;
+          }
+          return acc;
+        }, {} as Record<string, string>);
+
+        this.fontNames = Object.keys(this.fonts).sort((a, b) =>
+          a.localeCompare(b)
+        );
+
+        if (
+          this.fontNames.length > 0 &&
+          !this.fontNames.includes(this.videoOptions.font.name)
+        ) {
+          this.videoOptions.font.name = this.fontNames[0];
+        }
+      } catch (e) {
+        console.error("Unable to load fonts", e);
+      }
+    },
     async separateTrack(
       songFile: File,
       model: string
@@ -301,7 +323,7 @@ export default defineComponent({
             title: this.mediaStore.songTitle,
             duration: this.mediaStore.songDuration,
           },
-          fonts,
+          this.fonts,
           (progress) => {
             self.videoProgress = progress;
           }
