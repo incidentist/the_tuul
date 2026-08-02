@@ -1,8 +1,9 @@
 {
     "compilerOptions": {
         "target": "ES2022",
-        "baseUrl": "./",
         "sourceMap": true,
+        "skipLibCheck": true,
+        "strict": false,
         "moduleResolution": "Bundler",
         "esModuleInterop": true,
         "module": "ES2022",
@@ -17,6 +18,7 @@
         },
         "types": [
             "vitest/globals",
+            "node",
         ]
     },
     "vueCompilerOptions": {

@@ -5,22 +5,22 @@ import { pullAt } from 'lodash-es';
 import { useLyricsStore } from './lyrics';
 import { useMediaStore } from './media';
 import { useSettingsStore } from './settings';
-import { createAssFile, DEFAULT_KARAOKE_OPTIONS } from "@/lib/timing";
+import { createAssFile, DEFAULT_KARAOKE_OPTIONS, LyricEvent } from "@/lib/timing";
 import { VideoSettings } from './settings';
 
 export const useTimingsStore = defineStore('timings', {
   state: () => ({
-    _timings: []
+    _timings: [] as LyricEvent[]
   }),
 
   getters: {
     length(state): number { return state._timings.length; },
 
-    last(state) {
+    last(state): LyricEvent | null {
       return this.length > 0 ? state._timings[this.length - 1] : null;
     },
 
-    rawTimings: (state) => state._timings,
+    rawTimings: (state): LyricEvent[] => state._timings,
 
     toArray: (state) => () => {
       return state._timings;
@@ -67,6 +67,10 @@ export const useTimingsStore = defineStore('timings', {
         const mediaStore = useMediaStore();
         const settingsStore = useSettingsStore();
 
+        if (mediaStore.songDuration === null || mediaStore.songTitle === null || mediaStore.songArtist === null) {
+          return "";
+        }
+
         try {
           const videoOptions = settingsStore.videoOptions || DEFAULT_KARAOKE_OPTIONS;
           
@@ -92,7 +96,7 @@ export const useTimingsStore = defineStore('timings', {
   },
 
   actions: {
-    add(currentSegmentNum, keyCode, timestamp) {
+    add(currentSegmentNum: number, keyCode: number, timestamp: number) {
       if (currentSegmentNum < 0) {
         return;
       }
@@ -109,7 +113,7 @@ export const useTimingsStore = defineStore('timings', {
       this._timings.push([timestamp, marker]);
     },
 
-    handleConflictWithPreviousSegment(segmentStartTimestamp) {
+    handleConflictWithPreviousSegment(segmentStartTimestamp: number) {
       // If the user has entered a segment start time that is before the end of
       // the previous segment, adjust the end of the previous segment
       const previousTiming = this._timings.at(-1);
@@ -122,7 +126,7 @@ export const useTimingsStore = defineStore('timings', {
       }
     },
 
-    timingForSegmentNum(segmentNum) {
+    timingForSegmentNum(segmentNum: number) {
       const starts = this._timings.filter(
         (t) => t[1] == LYRIC_MARKERS.SEGMENT_START
       );
@@ -134,7 +138,7 @@ export const useTimingsStore = defineStore('timings', {
       return starts[segmentNum][0];
     },
 
-    setCurrentSegment(segmentNum) {
+    setCurrentSegment(segmentNum: number) {
       // Set the segment we're currently listening for to segmentNum
       let i = 0,
         currentSegment = 0;
@@ -154,7 +158,7 @@ export const useTimingsStore = defineStore('timings', {
       this.resetTimings(this._timings.slice(0, i));
     },
 
-    resetTimings(newTimings = []) {
+    resetTimings(newTimings: LyricEvent[] = []) {
       this._timings = [...newTimings];
     }
   }

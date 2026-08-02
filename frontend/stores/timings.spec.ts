@@ -5,6 +5,7 @@ import { useMediaStore } from './media';
 import { useSettingsStore } from './settings';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { KEY_CODES, LYRIC_MARKERS } from '@/constants';
+import type { LyricEvent } from '@/lib/timing';
 
 // Mock the createAssFile function
 vi.mock('@/lib/timing', () => ({
@@ -73,7 +74,7 @@ describe('Timings Store', () => {
     timings.add(0, KEY_CODES.SPACEBAR, 1.0);
     expect(timings.length).toBe(1);
 
-    const newTimings = [[2.0, LYRIC_MARKERS.SEGMENT_START], [5.0, LYRIC_MARKERS.SEGMENT_END]];
+    const newTimings: LyricEvent[] = [[2.0, LYRIC_MARKERS.SEGMENT_START], [5.0, LYRIC_MARKERS.SEGMENT_END]];
     timings.resetTimings(newTimings);
 
     expect(timings.length).toBe(2);
