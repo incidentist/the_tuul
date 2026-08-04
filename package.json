@@ -43,27 +43,27 @@
     "buefy": "^3.0.10",
     "jszip": "^3.10.1",
     "libass-wasm": "^4.1.0",
-    "lodash-es": "^4.17.21",
+    "lodash-es": "^4.18.1",
     "pinia": "^4.0.2",
-    "vue": "^3.5.13",
-    "wavesurfer.js": "^7.8.2"
+    "vue": "^3.5.40",
+    "wavesurfer.js": "^7.12.11"
   },
   "devDependencies": {
     "@ffmpeg/types": "^0.12.4",
-    "@playwright/test": "^1.51.1",
+    "@playwright/test": "^1.62.1",
     "@types/jsmediatags": "^3.9.6",
-    "@types/lodash": "^4.14.195",
+    "@types/lodash": "^4.17.25",
     "@types/node": "^26.1.2",
     "@vitejs/plugin-vue": "^6.0.8",
-    "@vue/test-utils": "^2.4.6",
+    "@vue/test-utils": "^2.4.11",
     "happy-dom": "^20.11.1",
-    "playwright": "^1.25.0",
-    "sass-embedded": "^1.86.0",
+    "playwright": "^1.62.1",
+    "sass-embedded": "^1.100.0",
     "typescript": "^7.0.2",
     "vite": "^8.2.0",
     "vitest": "^4.1.10"
   },
   "optionalDependencies": {
-    "@rollup/rollup-linux-x64-gnu": "^4.39.0"
+    "@rollup/rollup-linux-x64-gnu": "^4.62.4"
   }
 }
