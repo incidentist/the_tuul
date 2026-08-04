@@ -12,7 +12,7 @@ vi.mock('libass-wasm', () => {
     console.log('Mocking libass-wasm in test file');
     return {
         __esModule: true,
-        default: vi.fn().mockImplementation((options) => {
+        default: vi.fn().mockImplementation(function (options) {
             console.log('Mock constructor called in test');
             return {
                 setTrack: vi.fn(),

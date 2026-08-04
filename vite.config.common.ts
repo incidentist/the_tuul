@@ -5,7 +5,7 @@ import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 
 const commonConfig: UserConfig = {
-    root: resolve(__dirname, './frontend'),
+    root: resolve(import.meta.dirname, './frontend'),
     // URL prefix for assets, should be the same as DJANGO_VITE.static_url_prefix
     // in settings.py
     base: '/bundles/',
@@ -35,7 +35,7 @@ const commonConfig: UserConfig = {
     ],
     resolve: {
         alias: {
-            '@': resolve(__dirname, './frontend'),
+            '@': resolve(import.meta.dirname, './frontend'),
         },
     },
     build: {
@@ -44,7 +44,7 @@ const commonConfig: UserConfig = {
         manifest: true,
         sourcemap: false,
         rollupOptions: {
-            input: resolve(__dirname, 'frontend/index.ts'),
+            input: resolve(import.meta.dirname, 'frontend/index.ts'),
         }
     }
 }

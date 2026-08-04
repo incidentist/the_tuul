@@ -7,7 +7,7 @@ export default defineConfig({
     plugins: [vue2()],
     resolve: {
         alias: {
-            '@': path.resolve(__dirname, 'frontend'),
+            '@': path.resolve(import.meta.dirname, 'frontend'),
         },
     },
     test: {
