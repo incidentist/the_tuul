@@ -1,6 +1,6 @@
 <template>
   <b-field :label="label">
-    <b-upload v-model="file" class="file-label">
+    <b-upload v-model="file" class="file" :accept="acceptAttribute">
       <span class="file-cta">
         <b-icon class="file-icon" icon="upload"></b-icon>
         <span class="file-label">Choose File</span>

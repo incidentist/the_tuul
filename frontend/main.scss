@@ -1,6 +1,25 @@
 // Buefy and other global style adjustments
+//
+// This @use must come before Buefy's, since Buefy's own scss does
+// `@use "bulma/sass/utilities/..."`.
+// Use Bulma 0.9 font stack
+$system-font-stack: BlinkMacSystemFont, -apple-system, "Segoe UI", Roboto, Oxygen, Ubuntu, "Fira Sans", "Droid Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
 
-@import 'buefy/dist/css/buefy.css';
+@use "bulma/sass" with ($family-primary: $system-font-stack,
+    $family-secondary: $system-font-stack,
+    // purple, keeps turquoise's saturation/lightness (100%, 41%)
+    $primary: hsl(271, 100%, 41%));
+@use "buefy/src/scss/buefy";
+
+// Use Bulma 0.9 font weights
+.title,
+.subtitle {
+    --bulma-title-weight: var(--bulma-weight-semibold);
+}
+
+.content {
+    --bulma-content-heading-weight: var(--bulma-weight-semibold);
+}
 
 // Icon sizing fix
 .icon svg {
