@@ -26,8 +26,19 @@ export default defineComponent({
   props: {
     label: String,
     modelValue: File,
+    // Either a list of extensions/MIME types or a pre-joined accept string
+    accept: {
+      type: [Array, String],
+      default: null,
+    },
   },
   computed: {
+    acceptAttribute(): string | null {
+      if (!this.accept) {
+        return null;
+      }
+      return Array.isArray(this.accept) ? this.accept.join(",") : this.accept;
+    },
     file: {
       get() {
         return this.modelValue;

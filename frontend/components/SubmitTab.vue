@@ -103,11 +103,7 @@ import VideoCreationProgressIndicator from "@/components/VideoCreationProgressIn
 import jszip from "jszip";
 import video from "@/lib/video";
 import { CreationPhase } from "@/types";
-import {
-  useMediaStore,
-  NO_VOCALS_SEPARATOR_MODEL,
-  SeparatedTrack,
-} from "@/stores/media";
+import { useMediaStore, SeparatedTrack } from "@/stores/media";
 import { useSettingsStore } from "@/stores/settings";
 import { useTimingsStore } from "@/stores/timings";
 import { useLyricsStore } from "@/stores/lyrics";
@@ -147,12 +143,6 @@ export default defineComponent({
       lyricText,
       subtitles,
     };
-  },
-  props: {
-    musicSeparationModel: {
-      type: String,
-      required: true,
-    },
   },
   data() {
     return {
@@ -286,7 +276,7 @@ export default defineComponent({
         }, 1000);
         const separatedTrack = await this.separateTrack(
           this.songFile,
-          this.musicSeparationModel
+          this.mediaStore.separationModel
         );
         this.creationPhase = CreationPhase.CreatingVideo;
         const videoOptions = { createTitleScreens: true, ...this.videoOptions };

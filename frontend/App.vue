@@ -25,11 +25,11 @@
     </b-navbar>
     <b-tabs expanded :vertical="!isMobile" type="is-boxed" class="main-tabs">
       <help-tab></help-tab>
-      <song-info-tab @options-change="onOptionsChange" :music-separation-model="musicSeparationModel"></song-info-tab>
+      <song-info-tab></song-info-tab>
       <lyric-input-tab></lyric-input-tab>
       <song-timing-tab></song-timing-tab>
       <timing-adjustment-tab />
-      <submit-tab :music-separation-model="musicSeparationModel"></submit-tab>
+      <submit-tab></submit-tab>
     </b-tabs>
   </div>
 </template>
@@ -44,14 +44,7 @@ import LyricInputTab from "@/components/LyricInputTab.vue";
 import SongTimingTab from "@/components/SongTimingTab.vue";
 import TimingAdjustmentTab from "@/components/TimingAdjustmentTab.vue";
 import SubmitTab from "@/components/SubmitTab.vue";
-import {
-  BACKING_VOCALS_SEPARATOR_MODEL,
-  useMediaStore,
-} from "@/stores/media";
-import { useLyricsStore } from "@/stores/lyrics";
-import { useTimingsStore } from "@/stores/timings";
 // import mountedHarness from "@/mountedHarness";
-import { storeToRefs } from "pinia";
 
 export default defineComponent({
   // mixins: [mountedHarness],
@@ -66,24 +59,11 @@ export default defineComponent({
   data() {
     return {
       DONATE_URL,
-      musicSeparationModel: BACKING_VOCALS_SEPARATOR_MODEL,
-      isSubmitting: false,
     };
   },
 
   computed: {
     isMobile,
-  },
-  methods: {
-    onOptionsChange(newOptions) {
-      for (const key in newOptions) {
-        if (Object.hasOwnProperty.call(newOptions, key)) {
-          const newValue = newOptions[key];
-          this[key] = newValue;
-        }
-      }
-    },
-
   },
 });
 </script>

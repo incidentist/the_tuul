@@ -1,10 +1,10 @@
 <template>
-  <b-tab-item :class="['help-tab', 'scroll-wrapper']" headerClass="song-info-tab-header">
+  <b-tab-item :class="['song-info-tab', 'scroll-wrapper']" headerClass="song-info-tab-header">
     <template #header>
       <b-icon v-if="!isSeparatingTrack" icon="file-audio"></b-icon>
       <b-tooltip v-else label="Separating track" position="is-bottom"><span class="icon is-small loader"></span>
       </b-tooltip>
-      <span> Song File</span>
+      <span> Backing Track</span>
     </template>
     <div class="container">
       <h2 class="title">Get Your Song Ready</h2>
@@ -19,10 +19,10 @@
           :disabled="!mediaStore.youtubeUrl" @click="loadYouTubeUrl" :loading="isLoadingYouTube" />
       </b-field>
       <b-field label="Song Artist">
-        <b-input name="artist" v-model="mediaStore.songArtist" @input="onTextChange" />
+        <b-input name="artist" v-model="mediaStore.songArtist" />
       </b-field>
       <b-field label="Song Title">
-        <b-input name="title" v-model="mediaStore.songTitle" @input="onTextChange" />
+        <b-input name="title" v-model="mediaStore.songTitle" />
       </b-field>
       <b-field horizontal label="Include Backing Vocals" class="backing-vocals-toggle">
         <b-switch v-model="includeBackingVocals"></b-switch></b-field>
@@ -38,10 +38,11 @@
       <div class="box">
         <file-upload name="timings-file-upload" :accept="['.json']" label="Timings File" v-model="timingsFile"
           @update:modelValue="onTimingsFileChange" />
-        <file-upload label="Backing Track" v-model="backingTrackFile" @update:modelValue="onBackingTrackFileChange" />
+        <file-upload label="Backing Track" :modelValue="backingTrackFile"
+          @update:modelValue="onBackingTrackFileChange" />
       </div>
     </b-collapse>
-    <div class="buttons" v-if="!backingTrackFile">
+    <div class="buttons" v-if="!isBackingTrackUserUploaded">
       <b-tooltip position="is-right" :label="separatingTrackMessage" :always="isSeparatingTrack">
         <b-button label="Separate Track" type="is-primary" :disabled="!mediaStore.songFile" :loading="isSeparatingTrack"
           @click="separateTrack" />
@@ -52,7 +53,6 @@
 
 <script lang="ts">
 import { defineComponent } from "vue";
-import { mapStores } from "pinia";
 import { fetchYouTubeVideo, parseYouTubeTitle } from "@/lib/video";
 
 import {
@@ -79,20 +79,15 @@ export default defineComponent({
     return {
       isLoadingYouTube: false,
       timingsFile: null,
-      backingTrackFile: null,
       youtubeError: null,
     };
   },
   computed: {
-    songInfo() {
-      return {
-        file: this.songFile,
-        artist: this.songArtist,
-        title: this.songTitle,
-        duration: this.songDuration,
-        youtubeUrl: this.youtubeUrl,
-        videoBlob: this.videoBlob,
-      };
+    backingTrackFile() {
+      return this.mediaStore.separatedTrack?.backing || null;
+    },
+    isBackingTrackUserUploaded() {
+      return this.mediaStore.isBackingTrackUserUploaded;
     },
     isSeparatingTrack() {
       return this.mediaStore.isProcessing;
@@ -113,13 +108,8 @@ export default defineComponent({
           : NO_VOCALS_SEPARATOR_MODEL;
       },
     },
-    ...mapStores(useMediaStore),
   },
   methods: {
-
-    onTextChange(e) {
-      this.$emit("update:modelValue", this.songInfo);
-    },
     async loadYouTubeUrl() {
       this.isLoadingYouTube = true;
       this.youtubeError = null;
@@ -139,7 +129,7 @@ export default defineComponent({
       } catch (e) {
         console.error(e);
         let errorMessage = e.message;
-        
+
         // Try to extract the detail from JSON error responses
         try {
           const errorObj = JSON.parse(errorMessage);
@@ -149,7 +139,7 @@ export default defineComponent({
         } catch (parseError) {
           // If it's not JSON, use the original message
         }
-        
+
         this.youtubeError = `There was a problem downloading that video: ${errorMessage}. Please try again or use a service such as <a href="https://v2.youconvert.net/en/">YouConvert</a> to get the audio and add it above.`;
       }
       this.isLoadingYouTube = false;
@@ -175,12 +165,6 @@ export default defineComponent({
     async separateTrack() {
       const model = this.mediaStore.separationModel;
       this.mediaStore.startSeparation(this.mediaStore.songFile, model);
-
-      // Also store the song file and background video in the media store
-      this.mediaStore.songFile = this.mediaStore.songFile;
-      if (this.videoBlob) {
-        this.mediaStore.backgroundVideo = this.videoBlob;
-      }
     },
   },
 });

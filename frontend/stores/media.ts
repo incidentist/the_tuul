@@ -36,6 +36,9 @@ export const useMediaStore = defineStore('media', () => {
     const error = ref<string | null>(null);
     const separationStartTime = ref<Date | null>(null);
 
+    // True when the backing track came from the user rather than from separation
+    const isBackingTrackUserUploaded = ref(false);
+
     async function startSeparation(inputData: any, modelName: SeparationModel): Promise<SeparatedTrack> {
         if (isProcessing.value) {
             return;
@@ -46,6 +49,7 @@ export const useMediaStore = defineStore('media', () => {
         try {
             const result = await separateTrack(inputData, modelName);
             separatedTrack.value = result;
+            isBackingTrackUserUploaded.value = false;
             return separatedTrack.value;
         } catch (err) {
             console.error(err);
@@ -55,12 +59,20 @@ export const useMediaStore = defineStore('media', () => {
         }
     };
 
-    async function setBackingTrack(file: File) {
+    async function setBackingTrack(file: File | null) {
+        if (file == null) {
+            // Clearing the upload discards the track entirely. Leaving a null
+            // `backing` behind would break every consumer of separatedTrack.
+            separatedTrack.value = null;
+            isBackingTrackUserUploaded.value = false;
+            return;
+        }
         if (separatedTrack.value == null) {
             separatedTrack.value = { backing: file, vocals: new Blob() };
         } else {
             separatedTrack.value.backing = file;
         }
+        isBackingTrackUserUploaded.value = true;
     }
 
     async function duration(songFile: File): Promise<number> {
@@ -169,6 +181,7 @@ export const useMediaStore = defineStore('media', () => {
         separatedTrack,
         error,
         separationStartTime,
+        isBackingTrackUserUploaded,
 
         // Methods
         startSeparation,
