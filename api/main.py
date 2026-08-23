@@ -172,11 +172,10 @@ def process_track_separation_background(
 async def index(request: Request):
     """Serve the main application page."""
     context = {
-        "request": request,
         "vite_hmr_client": Markup(vite_assets.render_hmr_client()),
         "vite_assets": Markup(vite_assets.render_tags("index.ts")),
     }
-    return templates.TemplateResponse("index.html", context)
+    return templates.TemplateResponse(request, "index.html", context)
 
 
 @app.post("/separate_track")
