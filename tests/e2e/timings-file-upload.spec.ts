@@ -28,9 +28,7 @@ test.describe('Timings File Upload', () => {
     // 3. Verify Submit tab is initially disabled
     await expectTabToBeDisabled(page, TabId.Submit);
 
-    // 4. Upload timings file through advanced options in Song Info tab
-    await navigateToTab(page, TabId.SongInfo);
-    await page.click("button:has-text('Advanced')");
+    // 4. Upload timings file through advanced options in the Song Timing tab
     await uploadTimingsFile(page, defaultTestConfig.timingsFile);
 
     // 5. Verify Submit tab is now enabled

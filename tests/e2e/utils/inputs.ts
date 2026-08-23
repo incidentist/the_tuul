@@ -6,9 +6,24 @@ import { getFixturePath, loadFixtureFile } from './setupHelpers';
 import { TabId, navigateToTab } from './navigation';
 
 /**
+ * Source card ids on the Song Info tab
+ */
+export type SongSource = 'youtube' | 'upload' | 'backing';
+
+/**
+ * Selects a source card ("YouTube link", "Upload a song", "Upload a backing
+ * track") on the Song Info tab, revealing that source's panel.
+ */
+export async function selectSource(page: Page, source: SongSource): Promise<void> {
+  await page.check(`.source-card input[type="radio"][value="${source}"]`);
+}
+
+/**
  * Uploads an audio file and waits for metadata to be loaded
  */
 export async function uploadAudioFile(page: Page, filename: string, expectArtist?: string, expectTitle?: string): Promise<void> {
+  await selectSource(page, 'upload');
+
   const audioFilePath = getFixturePath(filename);
   const audioFileInput = page.locator('[name="song-file-upload"] [type="file"]');
 
@@ -28,8 +43,10 @@ export async function uploadAudioFile(page: Page, filename: string, expectArtist
  * Enters a YouTube URL and clicks the Load button
  */
 export async function enterYouTubeUrl(page: Page, url: string, expectArtist?: string, expectTitle?: string): Promise<void> {
+  await selectSource(page, 'youtube');
+
   // Enter YouTube URL
-  await page.fill('input[type="text"]', url);
+  await page.fill('[name="youtube-url"]', url);
 
   // Click the Load button
   await page.click('button:has-text("Load")');
@@ -51,6 +68,18 @@ export async function enterYouTubeUrl(page: Page, url: string, expectArtist?: st
   if (expectTitle) {
     await expect(page.locator('[name="title"]')).toHaveValue(expectTitle);
   }
+}
+
+/**
+ * Uploads a backing track directly (already-instrumental source)
+ */
+export async function uploadBackingTrackFile(page: Page, filename: string): Promise<void> {
+  await selectSource(page, 'backing');
+
+  const filePath = getFixturePath(filename);
+  const fileInput = page.locator('[name="backing-track-upload"] [type="file"]');
+
+  await fileInput.setInputFiles(filePath);
 }
 
 /**
@@ -76,12 +105,12 @@ export async function loadAndEnterLyrics(page: Page, lyricsContentOrFilename: st
 }
 
 /**
- * Uploads a timings file through the advanced options
+ * Uploads a timings file through the advanced options on the Song Timing tab
  */
 export async function uploadTimingsFile(page: Page, timingsFilename: string): Promise<void> {
-  // Navigate to song info tab if not already there
-  if (!await page.locator('.song-info-tab').isVisible()) {
-    await navigateToTab(page, TabId.SongInfo);
+  // Navigate to the song timing tab if not already there
+  if (!await page.locator('.song-timing-tab').isVisible()) {
+    await navigateToTab(page, TabId.SongTiming);
   }
 
   // Click advanced button to reveal timings file upload
