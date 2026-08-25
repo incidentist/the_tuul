@@ -87,6 +87,20 @@ def get_youtube_streams(
         else:
             raise YouTubeException(f"Network error accessing YouTube: {e}") from e
 
+    except Exception as e:
+        # pytubefix raises a wide variety of exceptions when YouTube changes its
+        # internals (RegexMatchError, BotDetection, VideoUnavailable, HTTP 403...).
+        # Funnel them all into YouTubeException so callers can report them.
+        logger.exception(
+            "youtube_stream_download_failed",
+            youtube_url=youtube_url,
+            error_type=type(e).__name__,
+            error=str(e),
+        )
+        raise YouTubeException(
+            f"Could not download from YouTube ({type(e).__name__}): {e}"
+        ) from e
+
 
 def assemble_metadata(youtube: pytube.YouTube) -> dict[str, str]:
     metadata = {
@@ -168,4 +182,25 @@ def process_youtube_download_background(video_id: str, youtube_url: str):
             youtube_url=youtube_url,
             error=str(e),
         )
-        write_async_error(str(e), video_id)
+        _write_async_error_safely(str(e), video_id)
+    except Exception as e:
+        # Anything else (zip creation, metadata, GCS upload) must still produce an
+        # error file, or the client polls the missing zip forever.
+        logger.exception(
+            "youtube_download_failed_unexpectedly",
+            video_id=video_id,
+            youtube_url=youtube_url,
+            error_type=type(e).__name__,
+            error=str(e),
+        )
+        _write_async_error_safely(
+            f"Unexpected error downloading video ({type(e).__name__}): {e}", video_id
+        )
+
+
+def _write_async_error_safely(error_message: str, video_id: str):
+    """Write the error file, logging (not raising) if that itself fails."""
+    try:
+        write_async_error(error_message, video_id)
+    except Exception:
+        logger.exception("youtube_error_upload_failed", video_id=video_id)
