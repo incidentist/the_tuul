@@ -67,7 +67,7 @@
         </li>
       </ul>
       <h3>What's New</h3>
-      <h5>0.17 - August 24, 2026</h5>
+      <h5>0.18 - August 24, 2026</h5>
       <ul>
         <li>Bug fixes and under-the-hood improvements.</li>
       </ul>
