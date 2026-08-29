@@ -6,7 +6,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Optional
 
-import httpx
+import httpx2 as httpx
 
 from api import settings
 
