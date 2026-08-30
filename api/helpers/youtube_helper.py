@@ -18,88 +18,148 @@ class YouTubeException(Exception):
     pass
 
 
+# Clients are tried in order until one produces a complete download.
+# YouTube rejects different clients for different videos: WEB_MUSIC serves the
+# music catalog, WEB/MWEB serve everything else, and the pytubefix default
+# (ANDROID_VR) currently fails bot detection on nearly all of them.
+YOUTUBE_CLIENTS = ("WEB_MUSIC", "WEB", "MWEB")
+
+
+def _proxy_options() -> dict[str, str] | None:
+    if not settings.YOUTUBE_PROXY:
+        return None
+    logger.info("Using proxy for YouTube download")
+    return {
+        "http": settings.YOUTUBE_PROXY,
+        "https": settings.YOUTUBE_PROXY,
+    }
+
+
+def _clear_partial_downloads(song_files_dir: Path) -> None:
+    """Remove files left behind by a failed attempt.
+
+    pytubefix skips downloading when a file of matching size already exists, so
+    a partial file from one client can silently corrupt the next client's run.
+    """
+    for name in ("audio", "video"):
+        path = song_files_dir / name
+        if path.exists():
+            path.unlink()
+
+
+def _download_with_client(
+    youtube_url: str, song_files_dir: Path, client: str, proxy_options
+) -> tuple[dict[str, str], Path, Path]:
+    """Download audio and video using a single client.
+
+    Succeeds completely or raises. Downloads happen here rather than in the
+    caller because resolving stream metadata does not predict success -- some
+    clients list streams fine and only fail once the bytes are requested.
+    """
+    youtube = pytube.YouTube(youtube_url, client=client, proxies=proxy_options)
+    audio_stream = youtube.streams.filter(only_audio=True).first()
+    video_stream = youtube.streams.filter(only_video=True, res="1080p").first()
+    if not video_stream:
+        video_stream = youtube.streams.filter(only_video=True).first()
+
+    if not audio_stream:
+        raise ValueError("No audio stream found")
+    if not video_stream:
+        raise ValueError("No video stream found")
+
+    audio_path = audio_stream.download(str(song_files_dir), "audio")
+    video_path = video_stream.download(str(song_files_dir), "video")
+    logger.info("video_stream", video_stream=video_stream)
+
+    if not audio_path or not video_path:
+        raise ValueError("Failed to download streams")
+
+    return assemble_metadata(youtube), Path(audio_path), Path(video_path)
+
+
+def _raise_no_route_error(youtube_url: str, error: urllib.error.URLError):
+    """Re-raise a URLError as a YouTubeException with host diagnostics."""
+    is_no_route_error = False
+    if hasattr(error, "reason"):
+        if hasattr(error.reason, "errno") and error.reason.errno == 113:
+            is_no_route_error = True
+        elif str(error.reason).find("No route to host") != -1:
+            is_no_route_error = True
+
+    if is_no_route_error:
+        from urllib.parse import urlparse
+
+        host = urlparse(youtube_url).netloc
+        error_msg = f"No route to host - unable to reach: {host}"
+        logger.error(
+            "No route to host error",
+            unreachable_host=host,
+            using_proxy=bool(settings.YOUTUBE_PROXY),
+            youtube_url=youtube_url,
+            error=str(error),
+        )
+        raise YouTubeException(error_msg) from error
+
+    raise YouTubeException(f"Network error accessing YouTube: {error}") from error
+
+
 def get_youtube_streams(
     youtube_url: str, song_files_dir: Path
 ) -> tuple[dict[str, str], Path, Path]:
     """Download audio and video streams from YouTube URL.
     Video has max resolution of 1080p.
     Return audio and video paths.
+
+    Tries each client in YOUTUBE_CLIENTS until one succeeds, since no single
+    client works for every video.
     """
+    proxy_options = _proxy_options()
+    failures: list[str] = []
+    last_error: Exception | None = None
 
-    proxy_options = None
-    if settings.YOUTUBE_PROXY:
-        proxy_options = {
-            "http": settings.YOUTUBE_PROXY,
-            "https": settings.YOUTUBE_PROXY,
-        }
-        logger.info("Using proxy for YouTube download")
-
-    try:
-        youtube = pytube.YouTube(youtube_url, proxies=proxy_options)
-        audio_stream = youtube.streams.filter(only_audio=True).first()
-        video_stream = youtube.streams.filter(only_video=True, res="1080p").first()
-        if not video_stream:
-            video_stream = youtube.streams.filter(only_video=True).first()
-
-        if not audio_stream:
-            raise ValueError("No audio stream found")
-        if not video_stream:
-            raise ValueError("No video stream found")
-
-        audio_path = audio_stream.download(str(song_files_dir), "audio")
-        video_path = video_stream.download(str(song_files_dir), "video")
-        logger.info("video_stream", video_stream=video_stream)
-
-        if not audio_path or not video_path:
-            raise ValueError("Failed to download streams")
-
-        return assemble_metadata(youtube), Path(audio_path), Path(video_path)
-
-    except urllib.error.URLError as e:
-        # Check if this is a "No route to host" error (errno 113)
-        is_no_route_error = False
-        if hasattr(e, "reason"):
-            if hasattr(e.reason, "errno") and e.reason.errno == 113:
-                is_no_route_error = True
-            elif str(e.reason).find("No route to host") != -1:
-                is_no_route_error = True
-
-        if is_no_route_error:
-            # Try to extract host information from the error
-            host = "unknown host"
-            error_str = str(e)
-
-            # Extract from the original YouTube URL as fallback
-            from urllib.parse import urlparse
-
-            parsed_url = urlparse(youtube_url)
-            host = parsed_url.netloc
-
-            error_msg = f"No route to host - unable to reach: {host}"
-            logger.error(
-                "No route to host error",
-                unreachable_host=host,
-                using_proxy=bool(settings.YOUTUBE_PROXY),
-                youtube_url=youtube_url,
-                error=error_str,
+    for client in YOUTUBE_CLIENTS:
+        try:
+            result = _download_with_client(
+                youtube_url, song_files_dir, client, proxy_options
             )
-            raise YouTubeException(error_msg) from e
-        else:
-            raise YouTubeException(f"Network error accessing YouTube: {e}") from e
+            logger.info(
+                "youtube_download_client_succeeded",
+                client=client,
+                youtube_url=youtube_url,
+            )
+            return result
 
-    except Exception as e:
-        # pytubefix raises a wide variety of exceptions when YouTube changes its
-        # internals (RegexMatchError, BotDetection, VideoUnavailable, HTTP 403...).
-        # Funnel them all into YouTubeException so callers can report them.
-        logger.exception(
-            "youtube_stream_download_failed",
-            youtube_url=youtube_url,
-            error_type=type(e).__name__,
-            error=str(e),
-        )
-        raise YouTubeException(
-            f"Could not download from YouTube ({type(e).__name__}): {e}"
-        ) from e
+        except urllib.error.URLError as e:
+            # A dead network will fail identically for every client, so stop
+            # rather than burning the remaining attempts on it.
+            _raise_no_route_error(youtube_url, e)
+
+        except Exception as e:
+            # pytubefix raises a wide variety of exceptions when YouTube rejects
+            # a client (BotDetection, SABRError, HTTPError, VideoUnavailable...).
+            # Record and try the next one.
+            logger.info(
+                "youtube_download_client_failed",
+                client=client,
+                youtube_url=youtube_url,
+                error_type=type(e).__name__,
+                error=str(e),
+            )
+            failures.append(f"{client}: {type(e).__name__}")
+            last_error = e
+            _clear_partial_downloads(song_files_dir)
+
+    logger.exception(
+        "youtube_stream_download_failed",
+        youtube_url=youtube_url,
+        error_type=type(last_error).__name__,
+        error=str(last_error),
+        clients_tried=failures,
+    )
+    raise YouTubeException(
+        f"Could not download from YouTube ({type(last_error).__name__}): "
+        f"{last_error} [tried {', '.join(failures)}]"
+    ) from last_error
 
 
 def assemble_metadata(youtube: pytube.YouTube) -> dict[str, str]:

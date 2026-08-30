@@ -16,7 +16,8 @@ def test_get_youtube_streams():
 
 def test_assemble_metadata():
     url = "https://www.youtube.com/watch?v=jVFIbpZA04I"
-    youtube = pytubefix.YouTube(url)
+    # Explicit client: the pytubefix default (ANDROID_VR) fails bot detection.
+    youtube = pytubefix.YouTube(url, client=youtube_helper.YOUTUBE_CLIENTS[0])
     metadata = youtube_helper.assemble_metadata(youtube)
     assert "title" in metadata
     assert metadata["title"] == youtube.title
@@ -118,3 +119,150 @@ def test_background_download_survives_error_upload_failure(monkeypatch):
     monkeypatch.setattr(youtube_helper, "write_async_error", fail_write)
 
     youtube_helper.process_youtube_download_background("vid789", "https://yt/vid789")
+
+
+class FakeStream:
+    """Stands in for a pytubefix Stream, writing a file on download()."""
+
+    def __init__(self, fail_on_download=None):
+        self.fail_on_download = fail_on_download
+
+    def download(self, output_path, filename, *args, **kwargs):
+        if self.fail_on_download:
+            raise self.fail_on_download
+        path = Path(output_path) / filename
+        path.write_bytes(b"fake media")
+        return str(path)
+
+
+class FakeStreamQuery:
+    def __init__(self, stream):
+        self.stream = stream
+
+    def filter(self, **kwargs):
+        return self
+
+    def first(self):
+        return self.stream
+
+
+class FakeYouTube:
+    """Minimal pytubefix.YouTube stand-in keyed by client."""
+
+    def __init__(self, url, client=None, proxies=None, behavior=None, **kwargs):
+        self.client = client
+        behavior = behavior or {}
+        outcome = behavior.get(client)
+        if isinstance(outcome, Exception):
+            raise outcome
+        self.streams = FakeStreamQuery(FakeStream())
+        self.title = "Fake Song"
+        self.author = "Fake Artist"
+        self.length = 100
+        self.rating = None
+        self.views = 5
+        self.keywords = []
+        self.description = "desc"
+
+
+def _patch_youtube(monkeypatch, behavior, attempts):
+    def factory(url, client=None, proxies=None, **kwargs):
+        attempts.append(client)
+        return FakeYouTube(url, client=client, proxies=proxies, behavior=behavior)
+
+    monkeypatch.setattr(youtube_helper.pytube, "YouTube", factory)
+
+
+def test_first_client_succeeds_without_trying_others(monkeypatch, tmp_path):
+    """A working first client must short-circuit the rest of the chain."""
+    attempts = []
+    _patch_youtube(monkeypatch, {}, attempts)
+
+    metadata, audio_path, video_path = youtube_helper.get_youtube_streams(
+        "https://youtu.be/abc", tmp_path
+    )
+
+    assert attempts == ["WEB_MUSIC"]
+    assert metadata["title"] == "Fake Song"
+    assert audio_path.exists() and video_path.exists()
+
+
+def test_falls_back_to_next_client(monkeypatch, tmp_path):
+    """WEB_MUSIC returns VideoUnavailable for non-music videos; WEB must run."""
+    attempts = []
+    _patch_youtube(
+        monkeypatch, {"WEB_MUSIC": ValueError("VideoUnavailable")}, attempts
+    )
+
+    metadata, audio_path, video_path = youtube_helper.get_youtube_streams(
+        "https://youtu.be/abc", tmp_path
+    )
+
+    assert attempts == ["WEB_MUSIC", "WEB"]
+    assert audio_path.exists()
+
+
+def test_all_clients_failing_raises_with_each_error(monkeypatch, tmp_path):
+    """The message must name every client tried, for diagnosis from logs."""
+    attempts = []
+    _patch_youtube(
+        monkeypatch,
+        {
+            "WEB_MUSIC": ValueError("VideoUnavailable"),
+            "WEB": RuntimeError("SABRError"),
+            "MWEB": RuntimeError("HTTPError 403"),
+        },
+        attempts,
+    )
+
+    with pytest.raises(youtube_helper.YouTubeException) as excinfo:
+        youtube_helper.get_youtube_streams("https://youtu.be/abc", tmp_path)
+
+    message = str(excinfo.value)
+    assert attempts == ["WEB_MUSIC", "WEB", "MWEB"]
+    assert "WEB_MUSIC: ValueError" in message
+    assert "WEB: RuntimeError" in message
+    assert "MWEB: RuntimeError" in message
+
+
+def test_network_error_stops_immediately(monkeypatch, tmp_path):
+    """A dead network fails identically for every client, so don't retry."""
+    import urllib.error
+
+    attempts = []
+    _patch_youtube(
+        monkeypatch,
+        {"WEB_MUSIC": urllib.error.URLError("No route to host")},
+        attempts,
+    )
+
+    with pytest.raises(youtube_helper.YouTubeException) as excinfo:
+        youtube_helper.get_youtube_streams("https://youtu.be/abc", tmp_path)
+
+    assert attempts == ["WEB_MUSIC"]
+    assert "No route to host" in str(excinfo.value)
+
+
+def test_partial_files_cleared_between_attempts(monkeypatch, tmp_path):
+    """A partial file from a failed client must not leak into the next attempt.
+
+    pytubefix skips downloading when a matching file already exists, so a
+    leftover would be zipped and served as if it were the real download.
+    """
+    attempts = []
+
+    def factory(url, client=None, proxies=None, **kwargs):
+        attempts.append(client)
+        if client == "WEB_MUSIC":
+            # Write a partial file, then fail after it lands on disk.
+            (tmp_path / "audio").write_bytes(b"partial junk")
+            raise RuntimeError("SABRError")
+        return FakeYouTube(url, client=client, proxies=proxies, behavior={})
+
+    monkeypatch.setattr(youtube_helper.pytube, "YouTube", factory)
+
+    _, audio_path, _ = youtube_helper.get_youtube_streams(
+        "https://youtu.be/abc", tmp_path
+    )
+
+    assert audio_path.read_bytes() == b"fake media"
