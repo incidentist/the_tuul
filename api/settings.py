@@ -18,7 +18,7 @@ DEBUG = os.getenv("DEBUG", "True") != "False"
 SEPARATED_TRACKS_BUCKET = os.getenv("SEPARATED_TRACKS_BUCKET", "")
 
 # YouTube proxy settings
-YOUTUBE_PROXY = os.getenv("YOUTUBE_PROXY", "")
+TUUL_YOUTUBE_PROXY = os.getenv("TUUL_YOUTUBE_PROXY", "")
 
 # Valid values are 'console' or 'gcp'
 LOGGING_FORMAT = os.getenv("LOGGING_FORMAT", "console")

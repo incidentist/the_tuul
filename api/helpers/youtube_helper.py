@@ -26,12 +26,12 @@ YOUTUBE_CLIENTS = ("WEB_MUSIC", "WEB", "MWEB")
 
 
 def _proxy_options() -> dict[str, str] | None:
-    if not settings.YOUTUBE_PROXY:
+    if not settings.TUUL_YOUTUBE_PROXY:
         return None
     logger.info("Using proxy for YouTube download")
     return {
-        "http": settings.YOUTUBE_PROXY,
-        "https": settings.YOUTUBE_PROXY,
+        "http": settings.TUUL_YOUTUBE_PROXY,
+        "https": settings.TUUL_YOUTUBE_PROXY,
     }
 
 
@@ -94,7 +94,7 @@ def _raise_no_route_error(youtube_url: str, error: urllib.error.URLError):
         logger.error(
             "No route to host error",
             unreachable_host=host,
-            using_proxy=bool(settings.YOUTUBE_PROXY),
+            using_proxy=bool(settings.TUUL_YOUTUBE_PROXY),
             youtube_url=youtube_url,
             error=str(error),
         )
