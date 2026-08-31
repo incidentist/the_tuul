@@ -1,7 +1,7 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
-import pytubefix
 
 from api.helpers import youtube_helper
 
@@ -15,12 +15,28 @@ def test_get_youtube_streams():
 
 
 def test_assemble_metadata():
-    url = "https://www.youtube.com/watch?v=jVFIbpZA04I"
-    # Explicit client: the pytubefix default (ANDROID_VR) fails bot detection.
-    youtube = pytubefix.YouTube(url, client=youtube_helper.YOUTUBE_CLIENTS[0])
+    """assemble_metadata only maps fields, so it needs no live YouTube call."""
+    youtube = SimpleNamespace(
+        title="Tongue Tied",
+        author="Grouplove",
+        length=217,
+        rating=4.8,
+        views=12345,
+        keywords=["indie", "rock"],
+        description="A song.",
+    )
+
     metadata = youtube_helper.assemble_metadata(youtube)
-    assert "title" in metadata
-    assert metadata["title"] == youtube.title
+
+    assert metadata == {
+        "title": "Tongue Tied",
+        "author": "Grouplove",
+        "length": 217,
+        "rating": 4.8,
+        "views": 12345,
+        "keywords": ["indie", "rock"],
+        "description": "A song.",
+    }
 
 
 def test_get_video_id():
