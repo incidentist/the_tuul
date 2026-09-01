@@ -103,25 +103,13 @@ import VideoCreationProgressIndicator from "@/components/VideoCreationProgressIn
 import jszip from "jszip";
 import video from "@/lib/video";
 import { CreationPhase } from "@/types";
+import { FONTS } from "@/constants";
 import { useMediaStore, SeparatedTrack } from "@/stores/media";
 import { useSettingsStore } from "@/stores/settings";
 import { useTimingsStore } from "@/stores/timings";
 import { useLyricsStore } from "@/stores/lyrics";
 
-const fonts = {
-  "Andale Mono": "/static/fonts/AndaleMono.ttf",
-  Arial: "/static/fonts/Arial.ttf",
-  "Arial Narrow": "/static/fonts/ArialNarrow.ttf",
-  "Comic Sans MS": "/static/fonts/ComicSans.ttf",
-  "Courier New": "/static/fonts/CourierNew.ttf",
-  Georgia: "/static/fonts/Georgia.ttf",
-  Impact: "/static/fonts/Impact.ttf",
-  "Metal Mania": "/static/fonts/MetalMania.ttf",
-  "Times New Roman": "/static/fonts/TimesNewRoman.ttf",
-  "Trebuchet MS": "/static/fonts/Trebuchet.ttf",
-  Verdana: "/static/fonts/Verdana.ttf",
-  "Liberation Sans": "/static/fonts/LiberationSans.ttf",
-};
+const fonts = FONTS;
 
 export default defineComponent({
   components: {
