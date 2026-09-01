@@ -1,6 +1,6 @@
 {
   "name": "the-tuul",
-  "version": "0.19.0",
+  "version": "0.19.1",
   "description": "Create a decent karaoke video from any song in about 10 minutes.",
   "main": "index.ts",
   "type": "module",
