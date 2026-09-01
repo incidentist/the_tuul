@@ -102,6 +102,36 @@ describe('Settings Store', () => {
     expect(settingsStore.videoOptions.color.secondary.toString()).toBe('#333333');
   });
 
+  test('should migrate the legacy "Trebuchet" font name', () => {
+    const customSettings = {
+      addTitleScreen: true,
+      addCountIns: true,
+      addInstrumentalScreens: true,
+      addStaggeredLines: true,
+      useBackgroundVideo: false,
+      verticalAlignment: VerticalAlignment.Middle,
+      vocalSeparationModel: NO_VOCALS_SEPARATOR_MODEL,
+      font: {
+        size: 28,
+        name: "Trebuchet"
+      },
+      color: {
+        background: "#000000",
+        primary: "#ff00ff",
+        secondary: "#00ffff"
+      }
+    };
+
+    window.localStorage.videoOptions = JSON.stringify(customSettings);
+
+    const settingsStore = useSettingsStore();
+
+    // "Trebuchet" is not the font's real family name, so libass renders no
+    // text at all in the final video. Stored values must be migrated.
+    expect(settingsStore.videoOptions.font.name).toBe('Trebuchet MS');
+    expect(settingsStore.videoOptions.font.size).toBe(28);
+  });
+
   test('should handle invalid localStorage data', () => {
     // Set invalid JSON in localStorage
     const consoleSpy = vi.spyOn(console, 'error');

@@ -91,6 +91,12 @@ export const useSettingsStore = defineStore('settings', () => {
         newVideoOptions.vocalSeparationModel = NO_VOCALS_SEPARATOR_MODEL;
       }
 
+      // Handle legacy font name. "Trebuchet" is not the font's real family name,
+      // so libass can't match it and renders no text at all in the final video.
+      if (newVideoOptions.font?.name === "Trebuchet") {
+        newVideoOptions.font.name = "Trebuchet MS";
+      }
+
       // Update the reactive state with loaded options
       Object.assign(videoOptions, newVideoOptions);
     } catch (e) {
