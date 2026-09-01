@@ -5,12 +5,14 @@ import { useMediaStore } from './media';
 import { useSettingsStore } from './settings';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { KEY_CODES, LYRIC_MARKERS } from '@/constants';
-import type { LyricEvent } from '@/lib/timing';
+import { createAssFile, type LyricEvent } from '@/lib/timing';
 
 // Mock the createAssFile function
-vi.mock('@/lib/timing', () => ({
+// Only createAssFile is stubbed; the rest of the module is real, since other
+// stores import from it (e.g. settings.ts needs VerticalAlignment).
+vi.mock('@/lib/timing', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/timing')>()),
   createAssFile: vi.fn().mockReturnValue('mock subtitles content'),
-  DEFAULT_KARAOKE_OPTIONS: {}
 }));
 
 describe('Timings Store', () => {
@@ -147,7 +149,6 @@ describe('Timings Store', () => {
     expect(timingsStore.subtitles()).toBe('mock subtitles content');
 
     // Verify that createAssFile was called with the correct parameters
-    const { createAssFile } = require('@/lib/timing');
     expect(createAssFile).toHaveBeenCalledWith(
       'Test lyrics',
       timingsStore.rawTimings,

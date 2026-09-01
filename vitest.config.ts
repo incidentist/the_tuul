@@ -15,7 +15,9 @@ export default defineConfig({
         environment: 'happy-dom',
         setupFiles: ['./vitest.setup.ts'],
         include: ['**/*.{test,spec}.{js,ts,jsx,tsx}'],
-        exclude: ['**/node_modules/**', '**/dist/**'],
+        // tests/e2e is Playwright's testDir; those specs import @playwright/test
+        // and can't run under vitest.
+        exclude: ['**/node_modules/**', '**/dist/**', 'tests/e2e/**'],
         css: true, // Handle CSS imports
     },
 })
