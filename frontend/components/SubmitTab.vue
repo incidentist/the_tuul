@@ -118,7 +118,7 @@ const fonts = {
   Impact: "/static/fonts/Impact.ttf",
   "Metal Mania": "/static/fonts/MetalMania.ttf",
   "Times New Roman": "/static/fonts/TimesNewRoman.ttf",
-  Trebuchet: "/static/fonts/Trebuchet.ttf",
+  "Trebuchet MS": "/static/fonts/Trebuchet.ttf",
   Verdana: "/static/fonts/Verdana.ttf",
   "Liberation Sans": "/static/fonts/LiberationSans.ttf",
 };
