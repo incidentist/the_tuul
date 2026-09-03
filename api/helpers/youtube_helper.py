@@ -129,6 +129,20 @@ def get_youtube_streams(
             )
             return result
 
+        except urllib.error.HTTPError as e:
+            # An HTTP-level rejection (403, etc.) is per-client, not a dead
+            # network -- fall through like any other client failure below.
+            logger.info(
+                "youtube_download_client_failed",
+                client=client,
+                youtube_url=youtube_url,
+                error_type=type(e).__name__,
+                error=str(e),
+            )
+            failures.append(f"{client}: {type(e).__name__}")
+            last_error = e
+            _clear_partial_downloads(song_files_dir)
+
         except urllib.error.URLError as e:
             # A dead network will fail identically for every client, so stop
             # rather than burning the remaining attempts on it.

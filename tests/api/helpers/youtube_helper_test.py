@@ -259,6 +259,27 @@ def test_network_error_stops_immediately(monkeypatch, tmp_path):
     assert "No route to host" in str(excinfo.value)
 
 
+def test_http_error_falls_back_to_next_client(monkeypatch, tmp_path):
+    """HTTPError is a URLError subclass, so it must not be mistaken for the
+    dead-network case above -- a 403 from one client is per-client and the
+    chain must still try the rest."""
+    import urllib.error
+
+    attempts = []
+    _patch_youtube(
+        monkeypatch,
+        {"WEB_MUSIC": urllib.error.HTTPError("https://youtu.be/abc", 403, "Forbidden", {}, None)},
+        attempts,
+    )
+
+    metadata, audio_path, video_path = youtube_helper.get_youtube_streams(
+        "https://youtu.be/abc", tmp_path
+    )
+
+    assert attempts == ["WEB_MUSIC", "WEB"]
+    assert audio_path.exists()
+
+
 def test_partial_files_cleared_between_attempts(monkeypatch, tmp_path):
     """A partial file from a failed client must not leak into the next attempt.
 
