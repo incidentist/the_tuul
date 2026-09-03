@@ -1,0 +1,68 @@
+[tools]
+uv = "latest"
+
+[settings]
+python.uv_venv_auto = "create|source"
+
+[tasks.install]
+description = "Install frontend and backend dependencies"
+run = '''
+npm install
+uv lock
+uv sync
+'''
+
+[tasks.frontend-dev]
+description = "Run the Vite frontend dev server"
+run = "npm run dev"
+
+[tasks.backend-dev]
+description = "Run the backend dev server with gunicorn (auto-reload via DEBUG)"
+run = "DEBUG=true uv run gunicorn --config gunicorn.conf.py api.main:app"
+
+[tasks.dev]
+description = "Run frontend and backend dev servers together"
+run = "mise run frontend-dev ::: backend-dev"
+
+[tasks.run-api]
+description = "Run the backend with gunicorn"
+run = "uv run gunicorn --config gunicorn.conf.py api.main:app"
+
+[tasks.format-backend]
+description = "Format backend code with black"
+run = "uv run black api/"
+
+[tasks.test-api]
+description = "Smoke-test that the FastAPI app loads"
+run = "uv run python -c \"from api.main import app; print('✅ FastAPI app loads successfully')\""
+
+[tasks.bump-version-minor]
+description = "Bump the minor version (via npm version, which also bumps the Python version)"
+run = "npm version minor"
+
+[tasks.bump-version-patch]
+description = "Bump the patch version (via npm version, which also bumps the Python version)"
+run = "npm version patch"
+
+[tasks.build-docker]
+description = "Build the production Docker image"
+run = '''
+docker buildx build -t "the-tuul:latest" \
+  --cache-from "the-tuul:latest" \
+  .
+'''
+
+[tasks.release]
+description = "Merge origin/beta into main, tag it with the project version, and push"
+run = '''
+VERSION="v$(uv version --short)"
+
+git fetch origin
+git branch -f main origin/beta
+git branch --set-upstream-to=origin/main main
+git tag "$VERSION" main
+git push origin main:main
+git push origin "$VERSION"
+
+echo "Released $VERSION"
+'''

@@ -13,3 +13,6 @@ api/assets/bundles/
 test-results/
 playwright-report/
 google-application-credentials.json
+
+# Mise
+mise.local.toml
