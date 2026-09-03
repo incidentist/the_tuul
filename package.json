@@ -15,7 +15,7 @@
     "build": "vite build --mode production --config vite.config.prod.ts",
     "build-dev": "vite build --config vite.config.dev.ts",
     "watch": "vite build --config vite.config.dev.ts --watch --host",
-    "version": "(cd api/ && poetry version $npm_package_version) && git add pyproject.toml"
+    "version": "uv version $npm_package_version && git add pyproject.toml"
   },
   "repository": {
     "type": "git",

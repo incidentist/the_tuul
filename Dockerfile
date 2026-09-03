@@ -24,27 +24,23 @@ RUN npm run build
 # https://hub.docker.com/_/python
 FROM python:3.13-slim AS backend-builder
 
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 ENV APP_HOME=/app
 # Setting this ensures print statements and log messages
 # promptly appear in Cloud Logging.
 ENV PYTHONUNBUFFERED=TRUE \
-    POETRY_VERSION=2.1.2 \
-    POETRY_VIRTUALENVS_IN_PROJECT=1 \
-    POETRY_VIRTUALENVS_CREATE=1 \
-    POETRY_CACHE_DIR=/tmp/poetry_cache
+    UV_PROJECT_ENVIRONMENT=/app/.venv \
+    UV_CACHE_DIR=/tmp/uv_cache
 WORKDIR $APP_HOME
-
-# prepend poetry and venv to path
-# ENV PATH "$POETRY_HOME/bin:$PATH"
 
 # Install dependencies.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential \
-    && pip install "poetry==$POETRY_VERSION"
+    && apt-get install -y --no-install-recommends build-essential
 
-COPY ./poetry.lock ./pyproject.toml ./
+COPY ./uv.lock ./pyproject.toml ./
 
-RUN poetry install --without dev --no-root --no-interaction --no-ansi
+RUN uv sync --no-dev --no-install-project --locked
 
 #
 # RUNTIME IMAGE
@@ -81,7 +77,7 @@ RUN apt-get update \
 # Copy local code to the container image.
 COPY api api
 # Copy gunicorn configuration
-COPY gunicorn.conf.py pyproject.toml poetry.lock ${APP_HOME}
+COPY gunicorn.conf.py pyproject.toml uv.lock ${APP_HOME}
 
 # Copy frontend static files from the node builder to the correct location
 # for FastAPI to serve them

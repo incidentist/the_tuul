@@ -3,7 +3,7 @@
 Normally it takes a long time to make a decent karaoke video. You need to separate the music from the vocals, and painstakingly adjust the timing of every syllable. What we try to do here is use some shortcuts to make videos that are 80% perfect in 20% of the time.
 
 ## Install
-Requires python 3, [poetry](http://python-poetry.org), npm and ffmpeg. Install with `make install`.
+Requires python 3, [uv](https://docs.astral.sh/uv/), npm and ffmpeg. Install with `make install`.
 
 Copy .env.example to .env and fill out the variables.
 
@@ -17,7 +17,7 @@ Load up http://localhost:8000 and follow the instructions!
 
 ### Running Seperate Separator App
 
-`poetry run python -m api.separator_server`
+`uv run python -m api.separator_server`
 
 ## Build
 To build the Docker image:
