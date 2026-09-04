@@ -39,6 +39,29 @@ def test_assemble_metadata():
     }
 
 
+def test_assemble_metadata_tolerates_a_broken_field():
+    """pytubefix's #description property has unguarded key access that can
+    KeyError on some unlisted videos. That must degrade to None, not sink an
+    otherwise-successful download."""
+
+    class BrokenDescription:
+        title = "Live Performance"
+        author = "Some Band"
+        length = 300
+        rating = None
+        views = 42
+        keywords = []
+
+        @property
+        def description(self):
+            raise KeyError("attributedDescription")
+
+    metadata = youtube_helper.assemble_metadata(BrokenDescription())
+
+    assert metadata["title"] == "Live Performance"
+    assert metadata["description"] is None
+
+
 def test_get_video_id():
     """Test extracting video ID from various YouTube URL formats."""
     test_cases = [
@@ -199,6 +222,39 @@ def test_first_client_succeeds_without_trying_others(monkeypatch, tmp_path):
     )
 
     assert attempts == ["WEB_MUSIC"]
+    assert metadata["title"] == "Fake Song"
+    assert audio_path.exists() and video_path.exists()
+
+
+def test_broken_metadata_field_does_not_discard_a_successful_download(
+    monkeypatch, tmp_path
+):
+    """A pytubefix metadata-parsing bug on one field (e.g. #description
+    KeyError) must not be mistaken for a client failure -- the streams
+    already downloaded successfully and shouldn't be thrown away."""
+    attempts = []
+
+    class BrokenDescriptionYouTube(FakeYouTube):
+        @property
+        def description(self):
+            raise KeyError("attributedDescription")
+
+        @description.setter
+        def description(self, value):
+            pass  # FakeYouTube.__init__ assigns here; discard it.
+
+    def factory(url, client=None, proxies=None, **kwargs):
+        attempts.append(client)
+        return BrokenDescriptionYouTube(url, client=client, proxies=proxies)
+
+    monkeypatch.setattr(youtube_helper.pytube, "YouTube", factory)
+
+    metadata, audio_path, video_path = youtube_helper.get_youtube_streams(
+        "https://youtu.be/abc", tmp_path
+    )
+
+    assert attempts == ["WEB_MUSIC"]
+    assert metadata["description"] is None
     assert metadata["title"] == "Fake Song"
     assert audio_path.exists() and video_path.exists()
 

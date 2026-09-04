@@ -176,15 +176,36 @@ def get_youtube_streams(
     ) from last_error
 
 
+def _safe_attr(youtube: pytube.YouTube, name: str):
+    """Read a pytubefix metadata property, tolerating its bugs.
+
+    These properties parse YouTube's response on access (not at fetch time),
+    and pytubefix sometimes has unguarded key access that breaks on a
+    response shape it didn't anticipate (e.g. #description on some unlisted
+    videos). None of this metadata is essential -- don't let a parsing bug
+    in one field sink an otherwise-successful download.
+    """
+    try:
+        return getattr(youtube, name)
+    except Exception as e:
+        logger.info(
+            "youtube_metadata_field_failed",
+            field=name,
+            error_type=type(e).__name__,
+            error=str(e),
+        )
+        return None
+
+
 def assemble_metadata(youtube: pytube.YouTube) -> dict[str, str]:
     metadata = {
-        "title": youtube.title,
-        "author": youtube.author,
-        "length": youtube.length,
-        "rating": youtube.rating,
-        "views": youtube.views,
-        "keywords": youtube.keywords,
-        "description": youtube.description,
+        "title": _safe_attr(youtube, "title"),
+        "author": _safe_attr(youtube, "author"),
+        "length": _safe_attr(youtube, "length"),
+        "rating": _safe_attr(youtube, "rating"),
+        "views": _safe_attr(youtube, "views"),
+        "keywords": _safe_attr(youtube, "keywords"),
+        "description": _safe_attr(youtube, "description"),
         # **youtube.metadata,
     }
     return metadata
