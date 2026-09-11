@@ -1,6 +1,6 @@
 [project]
 name = "the_tuul"
-version = "0.19.1"
+version = "0.20.0"
 description = "Create a good-enough karaoke track for any song in about 10 minutes"
 authors = [{ name = "Dan Kurtz", email = "andfurthermore@gmail.com" }]
 license = "MIT"
