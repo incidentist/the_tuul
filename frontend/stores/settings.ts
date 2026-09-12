@@ -3,12 +3,13 @@ import { reactive, watch } from 'vue';
 import { VerticalAlignment } from '@/lib/timing';
 import { NO_VOCALS_SEPARATOR_MODEL, BACKING_VOCALS_SEPARATOR_MODEL } from './media';
 import Color from 'buefy/src/utils/color';
-import { SeparationModel } from '@/types';
+import { SeparationModelId } from '@/types';
 
 
 // Define interface for settings with simple hex string colors
 export type VideoSettings = {
-  vocalSeparationModel: SeparationModel;
+  // Legacy, persisted but unread: the model in use is mediaStore.separationModel
+  vocalSeparationModel: SeparationModelId;
   addTitleScreen: boolean;
   addCountIns: boolean;
   addInstrumentalScreens: boolean;
@@ -43,7 +44,7 @@ const DEFAULT_SETTINGS: VideoSettings = {
   addStaggeredLines: true,
   useBackgroundVideo: false,
   verticalAlignment: VerticalAlignment.Middle,
-  vocalSeparationModel: BACKING_VOCALS_SEPARATOR_MODEL,
+  vocalSeparationModel: BACKING_VOCALS_SEPARATOR_MODEL.id,
   font: {
     size: 20,
     name: "Arial Narrow",
@@ -88,7 +89,7 @@ export const useSettingsStore = defineStore('settings', () => {
       if (
         newVideoOptions.vocalSeparationModel as string === "model_mel_band_roformer_ep_3005_sdr_11.4360.ckpt"
       ) {
-        newVideoOptions.vocalSeparationModel = NO_VOCALS_SEPARATOR_MODEL;
+        newVideoOptions.vocalSeparationModel = NO_VOCALS_SEPARATOR_MODEL.id;
       }
 
       // Handle legacy font name. "Trebuchet" is not the font's real family name,

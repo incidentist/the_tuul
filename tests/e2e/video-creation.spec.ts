@@ -7,6 +7,7 @@ import {
   uploadAudioFile,
   loadAndEnterLyrics,
   mockSeparateTrackApi,
+  setIncludeBackingVocals,
   expectTabToBeDisabled,
   expectTabToBeEnabled,
   loadAndEnterTimings,
@@ -28,6 +29,8 @@ test.describe('Karaoke Track Creation', () => {
     // 1. Navigate to Song Info tab and upload audio
     await navigateToTab(page, TabId.SongInfo);
     await uploadAudioFile(page, defaultTestConfig.audioFile, defaultTestConfig.artist, defaultTestConfig.title);
+    // The server-side model keeps separation on the mocked API
+    await setIncludeBackingVocals(page, false);
 
     // 2. Verify Song Timing tab is initially disabled
     await expectTabToBeDisabled(page, TabId.SongTiming);

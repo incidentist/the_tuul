@@ -100,7 +100,7 @@ export default defineComponent({
     },
     includeBackingVocals: {
       get() {
-        return this.mediaStore.separationModel == BACKING_VOCALS_SEPARATOR_MODEL;
+        return this.mediaStore.separationModel.keepsBackingVocals;
       },
       set(value) {
         this.mediaStore.separationModel = value
@@ -155,9 +155,6 @@ export default defineComponent({
         this.timingsStore.resetTimings(timings);
       };
       reader.readAsText(file);
-    },
-    onSeparationModelChange(model) {
-      this.mediaStore.separationModel = model;
     },
     onBackingTrackFileChange(file: File | null) {
       this.mediaStore.setBackingTrack(file);

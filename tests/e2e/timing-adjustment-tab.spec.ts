@@ -8,6 +8,7 @@ import {
   loadAndEnterLyrics,
   loadAndEnterTimings,
   mockSeparateTrackApi,
+  setIncludeBackingVocals,
 } from './utils';
 
 test.describe('Timing Adjustment Tab', () => {
@@ -20,6 +21,8 @@ test.describe('Timing Adjustment Tab', () => {
     // Setup: upload audio, enter lyrics, enter initial timings
     await navigateToTab(page, TabId.SongInfo);
     await uploadAudioFile(page, defaultTestConfig.audioFile, defaultTestConfig.artist, defaultTestConfig.title);
+    // The server-side model keeps separation on the mocked API
+    await setIncludeBackingVocals(page, false);
 
     await navigateToTab(page, TabId.LyricInput);
     await loadAndEnterLyrics(page, defaultTestConfig.lyricsFile);

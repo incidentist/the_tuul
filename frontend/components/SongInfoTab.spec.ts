@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 // Stub the network calls made from this tab.
-vi.mock('@/lib/audio', () => ({
+vi.mock('@/lib/audioSeparation', () => ({
   separateTrack: vi.fn(),
 }));
 
@@ -70,10 +70,10 @@ describe('SongInfoTab', () => {
       const wrapper = mountTab();
 
       wrapper.vm.includeBackingVocals = false;
-      expect(mediaStore.separationModel).toBe(NO_VOCALS_SEPARATOR_MODEL);
+      expect(mediaStore.separationModel.id).toBe(NO_VOCALS_SEPARATOR_MODEL.id);
 
       wrapper.vm.includeBackingVocals = true;
-      expect(mediaStore.separationModel).toBe(BACKING_VOCALS_SEPARATOR_MODEL);
+      expect(mediaStore.separationModel.id).toBe(BACKING_VOCALS_SEPARATOR_MODEL.id);
     });
   });
 

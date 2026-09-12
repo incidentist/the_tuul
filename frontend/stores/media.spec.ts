@@ -2,11 +2,12 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 // separateTrack posts to the separation API, so stub the network call.
-vi.mock('@/lib/audio', () => ({
+vi.mock('@/lib/audioSeparation', () => ({
   separateTrack: vi.fn(),
 }));
 
-import { separateTrack } from '@/lib/audio';
+import { separateTrack } from '@/lib/audioSeparation';
+import { SeparationPhase, SeparationProgress } from '@/types';
 import {
   useMediaStore,
   BACKING_VOCALS_SEPARATOR_MODEL,
@@ -21,7 +22,8 @@ describe('Media Store', () => {
 
   test('defaults to the backing-vocals separation model', () => {
     const mediaStore = useMediaStore();
-    expect(mediaStore.separationModel).toBe(BACKING_VOCALS_SEPARATOR_MODEL);
+    // Pinia proxies the stored object, so compare by id rather than identity
+    expect(mediaStore.separationModel.id).toBe(BACKING_VOCALS_SEPARATOR_MODEL.id);
   });
 
   describe('setBackingTrack', () => {
@@ -78,7 +80,8 @@ describe('Media Store', () => {
 
       expect(separateTrack).toHaveBeenCalledWith(
         songFile,
-        NO_VOCALS_SEPARATOR_MODEL
+        NO_VOCALS_SEPARATOR_MODEL,
+        expect.any(Function)
       );
       expect(await mediaStore.separatedTrack?.backing.text()).toBe(
         'backing-payload'
@@ -118,6 +121,46 @@ describe('Media Store', () => {
       expect(mediaStore.error).toBe('separation blew up');
       expect(mediaStore.separatedTrack).toBeNull();
       expect(mediaStore.isProcessing).toBe(false);
+    });
+
+    test('exposes progress reported by the backend while separating', async () => {
+      const mediaStore = useMediaStore();
+      const seen: (SeparationProgress | null)[] = [];
+      vi.mocked(separateTrack).mockImplementation(async (_file, _model, onProgress) => {
+        onProgress?.({ phase: SeparationPhase.DownloadingModel, fraction: null });
+        seen.push(mediaStore.separationProgress);
+        onProgress?.({ phase: SeparationPhase.Separating, fraction: 0.5 });
+        seen.push(mediaStore.separationProgress);
+        return { backing: new Blob(['b']), vocals: new Blob(['v']) };
+      });
+
+      await mediaStore.startSeparation(
+        new File(['song'], 'song.mp3', { type: 'audio/mpeg' }),
+        BACKING_VOCALS_SEPARATOR_MODEL
+      );
+
+      expect(seen).toEqual([
+        { phase: SeparationPhase.DownloadingModel, fraction: null },
+        { phase: SeparationPhase.Separating, fraction: 0.5 },
+      ]);
+      // Cleared once separation finishes, so the next run starts fresh
+      expect(mediaStore.separationProgress).toBeNull();
+    });
+
+    test('clears progress when separation fails', async () => {
+      const mediaStore = useMediaStore();
+      vi.mocked(separateTrack).mockImplementation(async (_file, _model, onProgress) => {
+        onProgress?.({ phase: SeparationPhase.Separating, fraction: 0.2 });
+        throw new Error('boom');
+      });
+
+      await mediaStore.startSeparation(
+        new File(['song'], 'song.mp3', { type: 'audio/mpeg' }),
+        BACKING_VOCALS_SEPARATOR_MODEL
+      );
+
+      expect(mediaStore.error).toBe('boom');
+      expect(mediaStore.separationProgress).toBeNull();
     });
   });
 });

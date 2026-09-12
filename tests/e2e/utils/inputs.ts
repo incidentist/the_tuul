@@ -15,7 +15,22 @@ export type SongSource = 'youtube' | 'upload' | 'backing';
  * track") on the Song Info tab, revealing that source's panel.
  */
 export async function selectSource(page: Page, source: SongSource): Promise<void> {
-  await page.check(`.source-card input[type="radio"][value="${source}"]`);
+  const card = page.locator(`.source-card input[type="radio"][value="${source}"]`);
+  // Layouts without source cards show every source at once; nothing to select.
+  if (await card.count() === 0) {
+    return;
+  }
+  await card.check();
+}
+
+/**
+ * Sets the "Include Backing Vocals" switch on the Song Info tab. On, the
+ * KARA_2 model separates in the browser; off, the server does it.
+ */
+export async function setIncludeBackingVocals(page: Page, enabled: boolean): Promise<void> {
+  await navigateToTab(page, TabId.SongInfo);
+  // Buefy hides the real checkbox behind the styled switch, so force the interaction.
+  await page.locator('.backing-vocals-toggle input[type="checkbox"]').setChecked(enabled, { force: true });
 }
 
 /**

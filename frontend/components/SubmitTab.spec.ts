@@ -2,7 +2,7 @@ import { shallowMount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-vi.mock('@/lib/audio', () => ({
+vi.mock('@/lib/audioSeparation', () => ({
   separateTrack: vi.fn(),
 }));
 

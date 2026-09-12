@@ -1,8 +1,11 @@
 import jszip from "jszip";
 import { API_HOSTNAME } from "@/constants";
-import { SeparationModel } from "@/types";
+import { SeparationBackend, SeparationModel, SeparationProgressCallback } from "@/types";
+import { LocalSeparationRunner, mainThreadRunner } from "./localSeparation";
 
-// Functions for working with audio files and streams
+// Splitting a song into a backing track and a vocals track, either on the
+// server or in the browser depending on the model.
+
 export interface TrackSeparationResult {
     backing: Blob; // Blob of backing track
     vocals: Blob; // Blob of vocals track
@@ -47,12 +50,13 @@ async function processZipResponse(zipBlob: Blob): Promise<TrackSeparationResult>
     return { backing: accompaniment, vocals: vocals };
 }
 
-export async function separateTrack(songFile: File, modelName: SeparationModel): Promise<TrackSeparationResult> {
+/** Separate on the server via POST /separate_track. Reports no progress. */
+export async function separateTrackRemotely(songFile: File, model: SeparationModel): Promise<TrackSeparationResult> {
     const formData = new FormData();
     formData.append("songFile", songFile);
-    formData.append("modelName", modelName);
+    formData.append("modelName", model.id);
     const url = `${API_HOSTNAME}/separate_track`;
-    
+
     try {
         const response = await fetch(url, {
             method: "POST",
@@ -73,6 +77,37 @@ export async function separateTrack(songFile: File, modelName: SeparationModel):
     } catch (error) {
         console.error(`Failed to fetch from separateTrack URL: ${url}`, error);
         throw error;
+    }
+}
+
+/** Separate in the browser with web-audio-separation. */
+export async function separateTrackLocally(
+    songFile: File,
+    model: SeparationModel,
+    onProgress?: SeparationProgressCallback,
+    runner: LocalSeparationRunner = mainThreadRunner
+): Promise<TrackSeparationResult> {
+    if (!model.localModelName) {
+        throw new Error(`Separation model ${model.id} is not available in the browser`);
+    }
+    return runner.run({ songFile, localModelName: model.localModelName }, onProgress);
+}
+
+/** Separate wherever the model says it runs. */
+export async function separateTrack(
+    songFile: File,
+    model: SeparationModel,
+    onProgress?: SeparationProgressCallback
+): Promise<TrackSeparationResult> {
+    switch (model.backend) {
+        case SeparationBackend.Local:
+            return separateTrackLocally(songFile, model, onProgress);
+        case SeparationBackend.Remote:
+            return separateTrackRemotely(songFile, model);
+        default: {
+            const unhandled: never = model.backend;
+            throw new Error(`Unknown separation backend: ${unhandled}`);
+        }
     }
 }
 

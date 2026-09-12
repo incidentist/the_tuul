@@ -1,8 +1,9 @@
 import { defineStore } from 'pinia';
 import { ref, watchEffect } from 'vue';
 
-import { separateTrack, TrackSeparationResult } from '@/lib/audio';
-import { SeparationModel } from '@/types';
+import { separateTrack } from '@/lib/audioSeparation';
+import { BACKING_VOCALS_SEPARATOR_MODEL } from '@/lib/separationModels';
+import { SeparationModel, SeparationProgress } from '@/types';
 import jsmediatags from "@/jsmediatags.min.js";
 
 
@@ -13,8 +14,8 @@ export interface SeparatedTrack {
     vocals: Blob;
 }
 
-export const BACKING_VOCALS_SEPARATOR_MODEL = "UVR_MDXNET_KARA_2.onnx";
-export const NO_VOCALS_SEPARATOR_MODEL = "UVR-MDX-NET-Inst_HQ_3.onnx";
+// Re-exported so existing importers keep working; the catalogue lives in lib/separationModels.
+export { BACKING_VOCALS_SEPARATOR_MODEL, NO_VOCALS_SEPARATOR_MODEL } from '@/lib/separationModels';
 
 export const useMediaStore = defineStore('media', () => {
     // The mixed song file (uploaded by user)
@@ -35,19 +36,24 @@ export const useMediaStore = defineStore('media', () => {
     const separatedTrack = ref<SeparatedTrack | null>(null);
     const error = ref<string | null>(null);
     const separationStartTime = ref<Date | null>(null);
+    // Progress reported by the separation backend, or null when it reports none
+    const separationProgress = ref<SeparationProgress | null>(null);
 
     // True when the backing track came from the user rather than from separation
     const isBackingTrackUserUploaded = ref(false);
 
-    async function startSeparation(inputData: any, modelName: SeparationModel): Promise<SeparatedTrack> {
+    async function startSeparation(inputData: File, model: SeparationModel): Promise<SeparatedTrack> {
         if (isProcessing.value) {
             return;
         }
         isProcessing.value = true;
         error.value = null;
         separationStartTime.value = new Date();
+        separationProgress.value = null;
         try {
-            const result = await separateTrack(inputData, modelName);
+            const result = await separateTrack(inputData, model, (progress) => {
+                separationProgress.value = progress;
+            });
             separatedTrack.value = result;
             isBackingTrackUserUploaded.value = false;
             return separatedTrack.value;
@@ -56,6 +62,7 @@ export const useMediaStore = defineStore('media', () => {
             error.value = (err as Error).message;
         } finally {
             isProcessing.value = false;
+            separationProgress.value = null;
         }
     };
 
@@ -181,6 +188,7 @@ export const useMediaStore = defineStore('media', () => {
         separatedTrack,
         error,
         separationStartTime,
+        separationProgress,
         isBackingTrackUserUploaded,
 
         // Methods

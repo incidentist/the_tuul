@@ -80,7 +80,8 @@
         email me?
       </b-message>
       <video-creation-progress-indicator v-if="isSubmitting" :song-duration="songDuration" :phase="creationPhase"
-        :progress="videoProgress" :elapsed-time="elapsedSubmissionTime" />
+        :progress="videoProgress" :elapsed-time="elapsedSubmissionTime"
+        :separation-progress="mediaStore.separationProgress" />
       <div class="buttons">
         <b-button expanded size="is-large" type="is-primary" :loading="isSubmitting" @click="createVideo"
           :disabled="!isEnabled && !isSubmitting">
@@ -102,7 +103,7 @@ import SourceFileDownloadLinks from "@/components/SourceFileDownloadLinks.vue";
 import VideoCreationProgressIndicator from "@/components/VideoCreationProgressIndicator.vue";
 import jszip from "jszip";
 import video from "@/lib/video";
-import { CreationPhase } from "@/types";
+import { CreationPhase, SeparationModel } from "@/types";
 import { FONTS } from "@/constants";
 import { useMediaStore, SeparatedTrack } from "@/stores/media";
 import { useSettingsStore } from "@/stores/settings";
@@ -215,7 +216,7 @@ export default defineComponent({
   methods: {
     async separateTrack(
       songFile: File,
-      model: string
+      model: SeparationModel
     ): Promise<SeparatedTrack> {
       const backingTrackPromise = new Promise<SeparatedTrack>(
         (resolve, reject) => {

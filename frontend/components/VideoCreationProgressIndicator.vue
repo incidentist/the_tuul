@@ -7,7 +7,7 @@
       type="is-success"
       size="is-medium"
       :rounded="false"
-      :value="phaseProgress * 100"
+      :value="progressValue"
       show-value
     >
       {{ progressMessage }}
@@ -17,7 +17,7 @@
 
 <script lang="ts">
 import { defineComponent, PropType } from "vue";
-import { CreationPhase } from "@/types";
+import { CreationPhase, SeparationPhase, SeparationProgress } from "@/types";
 
 export default defineComponent({
   props: {
@@ -28,6 +28,13 @@ export default defineComponent({
     // Duration of the song in seconds
     songDuration: Number,
     phase: Number as PropType<CreationPhase>,
+    // Progress reported by the separation backend during SeparatingVocals.
+    // Null when the backend reports nothing, in which case progress is
+    // estimated from elapsed time.
+    separationProgress: {
+      type: Object as PropType<SeparationProgress | null>,
+      default: null,
+    },
   },
   data() {
     return {
@@ -35,22 +42,54 @@ export default defineComponent({
     };
   },
   computed: {
-    progressMessage() {
-      if (this.phase == CreationPhase.CreatingVideo) {
-        return `Creating video: ${Math.round(this.phaseProgress * 100)}%`;
-      } else if (this.phase == CreationPhase.SeparatingVocals) {
-        return `Creating instrumental track: ${Math.round(
-          this.phaseProgress * 100
-        )}%`;
-      }
-    },
-    phaseProgress() {
+    // Fraction complete for the current phase, or null when unknown
+    phaseProgress(): number | null {
       if (this.phase == CreationPhase.CreatingVideo) {
         return this.progress;
       } else if (this.phase == CreationPhase.SeparatingVocals) {
-        const elapsedSeconds = this.elapsedTime / 1000;
-        return Math.min(elapsedSeconds / this.songDuration, 1);
+        return this.separationFraction;
       }
+      return null;
+    },
+    separationFraction(): number | null {
+      if (this.separationProgress) {
+        return this.separationProgress.fraction;
+      }
+      // Nothing reported: guess that separation takes about as long as the song
+      const elapsedSeconds = this.elapsedTime / 1000;
+      return Math.min(elapsedSeconds / this.songDuration, 1);
+    },
+    // Value for the progress bar; undefined renders Buefy's indeterminate bar
+    progressValue(): number | undefined {
+      return this.phaseProgress == null ? undefined : this.phaseProgress * 100;
+    },
+    percentComplete(): string {
+      return `${Math.round(this.phaseProgress * 100)}%`;
+    },
+    progressMessage(): string {
+      if (this.phase == CreationPhase.CreatingVideo) {
+        return `Creating video: ${this.percentComplete}`;
+      } else if (this.phase == CreationPhase.SeparatingVocals) {
+        return this.separationMessage;
+      }
+      return "";
+    },
+    separationMessage(): string {
+      switch (this.separationProgress?.phase) {
+        case SeparationPhase.DownloadingModel:
+          return this.withPercent("Downloading separation model");
+        case SeparationPhase.LoadingModel:
+          return this.withPercent("Loading separation model");
+        default:
+          return this.withPercent("Creating instrumental track");
+      }
+    },
+  },
+  methods: {
+    withPercent(message: string): string {
+      return this.phaseProgress == null
+        ? `${message}...`
+        : `${message}: ${this.percentComplete}`;
     },
   },
 });
@@ -61,4 +100,3 @@ export default defineComponent({
   padding: 0.5rem;
 }
 </style>
-

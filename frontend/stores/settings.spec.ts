@@ -25,7 +25,7 @@ describe('Settings Store', () => {
     expect(settingsStore.videoOptions.addStaggeredLines).toBe(true);
     expect(settingsStore.videoOptions.useBackgroundVideo).toBe(false);
     expect(settingsStore.videoOptions.verticalAlignment).toBe(VerticalAlignment.Middle);
-    expect(settingsStore.videoOptions.vocalSeparationModel).toBe(BACKING_VOCALS_SEPARATOR_MODEL);
+    expect(settingsStore.videoOptions.vocalSeparationModel).toBe(BACKING_VOCALS_SEPARATOR_MODEL.id);
 
     // Check font default values
     expect(settingsStore.videoOptions.font.size).toBe(20);
@@ -65,7 +65,7 @@ describe('Settings Store', () => {
       addStaggeredLines: false,
       useBackgroundVideo: true,
       verticalAlignment: VerticalAlignment.Top,
-      vocalSeparationModel: NO_VOCALS_SEPARATOR_MODEL,
+      vocalSeparationModel: NO_VOCALS_SEPARATOR_MODEL.id,
       font: {
         size: 30,
         name: "Times New Roman"
@@ -89,7 +89,7 @@ describe('Settings Store', () => {
     expect(settingsStore.videoOptions.addStaggeredLines).toBe(false);
     expect(settingsStore.videoOptions.useBackgroundVideo).toBe(true);
     expect(settingsStore.videoOptions.verticalAlignment).toBe(VerticalAlignment.Top);
-    expect(settingsStore.videoOptions.vocalSeparationModel).toBe(NO_VOCALS_SEPARATOR_MODEL);
+    expect(settingsStore.videoOptions.vocalSeparationModel).toBe(NO_VOCALS_SEPARATOR_MODEL.id);
 
     // Check font values
     expect(settingsStore.videoOptions.font.size).toBe(30);
@@ -110,7 +110,7 @@ describe('Settings Store', () => {
       addStaggeredLines: true,
       useBackgroundVideo: false,
       verticalAlignment: VerticalAlignment.Middle,
-      vocalSeparationModel: NO_VOCALS_SEPARATOR_MODEL,
+      vocalSeparationModel: NO_VOCALS_SEPARATOR_MODEL.id,
       font: {
         size: 28,
         name: "Trebuchet"
@@ -158,7 +158,7 @@ describe('Settings Store', () => {
       addStaggeredLines: false,
       useBackgroundVideo: true,
       verticalAlignment: VerticalAlignment.Top,
-      vocalSeparationModel: NO_VOCALS_SEPARATOR_MODEL,
+      vocalSeparationModel: NO_VOCALS_SEPARATOR_MODEL.id,
       font: {
         size: 30,
         name: "Times New Roman"

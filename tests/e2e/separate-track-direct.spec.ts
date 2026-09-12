@@ -7,6 +7,7 @@ import {
   uploadAudioFile,
   loadAndEnterLyrics,
   mockSeparateTrackApiDirect,
+  setIncludeBackingVocals,
   expectTabToBeDisabled,
   expectTabToBeEnabled,
   loadAndEnterTimings,
@@ -28,6 +29,8 @@ test.describe('Separate Track Direct Response', () => {
     // Navigate to Song Info tab and upload audio
     await navigateToTab(page, TabId.SongInfo);
     await uploadAudioFile(page, defaultTestConfig.audioFile, defaultTestConfig.artist, defaultTestConfig.title);
+    // The server-side model keeps separation on the mocked API
+    await setIncludeBackingVocals(page, false);
 
     // Wait for the separation to complete
     await page.waitForTimeout(2000); // Give some time for the API call to complete
