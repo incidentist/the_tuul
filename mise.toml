@@ -52,6 +52,17 @@ docker buildx build -t "the-tuul:latest" \
   .
 '''
 
+[tasks.gcs-cors]
+description = "Apply infra/gcs/cors.json to the separated-tracks bucket (reads SEPARATED_TRACKS_BUCKET from the env or .env)"
+run = '''
+BUCKET="${SEPARATED_TRACKS_BUCKET:-$(grep '^SEPARATED_TRACKS_BUCKET=' .env 2>/dev/null | cut -d= -f2-)}"
+if [ -z "$BUCKET" ]; then
+  echo "SEPARATED_TRACKS_BUCKET is not set (export it or add it to .env)" >&2
+  exit 1
+fi
+gcloud storage buckets update "gs://$BUCKET" --cors-file=infra/gcs/cors.json
+'''
+
 [tasks.release]
 description = "Merge origin/beta into main, tag it with the project version, and push"
 run = '''
