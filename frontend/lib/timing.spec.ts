@@ -275,9 +275,31 @@ test('compileLyricTimings handles more events than segments', () => {
         [5.0, LYRIC_MARKERS.SEGMENT_START]
     ];
 
-    // Should return whatever screens were built before running out of segments
+    // Extra events are ignored; the segments we do have still make a screen
     const screens = compileLyricTimings(shortLyrics, tooManyEvents);
     expect(screens.length).toBe(1);
     expect(screens[0].lines.length).toBe(1);
     expect(screens[0].lines[0].segments.length).toBe(1); // Only got the first segment
+});
+
+test('compileLyricTimings ignores extra segment starts', () => {
+    // Timing a song and then deleting lyrics leaves more events than segments
+    const extraEvents: LyricEvent[] = [
+        ...testEvents,
+        [20.0, LYRIC_MARKERS.SEGMENT_START],
+        [21.0, LYRIC_MARKERS.SEGMENT_END],
+        [22.0, LYRIC_MARKERS.SEGMENT_START],
+    ];
+
+    const screens = setSegmentEndTimes(compileLyricTimings(testLyrics, extraEvents), 60);
+
+    // Every lyric segment is still timed, exactly as if the extra events weren't there
+    expect(screens.length).toBe(2);
+    expect(screens[0].lines.length).toBe(2);
+    expect(screens[0].lines[0].segments.length).toBe(2);
+    expect(screens[1].lines[0].segments.length).toBe(4);
+    // The end event belonging to an ignored start doesn't end the last real segment
+    const lastLine = screens[1].lines[0];
+    expect(lastLine.segments[3].timestamp).toBe(9.0);
+    expect(lastLine.segments[3].endTimestamp).toBe(60);
 });

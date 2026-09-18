@@ -403,6 +403,7 @@ export function compileLyricTimings(lyrics: string, events: LyricEvent[]): Lyric
   let previousSegment = null;
   let line = null;
   let screen = null;
+  let ignoredSegmentStarts = 0;
 
   if (lyrics.length == 0 || events.length == 0) {
     return [];
@@ -415,10 +416,13 @@ export function compileLyricTimings(lyrics: string, events: LyricEvent[]): Lyric
       if (marker == LYRIC_MARKERS.SEGMENT_START) {
         const nextSegment = segments.next();
         if (nextSegment.done) {
-          console.error("compileLyricTimings: More SEGMENT_START events than lyric segments available", {
-            lyrics, totalEvents: events.length, currentScreens: screens.length
-          });
-          break;
+          // There are more timing events than lyric segments, which happens when
+          // the lyrics are edited after they have been timed. Ignore the extra
+          // start, and any end that belongs to it, so the segments we do have
+          // still produce screens.
+          ignoredSegmentStarts++;
+          previousSegment = null;
+          continue;
         }
         const segmentText = nextSegment.value.text;
         const segment = new LyricSegment(segmentText, timestamp);
@@ -450,6 +454,12 @@ export function compileLyricTimings(lyrics: string, events: LyricEvent[]): Lyric
     }
     if (screen !== null && screen.lines.length > 0) {
       screens.push(screen);
+    }
+
+    if (ignoredSegmentStarts > 0) {
+      console.warn("compileLyricTimings: More SEGMENT_START events than lyric segments available", {
+        ignoredSegmentStarts, totalEvents: events.length, screens: screens.length
+      });
     }
   } catch (e) {
     console.error("compileLyricTimings error", e, lyrics, events);
