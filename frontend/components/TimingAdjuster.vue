@@ -2,7 +2,16 @@
   <div>
     <smooth-audio-player ref="audioPlayer" controls :src="audioSource" @timeupdate="onAudioTimeUpdate"
       @seeking="onAudioSeeking" @play="onAudioPlay" @pause="onAudioPause" @error="onAudioError" />
-    <wavesurfer ref="wavesurfer" :audioData="vocalTrack || audioData" :regions="regions" :mediaControls="false"
+    <b-message v-if="error" type="is-danger" has-icon icon="circle-exclamation" :closable="false"
+      class="adjuster-error">
+      <p>The timing adjuster couldn't be displayed for this song.</p>
+      <p class="adjuster-error-detail">{{ error }}</p>
+      <p>
+        Your timings haven't been changed. You can still make your video from
+        the Submit tab.
+      </p>
+    </b-message>
+    <wavesurfer v-else ref="wavesurfer" :audioData="vocalTrack || audioData" :regions="regions" :mediaControls="false"
       :showWaveform="true || Boolean(vocalTrack)" @region-updated="onRegionUpdated" @seeking="onWavesurferSeeking" />
   </div>
 </template>
@@ -48,6 +57,9 @@ export default defineComponent({
     return {
       regions: [],
       audioSource: null as string | null,
+      // Set when the adjuster can't be built, e.g. from timings that don't
+      // match the lyrics. Shown in place of the waveform.
+      error: null as string | null,
     };
   },
   computed: {
@@ -63,20 +75,26 @@ export default defineComponent({
     },
   },
   mounted() {
-    this.regions = this.createRegions(this.timings, this.splitLyrics);
     if (this.audioData) {
       this.audioSource = URL.createObjectURL(this.audioData);
     }
+    this.rebuildRegions();
+  },
+  errorCaptured(e: unknown) {
+    // The waveform or the audio player failed. Say so instead of leaving an
+    // empty space under the preview. Returning nothing lets the error keep
+    // propagating to the app's error handler, which logs it to the server.
+    this.error = this.errorMessage(e);
   },
   watch: {
     timings: {
-      handler: function (newTimings: Array<LyricEvent>) {
-        this.regions = this.createRegions(newTimings, this.splitLyrics);
+      handler: function () {
+        this.rebuildRegions();
       },
       deep: true
     },
     lyrics(newLyrics: String) {
-      this.regions = this.createRegions(this.timings, this.splitLyrics);
+      this.rebuildRegions();
     },
     audioData(newAudioData: Blob) {
       if (newAudioData) {
@@ -88,6 +106,20 @@ export default defineComponent({
     },
   },
   methods: {
+    rebuildRegions() {
+      try {
+        this.regions = this.createRegions(this.timings, this.splitLyrics);
+        this.error = null;
+      } catch (e) {
+        // console.error is what forwards the error to the server, so keep it
+        // even though we're handling this one.
+        console.error("Timing adjuster could not build regions", e);
+        this.error = this.errorMessage(e);
+      }
+    },
+    errorMessage(e: unknown): string {
+      return e instanceof Error ? e.message : String(e);
+    },
     createRegions(
       timings: Array<LyricEvent>,
       lyrics: Array<String>
@@ -150,7 +182,7 @@ export default defineComponent({
       this.$emit("seeking", time);
     },
     setAdjusterPlayhead(playhead: number) {
-      this.$refs.wavesurfer.setTime(playhead);
+      this.$refs.wavesurfer?.setTime(playhead);
     },
     setAudioPlayhead(playhead: number) {
       this.$refs.audioPlayer.currentTime = playhead;
@@ -176,7 +208,7 @@ export default defineComponent({
       // this.$refs.wavesurfer.play();
     },
     onAudioPause() {
-      this.$refs.wavesurfer.pause();
+      this.$refs.wavesurfer?.pause();
     },
     onAudioError(event: Event) {
       const audio = event.target as HTMLAudioElement;
@@ -200,5 +232,10 @@ export default defineComponent({
 audio {
   width: 100%;
   margin-bottom: 1em;
+}
+
+.adjuster-error-detail {
+  font-family: monospace;
+  overflow-wrap: anywhere;
 }
 </style>
