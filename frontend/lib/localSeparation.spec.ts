@@ -8,9 +8,14 @@ vi.mock('web-audio-separation', () => ({
         UVR_MDXNET_KARA_2: { modelData: { primary_stem: 'Instrumental' } },
         Kim_Vocal_2: { modelData: { primary_stem: 'Vocals' } },
     },
+    SeparationStage: {
+        LoadingModel: 'loading-model',
+        Demixing: 'demixing',
+        WritingOutput: 'writing-output',
+    },
 }));
 
-import { createSeparator } from 'web-audio-separation';
+import { createSeparator, SeparationStage } from 'web-audio-separation';
 import {
     LocalSeparationEvent,
     mainThreadRunner,
@@ -30,6 +35,18 @@ function fakeSeparator(overrides: Partial<{ loadModel: () => Promise<void>; sepa
         separate: vi.fn().mockResolvedValue([VOCALS_URL, INSTRUMENTAL_URL]),
         ...overrides,
     };
+}
+
+// Captures the onProgress callback passed to createSeparator so tests can
+// simulate the library reporting progress mid-separation.
+function fakeSeparatorCapturingProgress(overrides: Parameters<typeof fakeSeparator>[0] = {}) {
+    const separator = fakeSeparator(overrides);
+    vi.mocked(createSeparator).mockImplementation((_name, config) => {
+        config?.common?.onProgress?.({ stage: SeparationStage.LoadingModel, fraction: 0.5 });
+        config?.common?.onProgress?.({ stage: SeparationStage.Demixing, fraction: 0.5, chunk: 1, totalChunks: 2 });
+        return separator as any;
+    });
+    return separator;
 }
 
 const songFile = new File(['song'], 'song.mp3', { type: 'audio/mpeg' });
@@ -67,26 +84,25 @@ describe('localSeparation', () => {
     });
 
     describe('toAppProgress', () => {
-        it('maps library phases onto app phases and keeps the fraction', () => {
-            expect(toAppProgress({ phase: 'download', fraction: 0.25 })).toEqual({
-                phase: SeparationPhase.DownloadingModel,
+        it('maps library stages onto app phases and keeps the fraction', () => {
+            expect(toAppProgress({ stage: SeparationStage.LoadingModel, fraction: 0.25 })).toEqual({
+                phase: SeparationPhase.LoadingModel,
                 fraction: 0.25,
             });
-            expect(toAppProgress({ phase: 'load', fraction: null })).toEqual({
-                phase: SeparationPhase.LoadingModel,
-                fraction: null,
-            });
-            expect(toAppProgress({ phase: 'separate', fraction: 1 })).toEqual({
+            expect(toAppProgress({ stage: SeparationStage.Demixing, fraction: 0.5 })).toEqual({
                 phase: SeparationPhase.Separating,
+                fraction: 0.5,
+            });
+            expect(toAppProgress({ stage: SeparationStage.WritingOutput, fraction: 1 })).toEqual({
+                phase: SeparationPhase.WritingOutput,
                 fraction: 1,
             });
         });
     });
 
     describe('runLocalSeparation', () => {
-        it('emits the phases in order and then the wav stems', async () => {
-            const separator = fakeSeparator();
-            vi.mocked(createSeparator).mockReturnValue(separator as any);
+        it('forwards progress from the library and then emits the wav stems', async () => {
+            const separator = fakeSeparatorCapturingProgress();
             const events: LocalSeparationEvent[] = [];
 
             await runLocalSeparation(request, (event) => events.push(event));
@@ -96,11 +112,11 @@ describe('localSeparation', () => {
             expect(events.map((event) => event.type)).toEqual(['progress', 'progress', 'result']);
             expect(events[0]).toEqual({
                 type: 'progress',
-                progress: { phase: SeparationPhase.DownloadingModel, fraction: null },
+                progress: { phase: SeparationPhase.LoadingModel, fraction: 0.5 },
             });
             expect(events[1]).toEqual({
                 type: 'progress',
-                progress: { phase: SeparationPhase.Separating, fraction: null },
+                progress: { phase: SeparationPhase.Separating, fraction: 0.5 },
             });
 
             const result = events[2] as Extract<LocalSeparationEvent, { type: 'result' }>;
@@ -148,7 +164,7 @@ describe('localSeparation', () => {
 
     describe('mainThreadRunner', () => {
         it('resolves with the result and forwards progress', async () => {
-            vi.mocked(createSeparator).mockReturnValue(fakeSeparator() as any);
+            fakeSeparatorCapturingProgress();
             const onProgress = vi.fn();
 
             const result = await mainThreadRunner.run(request, onProgress);
@@ -156,7 +172,7 @@ describe('localSeparation', () => {
             expect(result.backing).toBeInstanceOf(Blob);
             expect(result.vocals).toBeInstanceOf(Blob);
             expect(onProgress).toHaveBeenCalledTimes(2);
-            expect(onProgress).toHaveBeenLastCalledWith({ phase: SeparationPhase.Separating, fraction: null });
+            expect(onProgress).toHaveBeenLastCalledWith({ phase: SeparationPhase.Separating, fraction: 0.5 });
         });
 
         it('rejects when the engine reports an error', async () => {

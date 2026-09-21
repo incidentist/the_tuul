@@ -127,7 +127,7 @@ describe('Media Store', () => {
       const mediaStore = useMediaStore();
       const seen: (SeparationProgress | null)[] = [];
       vi.mocked(separateTrack).mockImplementation(async (_file, _model, onProgress) => {
-        onProgress?.({ phase: SeparationPhase.DownloadingModel, fraction: null });
+        onProgress?.({ phase: SeparationPhase.LoadingModel, fraction: null });
         seen.push(mediaStore.separationProgress);
         onProgress?.({ phase: SeparationPhase.Separating, fraction: 0.5 });
         seen.push(mediaStore.separationProgress);
@@ -140,7 +140,7 @@ describe('Media Store', () => {
       );
 
       expect(seen).toEqual([
-        { phase: SeparationPhase.DownloadingModel, fraction: null },
+        { phase: SeparationPhase.LoadingModel, fraction: null },
         { phase: SeparationPhase.Separating, fraction: 0.5 },
       ]);
       // Cleared once separation finishes, so the next run starts fresh

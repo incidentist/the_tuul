@@ -76,10 +76,10 @@ export default defineComponent({
     },
     separationMessage(): string {
       switch (this.separationProgress?.phase) {
-        case SeparationPhase.DownloadingModel:
-          return this.withPercent("Downloading separation model");
         case SeparationPhase.LoadingModel:
           return this.withPercent("Loading separation model");
+        case SeparationPhase.WritingOutput:
+          return this.withPercent("Writing separated tracks");
         default:
           return this.withPercent("Creating instrumental track");
       }

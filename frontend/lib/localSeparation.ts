@@ -6,7 +6,8 @@
 // `workerRunner` would implement `LocalSeparationRunner` by posting the
 // request and forwarding the events. Today the library needs the main thread
 // (it uses OfflineAudioContext and window), so only `mainThreadRunner` exists.
-import { createSeparator, MODEL_REGISTRY, RegisteredModelName } from "web-audio-separation";
+import { createSeparator, MODEL_REGISTRY, RegisteredModelName, SeparationStage } from "web-audio-separation";
+import type { SeparationProgress as LibraryProgress } from "web-audio-separation";
 import { SeparationPhase, SeparationProgress, SeparationProgressCallback } from "@/types";
 import type { TrackSeparationResult } from "./audioSeparation";
 
@@ -43,23 +44,14 @@ export function stemUrlsToResult(urls: string[], primaryStem: PrimaryStem): { ba
     return { backingUrl: secondaryUrl, vocalsUrl: primaryUrl };
 }
 
-// The shape web-audio-separation's onProgress callback is expected to report.
-// Once the library exposes it, pass
-//   common: { onProgress: (p) => emit({ type: "progress", progress: toAppProgress(p) }) }
-// to createSeparator and drop the coarse phase emits in runLocalSeparation.
-export interface LibraryProgress {
-    phase: "download" | "load" | "separate";
-    fraction: number | null;
-}
-
-const LIBRARY_PHASES: Record<LibraryProgress["phase"], SeparationPhase> = {
-    download: SeparationPhase.DownloadingModel,
-    load: SeparationPhase.LoadingModel,
-    separate: SeparationPhase.Separating,
+const LIBRARY_STAGES: Record<SeparationStage, SeparationPhase> = {
+    [SeparationStage.LoadingModel]: SeparationPhase.LoadingModel,
+    [SeparationStage.Demixing]: SeparationPhase.Separating,
+    [SeparationStage.WritingOutput]: SeparationPhase.WritingOutput,
 };
 
 export function toAppProgress(progress: LibraryProgress): SeparationProgress {
-    return { phase: LIBRARY_PHASES[progress.phase], fraction: progress.fraction };
+    return { phase: LIBRARY_STAGES[progress.stage], fraction: progress.fraction };
 }
 
 async function wavBlobFromUrl(url: string): Promise<Blob> {
@@ -76,19 +68,19 @@ export async function runLocalSeparation(
     request: LocalSeparationRequest,
     emit: (event: LocalSeparationEvent) => void
 ): Promise<void> {
-    const reportPhase = (phase: SeparationPhase) => emit({ type: "progress", progress: { phase, fraction: null } });
     let inputUrl: string | null = null;
     const stemUrls: string[] = [];
 
     try {
         const separator = createSeparator(request.localModelName, {
-            common: { logLevel: "warning" },
+            common: {
+                logLevel: "warning",
+                onProgress: (progress) => emit({ type: "progress", progress: toAppProgress(progress) }),
+            },
         });
 
-        reportPhase(SeparationPhase.DownloadingModel);
         await separator.loadModel();
 
-        reportPhase(SeparationPhase.Separating);
         inputUrl = URL.createObjectURL(request.songFile);
         stemUrls.push(...(await separator.separate(inputUrl)));
 

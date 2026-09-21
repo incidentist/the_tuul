@@ -14,8 +14,8 @@ describe('separationModels', () => {
         expect(BACKING_VOCALS_SEPARATOR_MODEL.keepsBackingVocals).toBe(true);
     });
 
-    it('runs the no-vocals model on the server', () => {
-        expect(NO_VOCALS_SEPARATOR_MODEL.backend).toBe(SeparationBackend.Remote);
+    it('runs the no-vocals model in the browser', () => {
+        expect(NO_VOCALS_SEPARATOR_MODEL.backend).toBe(SeparationBackend.Local);
         expect(NO_VOCALS_SEPARATOR_MODEL.keepsBackingVocals).toBe(false);
     });
 

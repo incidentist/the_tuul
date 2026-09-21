@@ -47,25 +47,25 @@ describe('VideoCreationProgressIndicator', () => {
     });
 
     test('shows an indeterminate bar with a phase message when the fraction is unknown', () => {
-      const separationProgress: SeparationProgress = { phase: SeparationPhase.DownloadingModel, fraction: null };
+      const separationProgress: SeparationProgress = { phase: SeparationPhase.LoadingModel, fraction: null };
       const wrapper = mountIndicator({ ...separatingProps, separationProgress });
 
       expect(wrapper.vm.progressValue).toBeUndefined();
-      expect(wrapper.vm.progressMessage).toBe('Downloading separation model...');
+      expect(wrapper.vm.progressMessage).toBe('Loading separation model...');
     });
 
-    test('labels the model download and load phases', () => {
-      const downloading = mountIndicator({
-        ...separatingProps,
-        separationProgress: { phase: SeparationPhase.DownloadingModel, fraction: 0.5 },
-      });
+    test('labels the model loading and writing-output phases', () => {
       const loading = mountIndicator({
         ...separatingProps,
-        separationProgress: { phase: SeparationPhase.LoadingModel, fraction: null },
+        separationProgress: { phase: SeparationPhase.LoadingModel, fraction: 0.5 },
+      });
+      const writingOutput = mountIndicator({
+        ...separatingProps,
+        separationProgress: { phase: SeparationPhase.WritingOutput, fraction: null },
       });
 
-      expect(downloading.vm.progressMessage).toBe('Downloading separation model: 50%');
-      expect(loading.vm.progressMessage).toBe('Loading separation model...');
+      expect(loading.vm.progressMessage).toBe('Loading separation model: 50%');
+      expect(writingOutput.vm.progressMessage).toBe('Writing separated tracks...');
     });
   });
 

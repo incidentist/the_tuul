@@ -206,6 +206,12 @@ describe('separateTrack', () => {
     });
 
     it('sends a remote model to the server', async () => {
+        const remoteModel: SeparationModel = {
+            id: NO_VOCALS_SEPARATOR_MODEL.id,
+            label: NO_VOCALS_SEPARATOR_MODEL.label,
+            backend: SeparationBackend.Remote,
+            keepsBackingVocals: false,
+        };
         const songFile = new File(['song'], 'song.mp3', { type: 'audio/mpeg' });
         (fetch as any).mockResolvedValueOnce({
             headers: { get: vi.fn().mockReturnValue('application/zip') },
@@ -213,12 +219,12 @@ describe('separateTrack', () => {
         });
         await mockZipResponse();
 
-        await separateTrack(songFile, NO_VOCALS_SEPARATOR_MODEL);
+        await separateTrack(songFile, remoteModel);
 
         expect(mainThreadRunner.run).not.toHaveBeenCalled();
         expect(fetch).toHaveBeenCalledTimes(1);
         const [, options] = (fetch as any).mock.calls[0];
-        expect((options.body as FormData).get('modelName')).toBe(NO_VOCALS_SEPARATOR_MODEL.id);
+        expect((options.body as FormData).get('modelName')).toBe(remoteModel.id);
     });
 
     it('rejects a local model that has no library model name', async () => {

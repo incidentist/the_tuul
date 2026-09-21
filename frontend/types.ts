@@ -31,9 +31,9 @@ export interface SeparationModel {
 }
 
 export enum SeparationPhase {
-    DownloadingModel = "downloading-model",
     LoadingModel = "loading-model",
     Separating = "separating",
+    WritingOutput = "writing-output",
 }
 
 export interface SeparationProgress {
