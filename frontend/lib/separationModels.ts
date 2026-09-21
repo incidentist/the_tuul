@@ -14,7 +14,8 @@ export const BACKING_VOCALS_SEPARATOR_MODEL: SeparationModel = {
 export const NO_VOCALS_SEPARATOR_MODEL: SeparationModel = {
     id: "UVR-MDX-NET-Inst_HQ_3.onnx",
     label: "Remove all vocals",
-    backend: SeparationBackend.Remote,
+    backend: SeparationBackend.Local,
+    localModelName: "UVR-MDX-NET-Inst_HQ_3",
     keepsBackingVocals: false,
 };
 
