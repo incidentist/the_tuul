@@ -31,6 +31,20 @@ To build the Docker image:
 
 `> mise run build-docker`
 
+## Self Hosting
+
+Want to run your own copy of The Tüül? Use the self-hosted Docker image, built from `infra/Dockerfile.selfhosted`:
+
+```
+> mise run selfhosted
+```
+
+This builds the image (tagged `the-tuul-selfhosted` by default) and runs it with port 8080 mapped to your host, so the app is available at http://localhost:8080. Pass a tag name to use something else:
+
+```
+> mise run selfhosted my-tag
+```
+
 ## Deploy
 
 Environment setup files that are applied by hand rather than at runtime live in `infra/` (see `infra/README.md`).

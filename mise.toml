@@ -52,6 +52,16 @@ docker buildx build -t "the-tuul:latest" \
   .
 '''
 
+[tasks.selfhosted]
+description = "Build and run the self-hosted Docker image (infra/Dockerfile.selfhosted)"
+usage = '''
+arg "<tag>" default="the-tuul-selfhosted"
+'''
+run = '''
+docker build -f infra/Dockerfile.selfhosted -t "$usage_tag" .
+docker run --rm -p 8080:8080 "$usage_tag"
+'''
+
 [tasks.gcs-cors]
 description = "Apply infra/gcs/cors.json to the separated-tracks bucket (reads SEPARATED_TRACKS_BUCKET from the env or .env)"
 run = '''
