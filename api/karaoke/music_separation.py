@@ -46,7 +46,6 @@ AVAILABLE_MODELS = [
 class SeparationMethod(Enum):
     API = "api"
     CLI = "cli"
-    MODAL_API = "modal_api"
 
 
 def _validate_model(model_name: str) -> None:
@@ -184,61 +183,6 @@ def _split_song_tcp(
         return split_song(songfile, song_dir, model_name, method=SeparationMethod.API)
 
 
-def _split_song_modal_api(
-    songfile: Path, song_dir: Path, model_name: str, api_url: str
-) -> tuple[Path, Path]:
-    """Split song using the remote Modal API separation service with AudioSeparatorAPIClient."""
-    try:
-        from audio_separator.remote import AudioSeparatorAPIClient
-    except ModuleNotFoundError as e:
-        logging.error(f"AudioSeparatorAPIClient not available: {e}")
-        logging.warning("Falling back to API method")
-        return split_song(songfile, song_dir, model_name, method=SeparationMethod.API)
-
-    try:
-        # Initialize the API client
-        logger = logging.getLogger(__name__)
-        api_client = AudioSeparatorAPIClient(api_url, logger)
-
-        # Set up custom output names to match our expected format
-        custom_output_names = {
-            "Vocals": "vocals",
-            "Instrumental": "accompaniment",
-        }
-
-        # Separate audio and wait for completion
-        result = api_client.separate_audio_and_wait(
-            str(songfile),
-            model=model_name,
-            timeout=600,  # Wait up to 10 minutes
-            poll_interval=5,  # Check status every 5 seconds
-            download=True,  # Automatically download files
-            output_dir=str(song_dir),  # Save files to song directory
-            output_format="wav",
-            custom_output_names=custom_output_names,
-        )
-
-        if result["status"] == "completed":
-            logging.info("Modal API separation completed")
-
-            # The files should be downloaded to the song_dir with our custom names
-            vocals_path = song_dir / "vocals.wav"
-            accompaniment_path = song_dir / "accompaniment.wav"
-
-            # Verify the files exist
-            if not vocals_path.exists() or not accompaniment_path.exists():
-                raise RuntimeError("Expected output files not found after separation")
-
-            return accompaniment_path, vocals_path
-        else:
-            error_msg = result.get("error", "Unknown error")
-            raise RuntimeError(f"Modal API separation failed: {error_msg}")
-
-    except Exception as e:
-        logging.warning(f"Modal API error: {e}, falling back to API method")
-        return split_song(songfile, song_dir, model_name, method=SeparationMethod.API)
-
-
 def split_song(
     songfile: Path,
     song_dir: Path,
@@ -246,7 +190,6 @@ def split_song(
     method: SeparationMethod = SeparationMethod.API,
     host: Optional[str] = None,
     port: Optional[int] = None,
-    modal_api_url: Optional[str] = None,
 ) -> tuple[Path, Path]:
     """
     Split song into instrumental and vocal tracks.
@@ -259,7 +202,6 @@ def split_song(
         method: SeparationMethod enum value
         host: Host for external separation server
         port: TCP port for external separation server (host+port overrides method if provided)
-        api_url: URL for Modal API separation (overrides method if provided)
     """
     _validate_model(model_name)
 
@@ -276,17 +218,9 @@ def split_song(
         accompaniment_path, vocals_path = _split_song_cli(
             songfile, song_dir, model_name
         )
-    elif method == SeparationMethod.MODAL_API:
-        if not modal_api_url:
-            raise ValueError(
-                "API_URL must be configured in settings or provided as parameter for MODAL_API method"
-            )
-        accompaniment_path, vocals_path = _split_song_modal_api(
-            songfile, song_dir, model_name, modal_api_url
-        )
     else:
         raise ValueError(
-            f"Invalid method '{method}'. Must be SeparationMethod.API, SeparationMethod.CLI, or SeparationMethod.MODAL_API"
+            f"Invalid method '{method}'. Must be SeparationMethod.API or SeparationMethod.CLI"
         )
 
     logging.info(

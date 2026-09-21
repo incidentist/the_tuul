@@ -40,6 +40,3 @@ PORT = int(os.getenv("PORT", "8000"))
 # Separator settings (for GPU access on host)
 SEPARATOR_HOST = os.getenv("SEPARATOR_HOST", "")
 SEPARATOR_PORT = int(os.getenv("SEPARATOR_PORT", "8001"))
-
-# Remote Modal API separation
-SEPARATOR_MODAL_API_URL = os.getenv("SEPARATOR_MODAL_API_URL", "")
