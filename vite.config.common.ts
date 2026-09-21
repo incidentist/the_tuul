@@ -37,6 +37,10 @@ const commonConfig: UserConfig = {
         alias: {
             '@': resolve(import.meta.dirname, './frontend'),
         },
+        // onnxruntime-web (pulled in by web-audio-separation) defaults to bundling a 27MB binary as an
+        // asset. web-audio-separation fetches the bundle from a CDN at runtime, so that asset is never
+        // fetched. Tell it to not bundle the binary.
+        conditions: ['module', 'browser', 'development|production', 'onnxruntime-web-use-extern-wasm'],
     },
     build: {
         outDir: '../api/assets/bundles',
