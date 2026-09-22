@@ -6,7 +6,10 @@ authors = [{ name = "Dan Kurtz", email = "andfurthermore@gmail.com" }]
 license = "MIT"
 requires-python = ">=3.13,<3.14"
 dependencies = [
-    "audio-separator[cpu]>=0.44.5,<0.45.0",
+    # audio-separator is NOT a base dependency: the hosted deployment offloads
+    # separation (on-device in the browser, or Modal) and never separates
+    # in-process, so shipping an ONNX runtime it never calls just bloats the
+    # image. Self-hosters install it via the `selfhosted` group below.
     "pytubefix>=10.11.0,<11.0.0",
     "google-cloud-storage>=3.13.0,<4.0.0",
     "fastapi[standard]>=0.141.1,<0.142.0",
@@ -19,6 +22,34 @@ dependencies = [
 separator-daemon = "api.run_separator_daemon:main"
 
 [dependency-groups]
+# Installed on the HOST by the provider in infra/compose-separation-provider/,
+# which runs the separator outside the container so it can reach the machine's GPU.
+#
+# The extra names are about which onnxruntime wheel gets pulled, not about
+# CPU-vs-GPU:
+#   - Linux/Windows: [gpu] pulls onnxruntime-gpu, which means CUDA.
+#   - macOS: onnxruntime-gpu publishes no macOS wheel at all, and it does not
+#     need to -- the plain onnxruntime wheel that [cpu] pulls already ships
+#     CoreMLExecutionProvider, which is the Apple GPU/ANE path.
+# audio-separator autodetects at runtime (setup_torch_device) and picks CUDA,
+# then CoreML, then DirectML, falling back to CPU if none are present.
+selfhosted = [
+    "audio-separator[gpu]>=0.44.5,<0.45.0; sys_platform != 'darwin'",
+    "audio-separator[cpu]>=0.44.5,<0.45.0; sys_platform == 'darwin'",
+    # audio-separator imports audioread (via uvr_lib_v5.spec_utils) but does not
+    # declare it; it used to arrive transitively through librosa, which no
+    # longer depends on it. Without this, `import audio_separator` raises
+    # ModuleNotFoundError -- which _split_song_api catches, silently returning
+    # UNSEPARATED audio. Declare it ourselves until upstream does.
+    "audioread>=3.0.0",
+    # audio-separator depends on librosa without a ceiling, but calls
+    # librosa.get_duration(filename=...), a keyword librosa 1.0 removed. Left
+    # unpinned, uv resolves 1.0.0 and every separation dies with
+    # "get_duration() got an unexpected keyword argument 'filename'". Cap it
+    # until audio-separator moves to the `path=` spelling.
+    "librosa<1.0",
+]
+
 dev = [
     "black>=26.5.1,<27.0.0",
     "pytest>=9.1.1,<10.0.0",

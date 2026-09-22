@@ -4,7 +4,6 @@ import logging
 import subprocess
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 import httpx2 as httpx
 
@@ -25,12 +24,17 @@ This module provides multiple methods for separating audio tracks into vocals an
    - Consistent with production deployment patterns
    - Requires audio-separator CLI to be installed
 
-3. **TCP Method** (_split_song_tcp): Communicates with external separation server via TCP
-   - Enables GPU acceleration on remote/host machines
-   - Useful for containerized deployments where GPU access is limited
-   - Requires a running separator server on localhost
+3. **Compose Provider Method** (_split_song_compose_provider): Calls a separator
+   server that a Docker Compose provider runs as a *host* process
+   - The separator runs outside the container, so it can reach the host GPU
+     (on macOS, onnxruntime's CoreML execution provider). Linux containers
+     cannot reach Metal at all, so in-container separation is always CPU-bound.
+   - The provider in infra/compose-separation-provider/ starts the host process and emits
+     a `setenv` message; Compose injects the result as SEPARATOR_URL into any
+     service that `depends_on` it.
+   - See infra/compose.selfhosted.host-gpu.yaml.
 
-The main split_song() function automatically selects the appropriate method based on parameters.
+The main split_song() function selects the method based on the `method` parameter.
 """
 
 MODELS_DIR = Path(__file__).parent.parent / "pretrained_models"
@@ -42,10 +46,18 @@ AVAILABLE_MODELS = [
     "UVR-MDX-NET-Inst_HQ_3.onnx",  # Removes background vocals
 ]
 
+# How long to wait for a separation to come back from the separator server.
+SEPARATION_TIMEOUT_SECONDS = 300
+
 
 class SeparationMethod(Enum):
     API = "api"
     CLI = "cli"
+    COMPOSE_PROVIDER = "compose_provider"
+
+
+class SeparationError(RuntimeError):
+    """Raised when separation fails and there is no usable result."""
 
 
 def _validate_model(model_name: str) -> None:
@@ -132,55 +144,70 @@ def _split_song_cli(
     return _get_output_paths(song_dir)
 
 
-def _split_song_tcp(
-    songfile: Path, song_dir: Path, model_name: str, host: str, port: int
+def _split_song_http(
+    songfile: Path, song_dir: Path, model_name: str, base_url: str
 ) -> tuple[Path, Path]:
-    """Split song using external separation server via TCP."""
-    # Read and encode the input file
-    audio_data = songfile.read_bytes()
-    audio_base64 = base64.b64encode(audio_data).decode("utf-8")
+    """Split song by POSTing it to a separator server at `base_url`.
 
-    # Prepare request payload
+    Raises SeparationError if the server is unreachable or reports failure.
+    """
+    audio_base64 = base64.b64encode(songfile.read_bytes()).decode("utf-8")
+
     request_data = {
         "model_name": model_name,
         "audio_base64": audio_base64,
         "filename": songfile.name,
     }
 
-    # Make request to separation server via TCP
     try:
         with httpx.Client() as client:
             response = client.post(
-                f"http://{host}:{port}/separate", json=request_data, timeout=300
+                f"{base_url.rstrip('/')}/separate",
+                json=request_data,
+                timeout=SEPARATION_TIMEOUT_SECONDS,
             )
             response.raise_for_status()
+    except httpx.HTTPError as e:
+        raise SeparationError(
+            f"Separator server at {base_url} is unreachable: {e}"
+        ) from e
 
-        result = response.json()
+    result = response.json()
 
-        if not result.get("success"):
-            error_msg = result.get("error", "Unknown error")
-            raise RuntimeError(f"Socket separation failed: {error_msg}")
-
-        # Decode and write output files
-        vocals_data = base64.b64decode(result["vocals_base64"])
-        accompaniment_data = base64.b64decode(result["accompaniment_base64"])
-
-        vocals_path = song_dir / "vocals.wav"
-        accompaniment_path = song_dir / "accompaniment.wav"
-
-        vocals_path.write_bytes(vocals_data)
-        accompaniment_path.write_bytes(accompaniment_data)
-
-        return accompaniment_path, vocals_path
-
-    except httpx.RequestError as e:
-        logging.warning(
-            f"Separation server communication failed: {e}, falling back to API method"
+    if not result.get("success"):
+        raise SeparationError(
+            f"Separator server reported failure: {result.get('error', 'Unknown error')}"
         )
-        return split_song(songfile, song_dir, model_name, method=SeparationMethod.API)
-    except Exception as e:
-        logging.warning(f"Separation server error: {e}, falling back to API method")
-        return split_song(songfile, song_dir, model_name, method=SeparationMethod.API)
+
+    accompaniment_path, vocals_path = _get_output_paths(song_dir)
+    vocals_path.write_bytes(base64.b64decode(result["vocals_base64"]))
+    accompaniment_path.write_bytes(base64.b64decode(result["accompaniment_base64"]))
+
+    return accompaniment_path, vocals_path
+
+
+def _split_song_compose_provider(
+    songfile: Path, song_dir: Path, model_name: str
+) -> tuple[Path, Path]:
+    """Split song using the separator host process started by the Compose provider.
+
+    Compose injects SEPARATOR_URL into this service because it declares
+    `depends_on` the provider service. There is deliberately no fallback to
+    in-process separation: the point of the provider is host GPU access, and
+    quietly separating on the container's CPU instead would hide a broken
+    provider behind a much slower result.
+    """
+    if not settings.SEPARATOR_URL:
+        raise SeparationError(
+            "SEPARATOR_URL is not set. The separator is started by the Compose "
+            "provider in infra/compose-separation-provider/; make sure this "
+            "service declares "
+            "`depends_on: [separator]` and that you are running with "
+            "infra/compose.selfhosted.host-gpu.yaml layered on "
+            "infra/compose.selfhosted.yaml."
+        )
+
+    return _split_song_http(songfile, song_dir, model_name, settings.SEPARATOR_URL)
 
 
 def split_song(
@@ -188,8 +215,6 @@ def split_song(
     song_dir: Path,
     model_name: str = DEFAULT_MODEL,
     method: SeparationMethod = SeparationMethod.API,
-    host: Optional[str] = None,
-    port: Optional[int] = None,
 ) -> tuple[Path, Path]:
     """
     Split song into instrumental and vocal tracks.
@@ -200,17 +225,10 @@ def split_song(
         song_dir: Directory to save the separated tracks
         model_name: Name of the separation model to use
         method: SeparationMethod enum value
-        host: Host for external separation server
-        port: TCP port for external separation server (host+port overrides method if provided)
     """
     _validate_model(model_name)
 
-    # TCP host+port takes precedence over method
-    if host and port:
-        accompaniment_path, vocals_path = _split_song_tcp(
-            songfile, song_dir, model_name, host, port
-        )
-    elif method == SeparationMethod.API:
+    if method == SeparationMethod.API:
         accompaniment_path, vocals_path = _split_song_api(
             songfile, song_dir, model_name
         )
@@ -218,9 +236,14 @@ def split_song(
         accompaniment_path, vocals_path = _split_song_cli(
             songfile, song_dir, model_name
         )
+    elif method == SeparationMethod.COMPOSE_PROVIDER:
+        accompaniment_path, vocals_path = _split_song_compose_provider(
+            songfile, song_dir, model_name
+        )
     else:
         raise ValueError(
-            f"Invalid method '{method}'. Must be SeparationMethod.API or SeparationMethod.CLI"
+            f"Invalid method '{method}'. Must be one of: "
+            f"{', '.join(m.name for m in SeparationMethod)}"
         )
 
     logging.info(

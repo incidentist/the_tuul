@@ -116,7 +116,7 @@ def perform_music_separation(
     with song_file_path.open("wb") as f:
         f.write(song_content)
 
-    separation_method = SeparationMethod.API
+    separation_method = SeparationMethod(settings.SEPARATION_METHOD)
 
     logger.info(
         "separation_started",
@@ -129,8 +129,6 @@ def perform_music_separation(
         song_files_dir,
         model_name=model_name,
         method=separation_method,
-        host=settings.SEPARATOR_HOST,
-        port=settings.SEPARATOR_PORT,
     )
     zip_path = zip_helper.create_zip_file(
         song_files_dir / "split_song.zip",

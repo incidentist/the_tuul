@@ -38,5 +38,13 @@ HOST = "0.0.0.0"
 PORT = int(os.getenv("PORT", "8000"))
 
 # Separator settings (for GPU access on host)
-SEPARATOR_HOST = os.getenv("SEPARATOR_HOST", "")
+# SEPARATOR_URL is injected by the Docker Compose provider in
+# infra/compose-separation-provider/ into services that `depends_on` the separator
+# service. Set it by hand only when running the separator yourself.
+SEPARATOR_URL = os.getenv("SEPARATOR_URL", "")
+
+# Port the separator server binds to when run directly (see api/separator_server.py).
 SEPARATOR_PORT = int(os.getenv("SEPARATOR_PORT", "8001"))
+
+# Separation method used by the web app: "api", "cli", or "compose_provider".
+SEPARATION_METHOD = os.getenv("SEPARATION_METHOD", "api")
