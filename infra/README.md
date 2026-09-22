@@ -8,7 +8,7 @@ them.
 | File | Purpose | Applied by |
 | --- | --- | --- |
 | `gcs/cors.json` | CORS policy for the `SEPARATED_TRACKS_BUCKET` Google Cloud Storage bucket. Lets the browser on `the-tuul.com` and `beta.the-tuul.com` GET finished separation results straight from the bucket. | `mise run gcs-cors` |
-| `compose-provider/tuul-separator` | Docker Compose [provider service](https://github.com/docker/compose/blob/main/docs/extension.md) that runs the separator as a **host** process, so it can reach the Mac GPU. Compose starts it on `up` and stops it on `down`. | `docker compose ... up` |
+| `compose-separation-provider/` | Docker Compose [provider service](https://github.com/docker/compose/blob/main/docs/extension.md) that runs the separator as a **host** process, so it can reach the Mac GPU. Compose starts it on `up` and stops it on `down`. `tuul-separator` is a shim that checks for `uv` and hands off to `provider.py`, which does the work. | `docker compose ... up` |
 | `compose.selfhosted.yaml` | Self-hosted stack, CPU-only: the app in a single container, separating in-process. Runs on its own. | `mise run selfhosted` |
 | `compose.selfhosted.cuda.yaml` | Overlay that hands the app container an NVIDIA GPU, so it separates with CUDA. | `mise run selfhosted-cuda` |
 | `compose.selfhosted.host-gpu.yaml` | Overlay that moves separation to a **host** process via the provider above, for accelerators a container cannot reach (notably a Mac GPU). | `mise run selfhosted-host-gpu` |
@@ -39,7 +39,7 @@ docker compose -f infra/compose.selfhosted.yaml \
                -f infra/compose.selfhosted.cuda.yaml up --build
 
 # Any other accelerator (notably a Mac GPU), by separating on the host.
-PATH="$PWD/infra/compose-provider:$PATH" \
+PATH="$PWD/infra/compose-separation-provider:$PATH" \
   docker compose -f infra/compose.selfhosted.yaml \
                  -f infra/compose.selfhosted.host-gpu.yaml up --build
 ```
@@ -90,6 +90,34 @@ both; one `down` stops both.
 
 The app reaches the host at `host.docker.internal`. On Linux, override the
 provider's `hostname` option to `172.17.0.1`.
+
+### How the provider is put together
+
+Two files, split by what they need to be able to import:
+
+| File | Role |
+| --- | --- |
+| `tuul-separator` | ~20 lines of bash. Checks that `uv` is on `PATH` and, if not, emits an `error` message and exits non-zero — which is how the provider protocol fails `docker compose up`, rather than starting the app against a separator that will never arrive. Then `exec`s into Python. |
+| `provider.py` | Everything else: argument parsing, the pidfile, the `uv sync`, spawning and stopping the server, health checks, and the JSON protocol. |
+
+`provider.py` runs under `uv run --no-project --isolated`, so it may import only
+the standard library — it starts in ~50ms and reports progress before the slow
+work begins. The heavyweight environment (audio-separator, torch, onnxruntime)
+belongs to the separator it spawns, not to the supervisor.
+
+`--isolated` is load-bearing rather than tidiness: `--no-project` alone still
+honours an active `VIRTUAL_ENV`, which mise sets in this repo. Without it the
+supervisor would import the project environment on a developer's machine and
+stdlib-only on a fresh user's — working here and breaking there.
+
+Two details are forced by the protocol. `up` is synchronous — Compose reads
+stdout until the process exits — so the server is double-forked into its own
+session and the supervisor returns once it is healthy. And every message is
+flushed, because Python block-buffers when stdout is a pipe, which is exactly
+how Compose invokes us; unflushed progress would never reach the UI.
+
+The binary has to keep the name `tuul-separator`: `provider.type` in
+`compose.selfhosted.host-gpu.yaml` resolves it by name on `PATH`.
 
 ### The host-gpu overlay is not macOS-only
 

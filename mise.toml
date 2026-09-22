@@ -52,14 +52,97 @@ docker buildx build -t "the-tuul:latest" \
   .
 '''
 
+# The three self-hosted flavors. Same image in all three; they differ only in
+# where audio separation runs. See the Self Hosting section of the README.
+#
+# Each takes a docker compose subcommand (default `up`) and a --build flag:
+#   mise run selfhosted --build     # build, then start
+#   mise run selfhosted-cuda        # start
+#   mise run selfhosted-cuda down   # stop
+#   mise run selfhosted logs
+
 [tasks.selfhosted]
-description = "Build and run the self-hosted Docker image (infra/Dockerfile.selfhosted)"
+description = "Run the self-hosted stack, CPU only (separates in the container)"
 usage = '''
-arg "<tag>" default="the-tuul-selfhosted"
+flag "--build" help="Rebuild the image before starting"
+arg "<command>" default="up" help="docker compose subcommand (up, down, logs, ps...)"
 '''
 run = '''
-docker build -f infra/Dockerfile.selfhosted -t "$usage_tag" .
-docker run --rm -p 8080:8080 "$usage_tag"
+# mise mis-parses `--build <cmd>`, handing both tokens back in
+# $usage_command, so pull --build out of the args wherever it ended up.
+BUILD=""
+ARGS=""
+for tok in $usage_command; do
+  if [ "$tok" = "--build" ]; then BUILD="--build"; else ARGS="$ARGS $tok"; fi
+done
+[ "$usage_build" = "true" ] && BUILD="--build"
+ARGS="${ARGS# }"
+[ -z "$ARGS" ] && ARGS="up"
+# --build is only meaningful for `up`.
+[ "${ARGS%% *}" = "up" ] || BUILD=""
+docker compose -f infra/compose.selfhosted.yaml $ARGS $BUILD
+'''
+
+[tasks.selfhosted-cuda]
+description = "Run the self-hosted stack with an NVIDIA GPU passed into the container"
+usage = '''
+flag "--build" help="Rebuild the image before starting"
+arg "<command>" default="up" help="docker compose subcommand (up, down, logs, ps...)"
+'''
+run = '''
+# mise mis-parses `--build <cmd>`, handing both tokens back in
+# $usage_command, so pull --build out of the args wherever it ended up.
+BUILD=""
+ARGS=""
+for tok in $usage_command; do
+  if [ "$tok" = "--build" ]; then BUILD="--build"; else ARGS="$ARGS $tok"; fi
+done
+[ "$usage_build" = "true" ] && BUILD="--build"
+ARGS="${ARGS# }"
+[ -z "$ARGS" ] && ARGS="up"
+# --build is only meaningful for `up`.
+[ "${ARGS%% *}" = "up" ] || BUILD=""
+docker compose \
+  -f infra/compose.selfhosted.yaml \
+  -f infra/compose.selfhosted.cuda.yaml \
+  $ARGS $BUILD
+'''
+
+[tasks.selfhosted-host-gpu]
+description = "Run the self-hosted stack with separation as a host process (use on a Mac)"
+usage = '''
+flag "--build" help="Rebuild the image before starting"
+arg "<command>" default="up" help="docker compose subcommand (up, down, logs, ps...)"
+'''
+run = '''
+# Compose finds the `tuul-separator` provider on PATH; it runs the separator on
+# the host, where it can reach a GPU a Linux container cannot (CoreML on a Mac).
+# Needs Docker Compose v2.36+ for provider services, and `uv` on the host.
+if ! docker compose version --short 2>/dev/null | awk -F. '{ exit !($1 > 2 || ($1 == 2 && $2 >= 36)) }'; then
+  echo "This flavor needs Docker Compose v2.36+ for provider services; found $(docker compose version --short 2>/dev/null || echo 'none')." >&2
+  exit 1
+fi
+if ! command -v uv >/dev/null 2>&1; then
+  echo "This flavor runs the separator on the host and needs uv: https://docs.astral.sh/uv/getting-started/installation/" >&2
+  exit 1
+fi
+
+# mise mis-parses `--build <cmd>`, handing both tokens back in
+# $usage_command, so pull --build out of the args wherever it ended up.
+BUILD=""
+ARGS=""
+for tok in $usage_command; do
+  if [ "$tok" = "--build" ]; then BUILD="--build"; else ARGS="$ARGS $tok"; fi
+done
+[ "$usage_build" = "true" ] && BUILD="--build"
+ARGS="${ARGS# }"
+[ -z "$ARGS" ] && ARGS="up"
+# --build is only meaningful for `up`.
+[ "${ARGS%% *}" = "up" ] || BUILD=""
+PATH="$PWD/infra/compose-separation-provider:$PATH" docker compose \
+  -f infra/compose.selfhosted.yaml \
+  -f infra/compose.selfhosted.host-gpu.yaml \
+  $ARGS $BUILD
 '''
 
 [tasks.gcs-cors]
