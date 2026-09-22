@@ -8,3 +8,108 @@ them.
 | File | Purpose | Applied by |
 | --- | --- | --- |
 | `gcs/cors.json` | CORS policy for the `SEPARATED_TRACKS_BUCKET` Google Cloud Storage bucket. Lets the browser on `the-tuul.com` and `beta.the-tuul.com` GET finished separation results straight from the bucket. | `mise run gcs-cors` |
+| `compose-provider/tuul-separator` | Docker Compose [provider service](https://github.com/docker/compose/blob/main/docs/extension.md) that runs the separator as a **host** process, so it can reach the Mac GPU. Compose starts it on `up` and stops it on `down`. | `docker compose ... up` |
+| `compose.selfhosted.yaml` | Self-hosted stack, CPU-only: the app in a single container, separating in-process. Runs on its own. | `mise run selfhosted` |
+| `compose.selfhosted.cuda.yaml` | Overlay that hands the app container an NVIDIA GPU, so it separates with CUDA. | `mise run selfhosted-cuda` |
+| `compose.selfhosted.host-gpu.yaml` | Overlay that moves separation to a **host** process via the provider above, for accelerators a container cannot reach (notably a Mac GPU). | `mise run selfhosted-host-gpu` |
+| `Dockerfile.selfhosted` | Image for the self-hosted app container. | Built by the compose files above |
+
+## Self-hosted stack
+
+One base file plus two optional overlays. The base file runs by itself and is
+CPU-only; each overlay adds one way of going faster. There is a mise task per
+flavor, each taking a `docker compose` subcommand plus an optional `--build`:
+
+```sh
+mise run selfhosted --build            # CPU only
+mise run selfhosted-cuda --build       # NVIDIA GPU, in the container
+mise run selfhosted-host-gpu --build   # separation on the host (Mac)
+
+mise run selfhosted-cuda down          # any compose subcommand works
+```
+
+The equivalent raw commands, which the tasks wrap:
+
+```sh
+# CPU only. Works everywhere, needs nothing but Docker, and is slow.
+docker compose -f infra/compose.selfhosted.yaml up --build
+
+# NVIDIA GPU, passed into the container.
+docker compose -f infra/compose.selfhosted.yaml \
+               -f infra/compose.selfhosted.cuda.yaml up --build
+
+# Any other accelerator (notably a Mac GPU), by separating on the host.
+PATH="$PWD/infra/compose-provider:$PATH" \
+  docker compose -f infra/compose.selfhosted.yaml \
+                 -f infra/compose.selfhosted.host-gpu.yaml up --build
+```
+
+The image is the same in all three cases. What differs is where separation
+happens and what it can reach:
+
+| Stack | `SEPARATION_METHOD` | Separation runs | Execution provider |
+| --- | --- | --- | --- |
+| base | `api` | in the app container | `CPUExecutionProvider` |
+| `+ cuda` | `api` | in the app container | `CUDAExecutionProvider` |
+| `+ host-gpu` | `compose_provider` | on the host, over HTTP | whatever the host has |
+
+### Requirements
+
+- **cuda**: an NVIDIA GPU, its driver, and the [NVIDIA Container
+  Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
+  Nothing extra goes into the image — on Linux the `selfhosted` dependency
+  group already pulls `onnxruntime-gpu`, and the CUDA runtime libraries come
+  with it as `nvidia-*` pip wheels, so the container carries its own CUDA
+  userspace and only needs the device.
+- **host-gpu**: Docker Compose v2.36+ (for provider services) and `uv` on the
+  host. The `PATH` entry is how Compose finds the `tuul-separator` provider.
+
+If the GPU is not visible at runtime, onnxruntime quietly falls back to
+`CPUExecutionProvider` — separation still succeeds, just slowly. To check:
+
+```sh
+docker compose -f infra/compose.selfhosted.yaml -f infra/compose.selfhosted.cuda.yaml \
+  exec app python -c "import onnxruntime; print(onnxruntime.get_available_providers())"
+```
+
+### Why a Mac needs the separator outside the container
+
+Separation runs ONNX models, and the only GPU-backed onnxruntime execution
+provider on a Mac is CoreML, which ships only in the macOS build. A Linux
+container cannot reach Metal at all — that is true of Docker and of Apple's
+`container` alike, and Apple closed the request for it as `wontfix`. Docker ran
+into the same wall building Model Runner and put it plainly: "there is no GPU
+passthrough for Metal in containers."
+
+So the separator has to be a host process. What Compose's provider services buy
+us is that it doesn't have to be a *separate setup step*: `tuul-separator` is
+declared in the compose file like any other service, Compose runs it on the
+host, and it reports its URL back with a `setenv` message that Compose injects
+as `SEPARATOR_URL` into the app container. One `docker compose up` brings up
+both; one `down` stops both.
+
+The app reaches the host at `host.docker.internal`. On Linux, override the
+provider's `hostname` option to `172.17.0.1`.
+
+### The host-gpu overlay is not macOS-only
+
+A Mac is the case that *forces* the split, but the overlay is worth using on
+any host where you would rather not pass the GPU into a container: because the
+separator runs on the host, it uses whatever acceleration that machine has,
+with no container toolkit. The provider runs `uv sync --group selfhosted`, and
+that group picks the right onnxruntime wheel per platform:
+
+| Host | Wheel | Execution provider |
+| --- | --- | --- |
+| Linux / Windows + NVIDIA | `onnxruntime-gpu` (`[gpu]` extra) | `CUDAExecutionProvider` |
+| macOS (Apple Silicon) | `onnxruntime` (`[cpu]` extra) | `CoreMLExecutionProvider` |
+| Anything else | either | `CPUExecutionProvider` |
+
+The extra names mislead: `[gpu]` means *CUDA specifically*, and
+`onnxruntime-gpu` publishes no macOS wheel at all. It doesn't need one — the
+plain wheel that `[cpu]` pulls already contains CoreML, the Apple GPU/ANE path.
+So on a Mac, `[cpu]` is what gives you the GPU.
+
+`audio-separator` detects this at runtime (`setup_torch_device`) and selects
+CUDA, then CoreML, then DirectML, falling back to CPU when a host has no GPU —
+so an accelerator-less machine still works, just slower.

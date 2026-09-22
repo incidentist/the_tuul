@@ -40,7 +40,15 @@ RUN apt-get update \
 
 COPY ./uv.lock ./pyproject.toml ./
 
-RUN uv sync --no-dev --no-install-project --locked
+# The `selfhosted` group carries audio-separator, so the container can separate
+# in-process (SEPARATION_METHOD=api). Without it, _split_song_api catches the
+# ModuleNotFoundError and silently returns UNSEPARATED audio.
+#
+# On Linux the group resolves to audio-separator[gpu] -> onnxruntime-gpu, which
+# is CUDA-capable but falls back to CPUExecutionProvider when no NVIDIA device
+# is visible. So one image serves both the CPU-only stack and the CUDA one;
+# only the compose file differs (see compose.selfhosted.cuda.yaml).
+RUN uv sync --no-dev --no-install-project --locked --group selfhosted
 
 #
 # RUNTIME IMAGE
@@ -59,8 +67,7 @@ ENV APP_HOME=/app \
     DEBUG=False \
     SECRET_KEY=SECRET_KEY \
     TUUL_YOUTUBE_PROXY= \
-    SEPARATED_TRACKS_BUCKET= \
-    SEPARATOR_SOCKET_PATH= 
+    SEPARATED_TRACKS_BUCKET=
 
 WORKDIR $APP_HOME
 
