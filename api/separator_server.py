@@ -7,6 +7,7 @@ The containerized Tuul app communicates with this server via TCP on localhost.
 """
 
 import base64
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -50,6 +51,17 @@ class SeparationResponse(BaseModel):
     vocals_filename: Optional[str] = None
     accompaniment_filename: Optional[str] = None
     error: Optional[str] = None
+
+
+@app.get("/health")
+async def health():
+    """Readiness probe for the Compose provider.
+
+    The provider polls this while waiting for startup. It exists so that check
+    does not depend on /docs, which FastAPI only serves incidentally and which
+    says nothing about whether the app is ready to separate.
+    """
+    return {"status": "ok"}
 
 
 @app.post("/separate", response_model=SeparationResponse)
@@ -138,7 +150,13 @@ async def separate_track(request: SeparationRequest):
 
 
 if __name__ == "__main__":
-    # This won't be used since we'll run with uvicorn, but helpful for testing
     import uvicorn
 
-    uvicorn.run(app, host="localhost", port=settings.SEPARATOR_PORT, log_level="info")
+    # Bind all interfaces so containers can reach us via host.docker.internal.
+    # Compose's provider in infra/compose-separation-provider/ starts us this way.
+    uvicorn.run(
+        app,
+        host=os.getenv("SEPARATOR_BIND_HOST", "0.0.0.0"),
+        port=settings.SEPARATOR_PORT,
+        log_level="info",
+    )

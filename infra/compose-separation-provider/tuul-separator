@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+#
+# Docker Compose provider shim for the Tuul separator.
+#
+# Everything this provider actually does lives in provider.py. All bash does is
+# guarantee `uv` exists -- without it we cannot run any Python beyond the
+# system's -- and then hand over.
+#
+# The failure is deliberately hard: a non-zero exit plus an `error` message is
+# how Compose's provider protocol reports a failed service, so `docker compose
+# up` stops rather than starting the app against a separator that will never
+# arrive.
+#
+set -euo pipefail
+
+if ! command -v uv >/dev/null 2>&1; then
+  # Hand-rolled protocol message: there is no interpreter to build it with yet.
+  printf '{"type":"error","message":"uv is required to run the separator on the host. Install it: https://docs.astral.sh/uv/getting-started/installation/"}\n'
+  exit 1
+fi
+
+cd "$(dirname "${BASH_SOURCE[0]}")/../.."
+
+# --isolated is load-bearing, not tidiness: --no-project alone still honours an
+# active VIRTUAL_ENV, which this repo sets via mise. Without it the supervisor
+# would import the project env on a developer's machine and stdlib-only on a
+# fresh user's -- working here and breaking there.
+exec uv run --no-project --isolated \
+  infra/compose-separation-provider/provider.py "$@"
