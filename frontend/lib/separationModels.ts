@@ -1,21 +1,20 @@
-import { SeparationBackend, SeparationModel, SeparationModelId } from "@/types";
+import { SeparationModel, SeparationModelId } from "@/types";
 
-// The catalogue of separation models the app offers. Each entry declares
-// whether it runs in the browser (web-audio-separation) or on the server.
+// The catalogue of separation models the app offers. Whether a given
+// separation runs in the browser or on the server is decided at dispatch time
+// by chooseSeparationMethod (see lib/audioSeparation.ts), not per model.
 
 export const BACKING_VOCALS_SEPARATOR_MODEL: SeparationModel = {
     id: "UVR_MDXNET_KARA_2.onnx",
     label: "Keep backing vocals",
-    backend: SeparationBackend.Local,
-    localModelName: "UVR_MDXNET_KARA_2",
+    modelName: "UVR_MDXNET_KARA_2",
     keepsBackingVocals: true,
 };
 
 export const NO_VOCALS_SEPARATOR_MODEL: SeparationModel = {
     id: "UVR-MDX-NET-Inst_HQ_3.onnx",
     label: "Remove all vocals",
-    backend: SeparationBackend.Local,
-    localModelName: "UVR-MDX-NET-Inst_HQ_3",
+    modelName: "UVR-MDX-NET-Inst_HQ_3",
     keepsBackingVocals: false,
 };
 

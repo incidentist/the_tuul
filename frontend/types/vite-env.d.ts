@@ -3,6 +3,7 @@
 interface ImportMetaEnv {
   // Custom prefixed variables
   readonly TUUL_API_HOSTNAME: string;
+  readonly TUUL_USE_REMOTE_SEPARATION: string;
   readonly TUUL_DONATE_URL: string;
 
   // Built-in Vite variables (these don't change)

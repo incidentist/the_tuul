@@ -1,10 +1,11 @@
 import jszip from "jszip";
-import { API_HOSTNAME } from "@/constants";
-import { SeparationBackend, SeparationModel, SeparationProgressCallback } from "@/types";
+import { API_HOSTNAME, USE_REMOTE_SEPARATION } from "@/constants";
+import { SeparationModel, SeparationProgressCallback } from "@/types";
+import { isMobile } from "./device";
 import { LocalSeparationRunner, mainThreadRunner } from "./localSeparation";
 
 // Splitting a song into a backing track and a vocals track, either on the
-// server or in the browser depending on the model.
+// server or in the browser depending on the device and deployment.
 
 export interface TrackSeparationResult {
     backing: Blob; // Blob of backing track
@@ -87,26 +88,43 @@ export async function separateTrackLocally(
     onProgress?: SeparationProgressCallback,
     runner: LocalSeparationRunner = mainThreadRunner
 ): Promise<TrackSeparationResult> {
-    if (!model.localModelName) {
-        throw new Error(`Separation model ${model.id} is not available in the browser`);
-    }
-    return runner.run({ songFile, localModelName: model.localModelName }, onProgress);
+    return runner.run({ songFile, localModelName: model.modelName }, onProgress);
 }
 
-/** Separate wherever the model says it runs. */
+/** Where a separation runs. */
+export enum SeparationMethod {
+    /** On the server, via POST /separate_track. */
+    Api = "api",
+    /** In the browser, via web-audio-separation. */
+    Local = "local",
+}
+
+/**
+ * In-browser separation is too heavy for phones, tablets and small (likely
+ * old) computers, so those always use the API, as does any deployment that
+ * sets USE_REMOTE_SEPARATION.
+ */
+export function chooseSeparationMethod(): SeparationMethod {
+    if (USE_REMOTE_SEPARATION || isMobile()) {
+        return SeparationMethod.Api;
+    }
+    return SeparationMethod.Local;
+}
+
 export async function separateTrack(
     songFile: File,
     model: SeparationModel,
     onProgress?: SeparationProgressCallback
 ): Promise<TrackSeparationResult> {
-    switch (model.backend) {
-        case SeparationBackend.Local:
-            return separateTrackLocally(songFile, model, onProgress);
-        case SeparationBackend.Remote:
+    const method = chooseSeparationMethod();
+    switch (method) {
+        case SeparationMethod.Api:
             return separateTrackRemotely(songFile, model);
+        case SeparationMethod.Local:
+            return separateTrackLocally(songFile, model, onProgress);
         default: {
-            const unhandled: never = model.backend;
-            throw new Error(`Unknown separation backend: ${unhandled}`);
+            const unhandled: never = method;
+            throw new Error(`Unknown separation method: ${unhandled}`);
         }
     }
 }

@@ -6,25 +6,22 @@ import {
     SEPARATION_MODELS,
     findSeparationModel,
 } from './separationModels';
-import { SeparationBackend, SeparationModelId } from '@/types';
+import { SeparationModelId } from '@/types';
 
 describe('separationModels', () => {
-    it('runs the backing-vocals model in the browser', () => {
-        expect(BACKING_VOCALS_SEPARATOR_MODEL.backend).toBe(SeparationBackend.Local);
+    it('names a backing-vocals model', () => {
         expect(BACKING_VOCALS_SEPARATOR_MODEL.keepsBackingVocals).toBe(true);
     });
 
-    it('runs the no-vocals model in the browser', () => {
-        expect(NO_VOCALS_SEPARATOR_MODEL.backend).toBe(SeparationBackend.Local);
+    it('names a no-vocals model', () => {
         expect(NO_VOCALS_SEPARATOR_MODEL.keepsBackingVocals).toBe(false);
     });
 
-    it('names a model web-audio-separation actually ships for every local model', () => {
-        const localModels = SEPARATION_MODELS.filter((model) => model.backend === SeparationBackend.Local);
-        expect(localModels.length).toBeGreaterThan(0);
-        for (const model of localModels) {
-            expect(model.localModelName).toBeDefined();
-            expect(MODEL_REGISTRY).toHaveProperty(model.localModelName!);
+    it('names a model web-audio-separation actually ships for every model', () => {
+        expect(SEPARATION_MODELS.length).toBeGreaterThan(0);
+        for (const model of SEPARATION_MODELS) {
+            expect(model.modelName).toBeDefined();
+            expect(MODEL_REGISTRY).toHaveProperty(model.modelName);
         }
     });
 

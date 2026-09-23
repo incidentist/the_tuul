@@ -30,6 +30,7 @@ services:
       dockerfile: infra/Dockerfile.selfhosted
       args:
         TUUL_API_HOSTNAME: "${TUUL_API_HOSTNAME:-}"
+        TUUL_USE_REMOTE_SEPARATION: "${TUUL_USE_REMOTE_SEPARATION:-true}"
         TUUL_SENTRY_DSN: "${TUUL_SENTRY_DSN:-}"
     ports:
       - "${TUUL_PORT:-8080}:8080"

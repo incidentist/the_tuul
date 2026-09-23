@@ -6,13 +6,32 @@ vi.mock('./localSeparation', () => ({
     mainThreadRunner: { run: vi.fn() },
 }));
 
-import { separateTrack, separateTrackRemotely } from './audioSeparation';
+// separateTrack's local/remote choice reads this constant at call time, so
+// tests toggle it directly rather than depending on the build-time env var.
+vi.mock('@/constants', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('@/constants')>()),
+    USE_REMOTE_SEPARATION: false,
+}));
+
+// Device detection reads window.screen; stub it so tests pick the device.
+vi.mock('./device', () => ({
+    isMobile: vi.fn().mockReturnValue(false),
+}));
+
+import {
+    chooseSeparationMethod,
+    SeparationMethod,
+    separateTrack,
+    separateTrackRemotely,
+} from './audioSeparation';
+import { isMobile } from './device';
 import { mainThreadRunner } from './localSeparation';
 import {
     BACKING_VOCALS_SEPARATOR_MODEL,
     NO_VOCALS_SEPARATOR_MODEL,
 } from './separationModels';
-import { SeparationBackend, SeparationModel, SeparationPhase } from '@/types';
+import { SeparationPhase } from '@/types';
+import * as constants from '@/constants';
 
 // Mock fetch globally
 global.fetch = vi.fn();
@@ -171,12 +190,41 @@ describe('separateTrackRemotely', () => {
     });
 });
 
+describe('chooseSeparationMethod', () => {
+    beforeEach(() => {
+        vi.mocked(constants).USE_REMOTE_SEPARATION = false;
+        vi.mocked(isMobile).mockReturnValue(false);
+    });
+
+    it('separates in the browser on desktop by default', () => {
+        expect(chooseSeparationMethod()).toBe(SeparationMethod.Local);
+    });
+
+    it('uses the API on mobile', () => {
+        vi.mocked(isMobile).mockReturnValue(true);
+        expect(chooseSeparationMethod()).toBe(SeparationMethod.Api);
+    });
+
+    it('uses the API on desktop when remote separation is forced', () => {
+        vi.mocked(constants).USE_REMOTE_SEPARATION = true;
+        expect(chooseSeparationMethod()).toBe(SeparationMethod.Api);
+    });
+
+    it('uses the API on mobile when remote separation is forced', () => {
+        vi.mocked(constants).USE_REMOTE_SEPARATION = true;
+        vi.mocked(isMobile).mockReturnValue(true);
+        expect(chooseSeparationMethod()).toBe(SeparationMethod.Api);
+    });
+});
+
 describe('separateTrack', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        vi.mocked(constants).USE_REMOTE_SEPARATION = false;
+        vi.mocked(isMobile).mockReturnValue(false);
     });
 
-    it('runs a local model in the browser and never calls the server', async () => {
+    it('runs in the browser and never calls the server on desktop', async () => {
         const songFile = new File(['song'], 'song.mp3', { type: 'audio/mpeg' });
         const result = { backing: new Blob(['b']), vocals: new Blob(['v']) };
         vi.mocked(mainThreadRunner.run).mockResolvedValue(result);
@@ -186,7 +234,7 @@ describe('separateTrack', () => {
 
         expect(returned).toBe(result);
         expect(mainThreadRunner.run).toHaveBeenCalledWith(
-            { songFile, localModelName: BACKING_VOCALS_SEPARATOR_MODEL.localModelName },
+            { songFile, localModelName: BACKING_VOCALS_SEPARATOR_MODEL.modelName },
             onProgress
         );
         expect(fetch).not.toHaveBeenCalled();
@@ -205,13 +253,8 @@ describe('separateTrack', () => {
         expect(onProgress).toHaveBeenCalledWith({ phase: SeparationPhase.Separating, fraction: 0.5 });
     });
 
-    it('sends a remote model to the server', async () => {
-        const remoteModel: SeparationModel = {
-            id: NO_VOCALS_SEPARATOR_MODEL.id,
-            label: NO_VOCALS_SEPARATOR_MODEL.label,
-            backend: SeparationBackend.Remote,
-            keepsBackingVocals: false,
-        };
+    it('sends to the server on mobile', async () => {
+        vi.mocked(isMobile).mockReturnValue(true);
         const songFile = new File(['song'], 'song.mp3', { type: 'audio/mpeg' });
         (fetch as any).mockResolvedValueOnce({
             headers: { get: vi.fn().mockReturnValue('application/zip') },
@@ -219,24 +262,26 @@ describe('separateTrack', () => {
         });
         await mockZipResponse();
 
-        await separateTrack(songFile, remoteModel);
+        await separateTrack(songFile, BACKING_VOCALS_SEPARATOR_MODEL);
+
+        expect(mainThreadRunner.run).not.toHaveBeenCalled();
+        expect(fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('sends to the server when remote separation is forced', async () => {
+        vi.mocked(constants).USE_REMOTE_SEPARATION = true;
+        const songFile = new File(['song'], 'song.mp3', { type: 'audio/mpeg' });
+        (fetch as any).mockResolvedValueOnce({
+            headers: { get: vi.fn().mockReturnValue('application/zip') },
+            blob: vi.fn().mockResolvedValue(new Blob([new ArrayBuffer(8)], { type: 'application/zip' }))
+        });
+        await mockZipResponse();
+
+        await separateTrack(songFile, NO_VOCALS_SEPARATOR_MODEL);
 
         expect(mainThreadRunner.run).not.toHaveBeenCalled();
         expect(fetch).toHaveBeenCalledTimes(1);
         const [, options] = (fetch as any).mock.calls[0];
-        expect((options.body as FormData).get('modelName')).toBe(remoteModel.id);
-    });
-
-    it('rejects a local model that has no library model name', async () => {
-        const broken: SeparationModel = {
-            ...BACKING_VOCALS_SEPARATOR_MODEL,
-            backend: SeparationBackend.Local,
-            localModelName: undefined,
-        };
-
-        await expect(
-            separateTrack(new File(['song'], 'song.mp3'), broken)
-        ).rejects.toThrow(/not available in the browser/);
-        expect(mainThreadRunner.run).not.toHaveBeenCalled();
+        expect((options.body as FormData).get('modelName')).toBe(NO_VOCALS_SEPARATOR_MODEL.id);
     });
 });

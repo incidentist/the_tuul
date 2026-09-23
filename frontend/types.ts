@@ -13,20 +13,14 @@ export enum CreationPhase {
  */
 export type SeparationModelId = "UVR_MDXNET_KARA_2.onnx" | "UVR-MDX-NET-Inst_HQ_3.onnx";
 
-/** Where a separation model runs. */
-export enum SeparationBackend {
-    /** In the browser, via web-audio-separation. */
-    Local = "local",
-    /** On the server, via POST /separate_track. */
-    Remote = "remote",
-}
-
 export interface SeparationModel {
     id: SeparationModelId;
     label: string;
-    backend: SeparationBackend;
-    /** The web-audio-separation registry key. Required when backend is Local. */
-    localModelName?: RegisteredModelName;
+    /**
+     * The web-audio-separation registry key, for when separation runs in the
+     * browser (see chooseSeparationMethod in lib/audioSeparation.ts).
+     */
+    modelName: RegisteredModelName;
     keepsBackingVocals: boolean;
 }
 
