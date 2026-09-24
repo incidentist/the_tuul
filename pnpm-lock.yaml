@@ -60,8 +60,8 @@ importers:
         specifier: ^7.12.11
         version: 7.12.12
       web-audio-separation:
-        specifier: ^0.1.0
-        version: 0.1.0(onnxruntime-web@1.29.0)
+        specifier: ^0.3.1
+        version: 0.3.1(onnxruntime-web@1.29.0)
     devDependencies:
       '@ffmpeg/types':
         specifier: ^0.12.4
@@ -1274,8 +1274,8 @@ packages:
   wavesurfer.js@7.12.12:
     resolution: {integrity: sha512-fyKNuREQTliCl4b9w7pUzpFXQIkX5tcdYu1o6vBdH+NlUXvTxshvfbG2hj8OxDevzQNZlDTHzZGyAT3FhuutWw==}
 
-  web-audio-separation@0.1.0:
-    resolution: {integrity: sha512-OBadfOwBixYt/nNJJqjOUntsTFHfOLCIMaDtjN0Jsj6iQDmdkTNEFY87RoGvs9ZI5Gf6FYwa9wea8oGQ2F4AHg==}
+  web-audio-separation@0.3.1:
+    resolution: {integrity: sha512-6ad6YZ+YyOXazIqe6lFGi8fYSkAVs9aZ+fIX0WHHGmJujnL7Q1cMeF77KHwAnsaWrt0jBb5MFBQrH4YDr/XDBQ==}
     peerDependencies:
       onnxruntime-web: '>=1.29.0 <2.0.0'
 
@@ -2241,7 +2241,7 @@ snapshots:
 
   wavesurfer.js@7.12.12: {}
 
-  web-audio-separation@0.1.0(onnxruntime-web@1.29.0):
+  web-audio-separation@0.3.1(onnxruntime-web@1.29.0):
     dependencies:
       onnxruntime-web: 1.29.0
 

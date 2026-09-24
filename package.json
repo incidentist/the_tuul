@@ -48,7 +48,7 @@
     "pinia": "^4.0.2",
     "vue": "^3.5.40",
     "wavesurfer.js": "^7.12.11",
-    "web-audio-separation": "^0.2.0"
+    "web-audio-separation": "^0.3.1"
   },
   "devDependencies": {
     "@ffmpeg/types": "^0.12.4",

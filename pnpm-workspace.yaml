@@ -1,3 +1,5 @@
 allowBuilds:
   '@parcel/watcher': set this to true or false
   protobufjs: set this to true or false
+minimumReleaseAgeExclude:
+  - web-audio-separation@0.3.1
