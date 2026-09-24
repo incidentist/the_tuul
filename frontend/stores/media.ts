@@ -80,6 +80,8 @@ export const useMediaStore = defineStore('media', () => {
             separatedTrack.value.backing = file;
         }
         isBackingTrackUserUploaded.value = true;
+        // A user-supplied backing track makes an earlier separation failure moot
+        error.value = null;
     }
 
     async function duration(songFile: File): Promise<number> {

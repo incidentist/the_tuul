@@ -64,6 +64,17 @@ describe('Media Store', () => {
       expect(mediaStore.separatedTrack).toBeNull();
       expect(mediaStore.isBackingTrackUserUploaded).toBe(false);
     });
+
+    test('clears an earlier separation error', async () => {
+      const mediaStore = useMediaStore();
+      mediaStore.error = 'separation blew up';
+
+      await mediaStore.setBackingTrack(
+        new File(['backing'], 'backing.mp3', { type: 'audio/mpeg' })
+      );
+
+      expect(mediaStore.error).toBeNull();
+    });
   });
 
   describe('startSeparation', () => {

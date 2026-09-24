@@ -239,9 +239,13 @@ export default defineComponent({
           const stopWatchingError = this.$watch(
             "mediaStore.error",
             (error) => {
+              if (!error) {
+                return;
+              }
               stopWatchingBacking();
               stopWatchingError();
-              reject(error);
+              // The store holds a message string; createVideo reads e.message
+              reject(new Error(error));
             }
           );
         }

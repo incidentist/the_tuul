@@ -15,6 +15,7 @@ vi.mock('@/lib/video', () => ({
 
 import SubmitTab from './SubmitTab.vue';
 import video from '@/lib/video';
+import { separateTrack } from '@/lib/audioSeparation';
 import {
   useMediaStore,
   BACKING_VOCALS_SEPARATOR_MODEL,
@@ -122,5 +123,21 @@ describe('SubmitTab', () => {
       mediaStore.songFile,
       BACKING_VOCALS_SEPARATOR_MODEL
     );
+  });
+
+  // Regression guard: the store's error is a string, and SubmitTab used to
+  // reject with it directly, so e.message was undefined and the error message
+  // never appeared.
+  test('shows the error when separation fails', async () => {
+    const mediaStore = useMediaStore();
+    mediaStore.songFile = new File(['song'], 'song.mp3', { type: 'audio/mpeg' });
+    vi.mocked(separateTrack).mockRejectedValue(new Error('model failed to load'));
+
+    const wrapper = mountTab();
+    await wrapper.vm.createVideo();
+
+    expect(wrapper.vm.submitError).toBe('model failed to load');
+    expect(wrapper.vm.isSubmitting).toBe(false);
+    expect(video.createVideo).not.toHaveBeenCalled();
   });
 });

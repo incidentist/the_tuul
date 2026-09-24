@@ -32,7 +32,12 @@ function mountTab() {
   return mount(SongInfoTab, {
     global: {
       stubs: {
-        'b-tab-item': { template: '<div><slot /></div>' },
+        'b-tab-item': { template: '<div><slot name="header" /><slot /></div>' },
+        'b-message': {
+          props: ['modelValue'],
+          emits: ['update:modelValue'],
+          template: '<div v-if="modelValue" class="b-message"><slot /></div>',
+        },
         'b-collapse': { template: '<div><slot /></div>' },
         'b-tooltip': { template: '<div><slot /></div>' },
         'b-field': { template: '<div><slot /></div>' },
@@ -138,6 +143,47 @@ describe('SongInfoTab', () => {
         mediaStore.songFile,
         NO_VOCALS_SEPARATOR_MODEL
       );
+    });
+  });
+
+  describe('separation errors', () => {
+    const headerIcons = (wrapper: ReturnType<typeof mountTab>) =>
+      wrapper.findAll('b-icon-stub').map((icon) => icon.attributes('icon'));
+
+    test('shows a warning icon on the tab and the error message', async () => {
+      const mediaStore = useMediaStore();
+      const wrapper = mountTab();
+      expect(headerIcons(wrapper)).toContain('file-audio');
+      expect(wrapper.find('.b-message').exists()).toBe(false);
+
+      mediaStore.error = 'no WebGPU for you';
+      await wrapper.vm.$nextTick();
+
+      expect(headerIcons(wrapper)).toContain('warning');
+      expect(headerIcons(wrapper)).not.toContain('file-audio');
+      expect(wrapper.find('.b-message').text()).toContain('no WebGPU for you');
+    });
+
+    test('shows the spinner rather than the warning while retrying', async () => {
+      const mediaStore = useMediaStore();
+      mediaStore.error = 'no WebGPU for you';
+      mediaStore.isProcessing = true;
+      const wrapper = mountTab();
+
+      expect(wrapper.find('.loader').exists()).toBe(true);
+      expect(headerIcons(wrapper)).not.toContain('warning');
+    });
+
+    test('dismissing the message clears the error and the warning', async () => {
+      const mediaStore = useMediaStore();
+      mediaStore.error = 'no WebGPU for you';
+      const wrapper = mountTab();
+
+      wrapper.vm.isSeparationErrorVisible = false;
+      await wrapper.vm.$nextTick();
+
+      expect(mediaStore.error).toBeNull();
+      expect(headerIcons(wrapper)).toContain('file-audio');
     });
   });
 
