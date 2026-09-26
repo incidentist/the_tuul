@@ -6,6 +6,7 @@ This server runs on the host (outside Docker) to provide GPU access for music se
 The containerized Tuul app communicates with this server via TCP on localhost.
 """
 
+import asyncio
 import base64
 import os
 import subprocess
@@ -29,6 +30,7 @@ from .karaoke.music_separation import (
     split_song,
     SeparationMethod,
 )
+from .karaoke.separation_queue import SeparationQueue, SeparationQueueFullError
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -36,6 +38,11 @@ app_logging.setup()
 logger = structlog.get_logger(__name__)
 
 app = FastAPI(title="Separator Socket API", version="1.0.0")
+
+# Every separation this server runs goes through here, one at a time.
+separation_queue = SeparationQueue(
+    max_pending=settings.SEPARATION_QUEUE_MAX_PENDING, name="separator"
+)
 
 
 class SeparationRequest(BaseModel):
@@ -67,10 +74,12 @@ async def health():
 @app.post("/separate", response_model=SeparationResponse)
 async def separate_track(request: SeparationRequest):
     """
-    Separate audio track into vocals and accompaniment using subprocess.
+    Separate audio track into vocals and accompaniment.
 
-    This endpoint processes separation requests using the audio-separator CLI tool
-    in a subprocess to ensure proper memory cleanup and GPU utilization.
+    Separations run one at a time through the queue, so this may wait a long
+    time before it answers. It waits without blocking the event loop, so
+    /health and newly arriving requests are still served meanwhile. Returns 503
+    if the queue is already full.
     """
     logger.info(
         "separation_request", model_name=request.model_name, filename=request.filename
@@ -83,12 +92,26 @@ async def separate_track(request: SeparationRequest):
             detail=f"Model {request.model_name} not found. Available: {AVAILABLE_MODELS}",
         )
 
+    try:
+        job = separation_queue.submit(_separate, request)
+    except SeparationQueueFullError as e:
+        logger.warning("separation_queue_full", error=str(e))
+        raise HTTPException(status_code=503, detail=str(e))
+
+    return await asyncio.wrap_future(job)
+
+
+def _separate(request: SeparationRequest) -> SeparationResponse:
+    """Run one separation. Called on the queue's worker thread, never the event
+    loop: everything here, decoding included, is blocking work."""
     # Decode audio from base64
     try:
         audio_data = base64.b64decode(request.audio_base64)
     except Exception as e:
         logger.error("base64_decode_failed", error=str(e))
-        raise HTTPException(status_code=400, detail=f"Invalid base64 audio data: {e}")
+        return SeparationResponse(
+            success=False, error=f"Invalid base64 audio data: {e}"
+        )
 
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_path = Path(temp_dir)
@@ -106,7 +129,6 @@ async def separate_track(request: SeparationRequest):
         )
 
         try:
-            # Use split_song function with CLI method for GPU acceleration
             accompaniment_file, vocals_file = split_song(
                 input_file, temp_path, request.model_name, method=SeparationMethod.API
             )
@@ -139,7 +161,7 @@ async def separate_track(request: SeparationRequest):
                 success=False, error=f"Separation failed: {e.stderr}"
             )
         except FileNotFoundError as fnf:
-            logger.error("audio_separator_not_found", str(fnf))
+            logger.error("audio_separator_not_found", error=str(fnf))
             return SeparationResponse(
                 success=False,
                 error="audio-separator command not found. Please install audio-separator CLI tool.",

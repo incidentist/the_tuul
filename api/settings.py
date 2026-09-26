@@ -48,3 +48,25 @@ SEPARATOR_PORT = int(os.getenv("SEPARATOR_PORT", "8001"))
 
 # Separation method used by the web app: "api", "cli", or "compose_provider".
 SEPARATION_METHOD = os.getenv("SEPARATION_METHOD", "api")
+
+# Separations run one at a time (see api/karaoke/separation_queue.py). This is
+# how many may wait in line, including the running one, before new requests
+# are turned away. Applies to the web app with "api"/"cli", and to the
+# separator server, which queues for "compose_provider".
+#
+# Keep it well under 40: each queued separation holds one of the web app's
+# threadpool threads while it waits, and AnyIO's pool (which also serves static
+# files) has 40.
+SEPARATION_QUEUE_MAX_PENDING = int(os.getenv("SEPARATION_QUEUE_MAX_PENDING", "20"))
+
+# How long the web app waits for the separator server to answer a separation,
+# including time spent waiting in its queue. Long, because a full queue is
+# hours of work.
+SEPARATOR_TIMEOUT_SECONDS = int(os.getenv("SEPARATOR_TIMEOUT_SECONDS", str(6 * 3600)))
+
+# A "processing" placeholder in the GCS cache older than this is assumed to
+# belong to a separation that was lost (e.g. a restart), and a new request for
+# the same song separates it again instead of waiting on it forever.
+SEPARATION_PLACEHOLDER_STALE_SECONDS = int(
+    os.getenv("SEPARATION_PLACEHOLDER_STALE_SECONDS", str(6 * 3600))
+)
