@@ -258,3 +258,56 @@ def test_split_song_compose_provider_raises_on_server_error(
                     DEFAULT_MODEL,
                     method=SeparationMethod.COMPOSE_PROVIDER,
                 )
+
+
+def test_split_song_compose_provider_waits_hours_but_connects_fast(
+    audio_file, temp_output_dir
+):
+    """The separator queues requests, so the answer can take hours to arrive;
+    but a server that is up accepts the connection right away."""
+    with mock.patch.object(
+        settings, "SEPARATOR_URL", "http://host.docker.internal:8001"
+    ):
+        with _mock_separator_post(_separator_response(b"v", b"a")) as post:
+            split_song(
+                audio_file,
+                temp_output_dir,
+                DEFAULT_MODEL,
+                method=SeparationMethod.COMPOSE_PROVIDER,
+            )
+
+    timeout = post.call_args.kwargs["timeout"]
+    assert timeout.read == settings.SEPARATOR_TIMEOUT_SECONDS
+    assert timeout.connect < 60
+
+
+def test_split_song_compose_provider_raises_when_the_queue_is_full(
+    audio_file, temp_output_dir
+):
+    """A full separator queue is reported as such, not as a generic HTTP error."""
+    response = mock.Mock()
+    response.status_code = 503
+
+    with mock.patch.object(
+        settings, "SEPARATOR_URL", "http://host.docker.internal:8001"
+    ):
+        with _mock_separator_post(response):
+            with pytest.raises(SeparationError, match="queue is full"):
+                split_song(
+                    audio_file,
+                    temp_output_dir,
+                    DEFAULT_MODEL,
+                    method=SeparationMethod.COMPOSE_PROVIDER,
+                )
+
+
+@pytest.mark.parametrize(
+    "method,in_process",
+    [
+        (SeparationMethod.API, True),
+        (SeparationMethod.CLI, True),
+        (SeparationMethod.COMPOSE_PROVIDER, False),
+    ],
+)
+def test_runs_in_process(method, in_process):
+    assert method.runs_in_process is in_process

@@ -46,14 +46,22 @@ AVAILABLE_MODELS = [
     "UVR-MDX-NET-Inst_HQ_3.onnx",  # Removes background vocals
 ]
 
-# How long to wait for a separation to come back from the separator server.
-SEPARATION_TIMEOUT_SECONDS = 300
+# How long to wait to connect to the separator server. Separation itself can
+# take hours to come back (see settings.SEPARATOR_TIMEOUT_SECONDS), but a
+# server that is up accepts the connection immediately.
+SEPARATOR_CONNECT_TIMEOUT_SECONDS = 10
 
 
 class SeparationMethod(Enum):
     API = "api"
     CLI = "cli"
     COMPOSE_PROVIDER = "compose_provider"
+
+    @property
+    def runs_in_process(self) -> bool:
+        """Whether this method separates in the calling process, as opposed to
+        handing the work to a separator server that queues it itself."""
+        return self in (SeparationMethod.API, SeparationMethod.CLI)
 
 
 class SeparationError(RuntimeError):
@@ -149,7 +157,11 @@ def _split_song_http(
 ) -> tuple[Path, Path]:
     """Split song by POSTing it to a separator server at `base_url`.
 
-    Raises SeparationError if the server is unreachable or reports failure.
+    The server runs separations one at a time, so this can wait behind a long
+    queue before the response comes back.
+
+    Raises SeparationError if the server is unreachable, its queue is full, or
+    it reports failure.
     """
     audio_base64 = base64.b64encode(songfile.read_bytes()).decode("utf-8")
 
@@ -164,8 +176,15 @@ def _split_song_http(
             response = client.post(
                 f"{base_url.rstrip('/')}/separate",
                 json=request_data,
-                timeout=SEPARATION_TIMEOUT_SECONDS,
+                timeout=httpx.Timeout(
+                    settings.SEPARATOR_TIMEOUT_SECONDS,
+                    connect=SEPARATOR_CONNECT_TIMEOUT_SECONDS,
+                ),
             )
+            if response.status_code == 503:
+                raise SeparationError(
+                    f"Separator server at {base_url} is busy: its queue is full"
+                )
             response.raise_for_status()
     except httpx.HTTPError as e:
         raise SeparationError(
