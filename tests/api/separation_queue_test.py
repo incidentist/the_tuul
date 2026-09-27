@@ -1,3 +1,4 @@
+import os
 import threading
 import time
 
@@ -115,3 +116,33 @@ def test_a_job_cancelled_while_waiting_never_runs():
     blocker.result(timeout=WAIT)
     q.run(lambda: None)  # everything submitted before this has been handled
     assert ran == []
+
+
+def _submit_in_forked_child(q: SeparationQueue) -> str:
+    """Fork like gunicorn's preload_app does, submit a job in the child, and
+    report what happened there."""
+    read_fd, write_fd = os.pipe()
+    pid = os.fork()
+    if pid == 0:
+        os.close(read_fd)
+        try:
+            result = q.submit(lambda: "ran").result(timeout=WAIT)
+        except BaseException as e:
+            result = f"failed: {type(e).__name__}"
+        os.write(write_fd, str(result).encode())
+        os._exit(0)
+    os.close(write_fd)
+    os.waitpid(pid, 0)
+    with os.fdopen(read_fd, "rb") as pipe:
+        return pipe.read().decode()
+
+
+def test_a_queue_built_before_a_fork_still_runs_jobs_in_the_child():
+    # gunicorn with preload_app imports api.main -- building the queue -- in
+    # the master, then forks workers. Threads don't survive fork(), so a worker
+    # thread started at construction would be missing in every worker and jobs
+    # would wait forever.
+    q = SeparationQueue(max_pending=10)
+    assert q.submit(lambda: "parent").result(timeout=WAIT) == "parent"
+
+    assert _submit_in_forked_child(q) == "ran"

@@ -11,8 +11,10 @@ The queue lives in memory, so it is per-process: it serializes separations for
 one gunicorn worker (or one separator server), not across several.
 """
 
+import os
 import queue
 import threading
+import weakref
 from concurrent.futures import Future
 from dataclasses import dataclass, field
 from typing import Any, Callable, TypeVar
@@ -44,6 +46,11 @@ class SeparationQueue:
     The worker is a daemon so that a process shutting down doesn't sit waiting
     for every queued separation to finish first; jobs still waiting are simply
     dropped with the process.
+
+    Safe to build before a fork. gunicorn's preload_app imports the app -- and
+    so builds the queue -- in the master, then forks the workers, and threads
+    don't survive fork(). Each child therefore gets a fresh, empty queue and a
+    worker thread of its own; without that, jobs in a worker wait forever.
     """
 
     def __init__(self, max_pending: int, name: str = "separation") -> None:
@@ -57,12 +64,25 @@ class SeparationQueue:
         """
         self.max_pending = max_pending
         self.name = name
+        self._start()
+
+        # A weakref, so the fork hook doesn't keep a discarded queue alive.
+        ref = weakref.ref(self)
+        os.register_at_fork(after_in_child=lambda: (q := ref()) and q._start())
+
+    def _start(self) -> None:
+        """Set up empty state and a new worker thread for this process.
+
+        Runs on construction and again in each forked child, where the parent's
+        thread is gone and its lock may have been held mid-fork. Jobs the parent
+        had queued stay the parent's.
+        """
         self._jobs: queue.SimpleQueue[_Job] = queue.SimpleQueue()
         # Jobs submitted but not yet finished, including the running one.
         self._pending = 0
         self._lock = threading.Lock()
         self._worker = threading.Thread(
-            target=self._work, name=f"{name}-queue", daemon=True
+            target=self._work, name=f"{self.name}-queue", daemon=True
         )
         self._worker.start()
 
