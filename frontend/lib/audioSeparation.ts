@@ -16,15 +16,28 @@ interface PollResponse {
     finishedTrackURL: string;
 }
 
+/** The JSON placeholder the server keeps at the poll URL until the zip is ready. */
+interface SeparationPlaceholder {
+    status: "processing" | "failed";
+    error?: string;
+}
+
 async function pollForResult(url: string): Promise<Blob> {
     while (true) {
         try {
             const response = await fetch(url, {
                 cache: 'no-cache'
             });
+            if (!response.ok) {
+                throw new Error(`Separation result request failed with status ${response.status}`);
+            }
             const contentType = response.headers.get("content-type");
 
             if (contentType?.includes("application/json")) {
+                const placeholder: SeparationPlaceholder = await response.json();
+                if (placeholder.status === "failed") {
+                    throw new Error(placeholder.error ?? "Separation failed on the server.");
+                }
                 await new Promise(resolve => setTimeout(resolve, 30000));
                 continue;
             }
@@ -63,6 +76,10 @@ export async function separateTrackRemotely(songFile: File, model: SeparationMod
             method: "POST",
             body: formData,
         });
+        if (!response.ok) {
+            // e.g. 503 when the server's separation queue is full
+            throw new Error(`Separation request failed with status ${response.status}`);
+        }
 
         const contentType = response.headers.get("content-type");
 

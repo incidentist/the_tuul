@@ -64,6 +64,7 @@ describe('separateTrackRemotely', () => {
 
         // Mock the initial response as zip
         (fetch as any).mockResolvedValueOnce({
+            ok: true,
             headers: {
                 get: vi.fn().mockReturnValue('application/zip')
             },
@@ -81,6 +82,7 @@ describe('separateTrackRemotely', () => {
     it("sends the model's id as the modelName form field", async () => {
         const mockFile = new File(['audio data'], 'test.mp3', { type: 'audio/mp3' });
         (fetch as any).mockResolvedValueOnce({
+            ok: true,
             headers: { get: vi.fn().mockReturnValue('application/zip') },
             blob: vi.fn().mockResolvedValue(new Blob([new ArrayBuffer(8)], { type: 'application/zip' }))
         });
@@ -101,6 +103,7 @@ describe('separateTrackRemotely', () => {
 
         // Mock the initial response as JSON
         (fetch as any).mockResolvedValueOnce({
+            ok: true,
             headers: {
                 get: vi.fn().mockReturnValue('application/json')
             },
@@ -111,12 +114,15 @@ describe('separateTrackRemotely', () => {
 
         // Mock polling responses: first JSON (still processing), then zip (finished)
         (fetch as any).mockResolvedValueOnce({
+            ok: true,
             headers: {
                 get: vi.fn().mockReturnValue('application/json')
-            }
+            },
+            json: vi.fn().mockResolvedValue({ status: 'processing', startTime: 0 })
         });
 
         (fetch as any).mockResolvedValueOnce({
+            ok: true,
             headers: {
                 get: vi.fn().mockReturnValue('application/zip')
             },
@@ -147,6 +153,7 @@ describe('separateTrackRemotely', () => {
 
         // Mock the initial response as JSON
         (fetch as any).mockResolvedValueOnce({
+            ok: true,
             headers: {
                 get: vi.fn().mockReturnValue('application/json')
             },
@@ -157,18 +164,23 @@ describe('separateTrackRemotely', () => {
 
         // Mock multiple JSON responses before final zip
         (fetch as any).mockResolvedValueOnce({
+            ok: true,
             headers: {
                 get: vi.fn().mockReturnValue('application/json')
-            }
+            },
+            json: vi.fn().mockResolvedValue({ status: 'processing', startTime: 0 })
         });
 
         (fetch as any).mockResolvedValueOnce({
+            ok: true,
             headers: {
                 get: vi.fn().mockReturnValue('application/json')
-            }
+            },
+            json: vi.fn().mockResolvedValue({ status: 'processing', startTime: 0 })
         });
 
         (fetch as any).mockResolvedValueOnce({
+            ok: true,
             headers: {
                 get: vi.fn().mockReturnValue('application/zip')
             },
@@ -187,6 +199,57 @@ describe('separateTrackRemotely', () => {
         expect(result.backing).toBeInstanceOf(Blob);
         expect(result.vocals).toBeInstanceOf(Blob);
         expect(fetch).toHaveBeenCalledTimes(4); // Initial + 3 polls
+    });
+    it('fails when the server reports the separation failed', async () => {
+        const mockFile = new File(['audio data'], 'test.mp3', { type: 'audio/mp3' });
+
+        (fetch as any).mockResolvedValueOnce({
+            ok: true,
+            headers: { get: vi.fn().mockReturnValue('application/json') },
+            json: vi.fn().mockResolvedValue({ finishedTrackURL: 'http://example.com/poll-url' })
+        });
+        (fetch as any).mockResolvedValueOnce({
+            ok: true,
+            headers: { get: vi.fn().mockReturnValue('application/json') },
+            json: vi.fn().mockResolvedValue({ status: 'failed', error: 'Separation failed on the server.' })
+        });
+
+        await expect(separateTrackRemotely(mockFile, NO_VOCALS_SEPARATOR_MODEL))
+            .rejects.toThrow('Separation failed on the server.');
+        expect(fetch).toHaveBeenCalledTimes(2); // Initial + 1 poll, then no more
+    });
+
+    it('fails when the poll URL returns an error status', async () => {
+        const mockFile = new File(['audio data'], 'test.mp3', { type: 'audio/mp3' });
+
+        (fetch as any).mockResolvedValueOnce({
+            ok: true,
+            headers: { get: vi.fn().mockReturnValue('application/json') },
+            json: vi.fn().mockResolvedValue({ finishedTrackURL: 'http://example.com/poll-url' })
+        });
+        (fetch as any).mockResolvedValueOnce({
+            ok: false,
+            status: 404,
+            headers: { get: vi.fn().mockReturnValue('application/xml') }
+        });
+
+        await expect(separateTrackRemotely(mockFile, NO_VOCALS_SEPARATOR_MODEL))
+            .rejects.toThrow('404');
+    });
+
+    it('fails without polling when the server is busy', async () => {
+        const mockFile = new File(['audio data'], 'test.mp3', { type: 'audio/mp3' });
+
+        (fetch as any).mockResolvedValueOnce({
+            ok: false,
+            status: 503,
+            headers: { get: vi.fn().mockReturnValue('application/json') },
+            json: vi.fn().mockResolvedValue({ detail: 'The server is busy. Try again later.' })
+        });
+
+        await expect(separateTrackRemotely(mockFile, NO_VOCALS_SEPARATOR_MODEL))
+            .rejects.toThrow('503');
+        expect(fetch).toHaveBeenCalledTimes(1);
     });
 });
 
@@ -257,6 +320,7 @@ describe('separateTrack', () => {
         vi.mocked(isMobile).mockReturnValue(true);
         const songFile = new File(['song'], 'song.mp3', { type: 'audio/mpeg' });
         (fetch as any).mockResolvedValueOnce({
+            ok: true,
             headers: { get: vi.fn().mockReturnValue('application/zip') },
             blob: vi.fn().mockResolvedValue(new Blob([new ArrayBuffer(8)], { type: 'application/zip' }))
         });
@@ -272,6 +336,7 @@ describe('separateTrack', () => {
         vi.mocked(constants).USE_REMOTE_SEPARATION = true;
         const songFile = new File(['song'], 'song.mp3', { type: 'audio/mpeg' });
         (fetch as any).mockResolvedValueOnce({
+            ok: true,
             headers: { get: vi.fn().mockReturnValue('application/zip') },
             blob: vi.fn().mockResolvedValue(new Blob([new ArrayBuffer(8)], { type: 'application/zip' }))
         });
