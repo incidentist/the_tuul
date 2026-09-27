@@ -1,0 +1,23 @@
+# Only what the Dockerfile COPYs is needed; everything else just slows the
+# build context upload.
+.git
+.venv
+node_modules
+**/__pycache__
+.mypy_cache
+.pytest_cache
+dist
+playwright-report
+test-results
+songs
+test_songs
+buggy_songs
+research
+api/assets/bundles
+.env
+google-application-credentials.json
+# Gitignored build/dev output under api/, which `COPY api api` would otherwise
+# pick up (~300MB).
+api/staticroot
+api/static-build
+api/assets/dev

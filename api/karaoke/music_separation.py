@@ -32,7 +32,7 @@ This module provides multiple methods for separating audio tracks into vocals an
    - The provider in infra/compose-separation-provider/ starts the host process and emits
      a `setenv` message; Compose injects the result as SEPARATOR_URL into any
      service that `depends_on` it.
-   - See infra/compose.selfhosted.host-gpu.yaml.
+   - See compose.host-gpu.yaml.
 
 The main split_song() function selects the method based on the `method` parameter.
 """
@@ -222,8 +222,7 @@ def _split_song_compose_provider(
             "provider in infra/compose-separation-provider/; make sure this "
             "service declares "
             "`depends_on: [separator]` and that you are running with "
-            "infra/compose.selfhosted.host-gpu.yaml layered on "
-            "infra/compose.selfhosted.yaml."
+            "compose.host-gpu.yaml layered on compose.yaml."
         )
 
     return _split_song_http(songfile, song_dir, model_name, settings.SEPARATOR_URL)

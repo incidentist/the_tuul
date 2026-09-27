@@ -2,10 +2,12 @@
 FROM node:22-slim AS frontend-builder
 
 ARG TUUL_API_HOSTNAME="" \
-    TUUL_DONATE_URL="https://ko-fi.com/incidentist"
+    TUUL_DONATE_URL="https://ko-fi.com/incidentist" \
+    TUUL_USE_REMOTE_SEPARATION="false"
 
 ENV TUUL_API_HOSTNAME=$TUUL_API_HOSTNAME \
-    TUUL_DONATE_URL=$TUUL_DONATE_URL
+    TUUL_DONATE_URL=$TUUL_DONATE_URL \
+    TUUL_USE_REMOTE_SEPARATION=$TUUL_USE_REMOTE_SEPARATION
 
 WORKDIR /app
 
@@ -40,7 +42,14 @@ RUN apt-get update \
 
 COPY ./uv.lock ./pyproject.toml ./
 
-RUN uv sync --no-dev --no-install-project --locked
+# Which torch/onnxruntime flavor to install: "cpu" (the default, used in
+# production) or "cuda" (see compose.cuda.yaml). The two are separate images,
+# because the CUDA userspace that torch and onnxruntime-gpu need weighs several
+# GB and a CPU-only host would carry it for nothing.
+ARG TORCH_GROUP=cpu
+
+RUN uv sync --no-dev --no-install-project --locked \
+    --no-default-groups --group $TORCH_GROUP
 
 #
 # RUNTIME IMAGE
@@ -56,11 +65,13 @@ ENV APP_HOME=/app \
     # This default value facilitates local development.
     PORT=8080 \
     WORKER_COUNT=1 \
+    # Never recycle the worker: it would kill separations queued in it.
+    MAX_REQUESTS=0 \
     DEBUG=False \
     SECRET_KEY=SECRET_KEY \
     TUUL_YOUTUBE_PROXY= \
     SEPARATED_TRACKS_BUCKET= \
-    SEPARATOR_SOCKET_PATH= 
+    SEPARATOR_SOCKET_PATH=
 
 WORKDIR $APP_HOME
 

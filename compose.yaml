@@ -4,31 +4,31 @@
 # no host setup beyond Docker -- separation just runs on the CPU inside the
 # container, which works everywhere and is slow.
 #
-#   docker compose -f infra/compose.selfhosted.yaml up --build
+#   docker compose up --build
 #
 # Two overlays make it faster, each layered on top of this file:
 #
-#   # NVIDIA GPU, passed through to the container:
-#   docker compose -f infra/compose.selfhosted.yaml \
-#                  -f infra/compose.selfhosted.cuda.yaml up --build
+#   # NVIDIA GPU, passed through to the container (builds the CUDA image):
+#   docker compose -f compose.yaml -f compose.cuda.yaml up --build
 #
 #   # Any other accelerator (notably a Mac GPU), by running the separator as a
 #   # host process -- Linux containers cannot reach Metal at all:
 #   PATH="$PWD/infra/compose-separation-provider:$PATH" \
-#     docker compose -f infra/compose.selfhosted.yaml \
-#                    -f infra/compose.selfhosted.host-gpu.yaml up --build
+#     docker compose -f compose.yaml -f compose.host-gpu.yaml up --build
 #
-# Without this, Compose would name the project after this file's directory
-# ("infra"), and the name is also what the provider overlay gets as
-# --project-name.
+# Pinned so the project name (which the provider overlay also gets as
+# --project-name) doesn't depend on the checkout's directory name.
 name: the-tuul
 
 services:
   app:
+    # Tagged per flavor so the CPU and CUDA images can coexist.
+    image: the-tuul:cpu
     build:
-      context: ..
-      dockerfile: infra/Dockerfile.selfhosted
+      context: .
       args:
+        # CPU-only torch and onnxruntime. compose.cuda.yaml overrides this.
+        TORCH_GROUP: cpu
         TUUL_API_HOSTNAME: "${TUUL_API_HOSTNAME:-}"
         TUUL_USE_REMOTE_SEPARATION: "${TUUL_USE_REMOTE_SEPARATION:-true}"
         TUUL_SENTRY_DSN: "${TUUL_SENTRY_DSN:-}"

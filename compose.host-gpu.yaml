@@ -1,8 +1,7 @@
 # Overlay: run the separator as a HOST process instead of inside the container.
 #
 #   PATH="$PWD/infra/compose-separation-provider:$PATH" \
-#     docker compose -f infra/compose.selfhosted.yaml \
-#                    -f infra/compose.selfhosted.host-gpu.yaml up --build
+#     docker compose -f compose.yaml -f compose.host-gpu.yaml up --build
 #
 # Requires Docker Compose v2.36+ (for provider services) and `uv` on the host.
 # The PATH entry is how Compose finds the `tuul-separator` provider binary.
@@ -20,7 +19,7 @@
 # This is not macOS-only. Because the separator runs on the host, it uses
 # whatever acceleration that machine has -- including CUDA on a Linux host
 # where you would rather not pass the GPU into a container. For passing an
-# NVIDIA GPU *into* the container instead, use compose.selfhosted.cuda.yaml.
+# NVIDIA GPU *into* the container instead, use compose.cuda.yaml.
 
 services:
   # Not a container. Compose runs the tuul-separator provider in

@@ -47,8 +47,9 @@ port, and see `.env.example` for the other variables it reads.
 
 The slow part of making a karaoke video is separating the vocals from the
 music, which runs an ONNX model and wants a GPU. Where that model runs is the
-only difference between the three flavors — the app image is identical in all
-three. Layer an overlay file on the base one to change it:
+difference between the three flavors. CPU only and Host GPU share the small
+CPU-only image; CUDA builds its own, much larger image with CUDA torch and
+onnxruntime-gpu. Layer an overlay file on the base one to change flavor:
 
 | Flavor | Task | Use it when |
 | --- | --- | --- |
@@ -74,8 +75,7 @@ Each task is a thin wrapper over the Compose files, which you can also run
 directly:
 
 ```sh
-> docker compose -f infra/compose.selfhosted.yaml \
-                 -f infra/compose.selfhosted.cuda.yaml up --build
+> docker compose -f compose.yaml -f compose.cuda.yaml up --build
 ```
 
 **Why a Mac needs its own flavor:** the only GPU-backed onnxruntime provider on
@@ -89,7 +89,7 @@ loudly — onnxruntime falls back to the CPU and separation just gets slow. To
 check which provider you got:
 
 ```sh
-> docker compose -f infra/compose.selfhosted.yaml -f infra/compose.selfhosted.cuda.yaml \
+> docker compose -f compose.yaml -f compose.cuda.yaml \
     exec app python -c "import onnxruntime; print(onnxruntime.get_available_providers())"
 ```
 
@@ -97,12 +97,13 @@ check which provider you got:
 
 ### Just the image
 
-To build and run the container by hand, without Compose — the CPU-only flavor
-with none of the Compose wiring, so you pass environment variables yourself:
+To build and run the container by hand, without Compose, you pass the
+environment variables yourself. It is the same image production runs; add
+`--build-arg TORCH_GROUP=cuda` for the CUDA flavor:
 
 ```sh
-> docker build -f infra/Dockerfile.selfhosted -t the-tuul-selfhosted .
-> docker run --rm -p 8080:8080 the-tuul-selfhosted
+> docker build --build-arg TUUL_USE_REMOTE_SEPARATION=true -t the-tuul:cpu .
+> docker run --rm -p 8080:8080 the-tuul:cpu
 ```
 
 ## Deploy

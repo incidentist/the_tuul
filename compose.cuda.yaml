@@ -1,20 +1,22 @@
 # Overlay: give the app container an NVIDIA GPU, so it separates with CUDA
 # inside the container -- no host process, no provider service.
 #
-#   docker compose -f infra/compose.selfhosted.yaml \
-#                  -f infra/compose.selfhosted.cuda.yaml up --build
+#   docker compose -f compose.yaml -f compose.cuda.yaml up --build
 #
 # Requires an NVIDIA GPU, the driver on the host, and the NVIDIA Container
 # Toolkit so Docker can expose it:
 # https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html
 #
-# Nothing here changes the image. On Linux the `selfhosted` dependency group
-# already resolves to audio-separator[gpu] -> onnxruntime-gpu, and the CUDA
-# runtime libraries (cuBLAS, cuDNN, cuFFT...) arrive with it as nvidia-* pip
-# wheels, so the slim image carries its own CUDA userspace. All that is missing
-# from the base stack is the device itself, which is what this file adds.
-# SEPARATION_METHOD stays `api`: same in-process separation as the CPU-only
-# stack, except onnxruntime now finds CUDAExecutionProvider and uses it.
+# This builds a different image from the base stack: TORCH_GROUP=cuda installs
+# the `cuda` dependency group, i.e. CUDA 13 torch and onnxruntime-gpu. Their
+# runtime libraries (cuBLAS, cuDNN, cuFFT...) arrive as nvidia-* pip wheels, so
+# the slim image carries its own CUDA userspace and the host only needs the
+# driver (580+ for CUDA 13). SEPARATION_METHOD stays `api`: same in-process
+# separation as the CPU-only stack, except onnxruntime finds
+# CUDAExecutionProvider and torch finds the GPU.
+#
+# The image is tagged the-tuul:cuda, so it sits alongside the base stack's
+# the-tuul:cpu rather than replacing it.
 #
 # If the GPU is not visible at runtime, onnxruntime falls back to
 # CPUExecutionProvider -- separation still succeeds, just at CPU speed. Check
@@ -24,6 +26,10 @@
 
 services:
   app:
+    image: the-tuul:cuda
+    build:
+      args:
+        TORCH_GROUP: cuda
     environment:
       # Which host GPUs the CUDA libraries inside the container may use.
       # "all" matches the reservation below; set an index (e.g. "0") to pin one.

@@ -25,6 +25,7 @@ import argparse
 import errno
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
@@ -181,11 +182,24 @@ def wait_until_healthy(state: State, port: str, timeout: int) -> bool:
 
 # --- Spawning ----------------------------------------------------------------
 
+def torch_group_args() -> list[str]:
+    """uv flags selecting the torch/onnxruntime flavor for THIS host.
+
+    The `cpu` group is uv's default, and on macOS it is also the fast one: its
+    plain onnxruntime wheel ships CoreML, the Apple GPU/ANE path. On Linux, a
+    visible `nvidia-smi` means an NVIDIA driver, so swap in the `cuda` group
+    (CUDA 13 torch and onnxruntime-gpu). audio-separator then autodetects and
+    uses whatever acceleration the host actually has, falling back to CPU.
+    """
+    if sys.platform == "linux" and shutil.which("nvidia-smi"):
+        return ["--no-default-groups", "--group", "cuda"]
+    return []
+
+
 SERVER_COMMAND = [
     "uv",
     "run",
-    "--group",
-    "selfhosted",
+    *torch_group_args(),
     "--locked",
     "python",
     "-m",
@@ -261,10 +275,8 @@ def cmd_up(args: argparse.Namespace, state: State) -> None:
         emit("setenv", f"URL={separator_url(args.hostname, args.port)}")
         return
 
-    # The `selfhosted` group carries audio-separator with the right onnxruntime
-    # wheel for THIS machine: onnxruntime-gpu (CUDA) on Linux/Windows, plain
-    # onnxruntime (which ships CoreML) on macOS. audio-separator then autodetects
-    # and uses whatever acceleration the host actually has, falling back to CPU.
+    # Same group flags as SERVER_COMMAND, so the environment we sync is the
+    # one the server runs in; see torch_group_args().
     #
     # `uv run` would sync this anyway, but doing it as its own step lets us say
     # what is happening first: a cold run downloads torch and onnxruntime and
@@ -272,7 +284,7 @@ def cmd_up(args: argparse.Namespace, state: State) -> None:
     info("syncing host Python environment (first run downloads ~1GB, be patient)")
     with open(state.log_file, "ab") as log:
         sync = subprocess.run(
-            ["uv", "sync", "--group", "selfhosted", "--locked"],
+            ["uv", "sync", *torch_group_args(), "--locked"],
             cwd=REPO_ROOT,
             stdout=log,
             stderr=subprocess.STDOUT,

@@ -52,8 +52,8 @@ docker buildx build -t "the-tuul:latest" \
   .
 '''
 
-# The three self-hosted flavors. Same image in all three; they differ only in
-# where audio separation runs. See the Self Hosting section of the README.
+# The three self-hosted flavors. They differ in where audio separation runs;
+# cuda also builds its own image. See the Self Hosting section of the README.
 #
 # Each takes a docker compose subcommand (default `up`) and a --build flag:
 #   mise run selfhosted --build     # build, then start
@@ -80,7 +80,7 @@ ARGS="${ARGS# }"
 [ -z "$ARGS" ] && ARGS="up"
 # --build is only meaningful for `up`.
 [ "${ARGS%% *}" = "up" ] || BUILD=""
-docker compose -f infra/compose.selfhosted.yaml $ARGS $BUILD
+docker compose -f compose.yaml $ARGS $BUILD
 '''
 
 [tasks.selfhosted-cuda]
@@ -103,8 +103,8 @@ ARGS="${ARGS# }"
 # --build is only meaningful for `up`.
 [ "${ARGS%% *}" = "up" ] || BUILD=""
 docker compose \
-  -f infra/compose.selfhosted.yaml \
-  -f infra/compose.selfhosted.cuda.yaml \
+  -f compose.yaml \
+  -f compose.cuda.yaml \
   $ARGS $BUILD
 '''
 
@@ -140,8 +140,8 @@ ARGS="${ARGS# }"
 # --build is only meaningful for `up`.
 [ "${ARGS%% *}" = "up" ] || BUILD=""
 PATH="$PWD/infra/compose-separation-provider:$PATH" docker compose \
-  -f infra/compose.selfhosted.yaml \
-  -f infra/compose.selfhosted.host-gpu.yaml \
+  -f compose.yaml \
+  -f compose.host-gpu.yaml \
   $ARGS $BUILD
 '''
 
