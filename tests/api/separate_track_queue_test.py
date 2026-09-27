@@ -150,14 +150,15 @@ async def test_returns_503_when_the_queue_is_full(
 
 
 @pytest.mark.anyio
-async def test_compose_provider_leaves_queueing_to_the_separator(
-    fake_split, no_bucket, client, monkeypatch
+@pytest.mark.parametrize("method", ["compose_provider", "modal_api"])
+async def test_remote_separators_skip_the_local_queue(
+    fake_split, no_bucket, client, monkeypatch, method
 ):
     # A local queue that can't take anything: using it would be a 503.
     monkeypatch.setattr(main, "separation_queue", SeparationQueue(max_pending=0))
     fake_split.release()
 
-    with mock.patch("api.settings.SEPARATION_METHOD", "compose_provider"):
+    with mock.patch("api.settings.SEPARATION_METHOD", method):
         response = await post_song(client)
 
     assert response.status_code == 200

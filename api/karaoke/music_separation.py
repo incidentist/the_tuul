@@ -34,6 +34,12 @@ This module provides multiple methods for separating audio tracks into vocals an
      service that `depends_on` it.
    - See compose.host-gpu.yaml.
 
+4. **Modal API Method** (_split_song_modal_api): Submits the song to an
+   audio-separator deployment on Modal and polls until it is done
+   - Modal scales out GPU containers itself, so like the Compose provider this
+     is not queued locally.
+   - Set SEPARATOR_MODAL_API_URL to the deployment's URL.
+
 The main split_song() function selects the method based on the `method` parameter.
 """
 
@@ -56,6 +62,7 @@ class SeparationMethod(Enum):
     API = "api"
     CLI = "cli"
     COMPOSE_PROVIDER = "compose_provider"
+    MODAL_API = "modal_api"
 
     @property
     def runs_in_process(self) -> bool:
@@ -228,6 +235,54 @@ def _split_song_compose_provider(
     return _split_song_http(songfile, song_dir, model_name, settings.SEPARATOR_URL)
 
 
+def _split_song_modal_api(
+    songfile: Path, song_dir: Path, model_name: str
+) -> tuple[Path, Path]:
+    """Split song using the audio-separator deployment on Modal.
+
+    Like the Compose provider, there is no fallback to in-process separation:
+    that would run outside the local queue and hide a broken deployment.
+    """
+    if not settings.SEPARATOR_MODAL_API_URL:
+        raise SeparationError(
+            "SEPARATOR_MODAL_API_URL must be set to use the modal_api separation method."
+        )
+
+    from audio_separator.remote import AudioSeparatorAPIClient
+
+    api_client = AudioSeparatorAPIClient(
+        settings.SEPARATOR_MODAL_API_URL, logging.getLogger(__name__)
+    )
+
+    try:
+        result = api_client.separate_audio_and_wait(
+            str(songfile),
+            model=model_name,
+            timeout=settings.SEPARATOR_MODAL_TIMEOUT_SECONDS,
+            poll_interval=5,
+            download=True,
+            output_dir=str(song_dir),
+            output_format="wav",
+            custom_output_names={
+                "Vocals": "vocals",
+                "Instrumental": "accompaniment",
+            },
+        )
+    except Exception as e:
+        raise SeparationError(f"Modal separation request failed: {e}") from e
+
+    if result.get("status") != "completed":
+        raise SeparationError(
+            f"Modal separation failed: {result.get('error', 'Unknown error')}"
+        )
+
+    accompaniment_path, vocals_path = _get_output_paths(song_dir)
+    if not vocals_path.exists() or not accompaniment_path.exists():
+        raise SeparationError("Modal separation finished but its output files are missing")
+
+    return accompaniment_path, vocals_path
+
+
 def split_song(
     songfile: Path,
     song_dir: Path,
@@ -256,6 +311,10 @@ def split_song(
         )
     elif method == SeparationMethod.COMPOSE_PROVIDER:
         accompaniment_path, vocals_path = _split_song_compose_provider(
+            songfile, song_dir, model_name
+        )
+    elif method == SeparationMethod.MODAL_API:
+        accompaniment_path, vocals_path = _split_song_modal_api(
             songfile, song_dir, model_name
         )
     else:

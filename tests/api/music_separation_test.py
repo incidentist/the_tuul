@@ -301,12 +301,93 @@ def test_split_song_compose_provider_raises_when_the_queue_is_full(
                 )
 
 
+MODAL_URL = "https://tuul--audio-separator.modal.run"
+
+
+@contextmanager
+def _mock_modal_client(result=None, side_effect=None, write_outputs=True):
+    """Patch the Modal API client; on success it "downloads" the stems into
+    output_dir the way the real client does."""
+
+    def separate_audio_and_wait(file_path, **kwargs):
+        if side_effect is not None:
+            raise side_effect
+        if write_outputs:
+            output_dir = Path(kwargs["output_dir"])
+            (output_dir / "vocals.wav").write_bytes(b"vocal-audio")
+            (output_dir / "accompaniment.wav").write_bytes(b"accompaniment-audio")
+        return result
+
+    with mock.patch(
+        "audio_separator.remote.AudioSeparatorAPIClient"
+    ) as mock_client_class:
+        client = mock_client_class.return_value
+        client.separate_audio_and_wait.side_effect = separate_audio_and_wait
+        yield mock_client_class, client
+
+
+def _split_modal(audio_file, temp_output_dir):
+    return split_song(
+        audio_file, temp_output_dir, DEFAULT_MODEL, method=SeparationMethod.MODAL_API
+    )
+
+
+def test_split_song_modal_api_returns_downloaded_stems(audio_file, temp_output_dir):
+    with mock.patch.object(settings, "SEPARATOR_MODAL_API_URL", MODAL_URL):
+        with _mock_modal_client({"status": "completed"}) as (client_class, client):
+            accompaniment_path, vocals_path = _split_modal(audio_file, temp_output_dir)
+
+    assert vocals_path.read_bytes() == b"vocal-audio"
+    assert accompaniment_path.read_bytes() == b"accompaniment-audio"
+    assert client_class.call_args.args[0] == MODAL_URL
+    kwargs = client.separate_audio_and_wait.call_args.kwargs
+    assert kwargs["model"] == DEFAULT_MODEL
+    assert kwargs["output_format"] == "wav"
+    assert kwargs["custom_output_names"] == {
+        "Vocals": "vocals",
+        "Instrumental": "accompaniment",
+    }
+
+
+def test_split_song_modal_api_requires_url(audio_file, temp_output_dir):
+    with mock.patch.object(settings, "SEPARATOR_MODAL_API_URL", ""):
+        with pytest.raises(SeparationError, match="SEPARATOR_MODAL_API_URL"):
+            _split_modal(audio_file, temp_output_dir)
+
+
+def test_split_song_modal_api_raises_on_reported_failure(audio_file, temp_output_dir):
+    """A failed job raises rather than falling back to unqueued local separation."""
+    with mock.patch.object(settings, "SEPARATOR_MODAL_API_URL", MODAL_URL):
+        with _mock_modal_client(
+            {"status": "error", "error": "out of GPUs"}, write_outputs=False
+        ):
+            with pytest.raises(SeparationError, match="out of GPUs"):
+                _split_modal(audio_file, temp_output_dir)
+
+
+def test_split_song_modal_api_raises_when_unreachable(audio_file, temp_output_dir):
+    with mock.patch.object(settings, "SEPARATOR_MODAL_API_URL", MODAL_URL):
+        with _mock_modal_client(side_effect=ConnectionError("refused")):
+            with pytest.raises(SeparationError, match="refused"):
+                _split_modal(audio_file, temp_output_dir)
+
+
+def test_split_song_modal_api_raises_when_outputs_missing(
+    audio_file, temp_output_dir
+):
+    with mock.patch.object(settings, "SEPARATOR_MODAL_API_URL", MODAL_URL):
+        with _mock_modal_client({"status": "completed"}, write_outputs=False):
+            with pytest.raises(SeparationError, match="missing"):
+                _split_modal(audio_file, temp_output_dir)
+
+
 @pytest.mark.parametrize(
     "method,in_process",
     [
         (SeparationMethod.API, True),
         (SeparationMethod.CLI, True),
         (SeparationMethod.COMPOSE_PROVIDER, False),
+        (SeparationMethod.MODAL_API, False),
     ],
 )
 def test_runs_in_process(method, in_process):

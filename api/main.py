@@ -39,7 +39,8 @@ logger = structlog.get_logger(__name__)
 app = FastAPI(title="The Tuul API", debug=settings.DEBUG)
 
 # In-process separations ("api"/"cli") run one at a time through here. With
-# "compose_provider" the separator server does its own queueing instead.
+# "compose_provider" the separator server does its own queueing instead, and
+# with "modal_api" Modal runs concurrent separations in separate containers.
 separation_queue = SeparationQueue(
     max_pending=settings.SEPARATION_QUEUE_MAX_PENDING, name="app"
 )
@@ -144,8 +145,8 @@ def perform_music_separation(
             music_separation.split_song, *split_args, **split_kwargs
         )
     else:
-        # Calls out to the separator the Compose provider runs on the host,
-        # which queues the work itself.
+        # Calls out to a remote separator (the Compose provider's host process,
+        # or Modal), which handles its own concurrency.
         accompaniment_path, vocal_path = music_separation.split_song(
             *split_args, **split_kwargs
         )
