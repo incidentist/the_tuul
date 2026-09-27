@@ -66,6 +66,8 @@ ENV APP_HOME=/app \
     # This default value facilitates local development.
     PORT=8080 \
     WORKER_COUNT=1 \
+    # Never recycle the worker: it would kill separations queued in it.
+    MAX_REQUESTS=0 \
     DEBUG=False \
     SECRET_KEY=SECRET_KEY \
     TUUL_YOUTUBE_PROXY= \
