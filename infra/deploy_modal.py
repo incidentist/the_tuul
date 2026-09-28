@@ -36,11 +36,7 @@ from typing import Optional
 from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.responses import Response as StarletteResponse, PlainTextResponse
-import filetype
 import modal
-
-# Local imports
-from audio_separator.separator import Separator
 
 # Constants
 DEFAULT_MODEL_NAME = "default"  # Used when no model is specified
@@ -61,72 +57,44 @@ except Exception:
 # Create Modal app
 app = modal.App("audio-separator")
 
-# Define the container image; we're using CUDA for hardware acceleration and Python 3.13 for optimal performance
+# Modal already provides the NVIDIA driver, and torch's pip wheels bring the
+# CUDA runtime libraries, which onnxruntime-gpu picks up because audio-separator
+# imports torch first. So no CUDA base image or build toolchain is needed.
 image = (
-    modal.Image.from_registry("nvidia/cuda:12.9.1-devel-ubuntu22.04", add_python="3.13")
-    .apt_install(
-        [
-            # Core system packages
-            "curl",
-            "wget",
-            # Audio libraries and dependencies
-            "libsndfile1",
-            "libsndfile1-dev",
-            "libsox-dev",
-            "sox",
-            "libportaudio2",
-            "portaudio19-dev",
-            "libasound2-dev",
-            "libpulse-dev",
-            "libjack-dev",
-            # Sample rate conversion library
-            "libsamplerate0",
-            "libsamplerate0-dev",
-            # Build tools for compiling Python packages with C extensions
-            "build-essential",
-            "clang",
-            "gcc",
-            "g++",
-            "make",
-            "cmake",
-            "pkg-config",
-        ]
-    )
-    .run_commands(
-        [
-            # Set up CUDA library paths for NVENC support
-            "echo '/usr/local/cuda/lib64' >> /etc/ld.so.conf.d/cuda.conf",
-            "ldconfig",
-            # Install latest FFmpeg
-            "wget https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-linux64-gpl.tar.xz",
-            "tar -xf ffmpeg-master-latest-linux64-gpl.tar.xz",
-            "cp ffmpeg-master-latest-linux64-gpl/bin/* /usr/local/bin/",
-            "chmod +x /usr/local/bin/ffmpeg /usr/local/bin/ffprobe",
-            # Verify installations and NVENC support
-            "ffmpeg -version",
-        ]
-    )
-    .pip_install(
-        [
-            # Core audio-separator with GPU support (this pulls in most dependencies from pyproject.toml)
-            "audio-separator[gpu]>=0.35.2",
-            # FastAPI and web server dependencies for Modal API deployment
-            "fastapi>=0.104.0",
-            "uvicorn[standard]>=0.24.0",
-            "python-multipart>=0.0.6",
-            # File type detection for response content type
-            "filetype>=1.2.0",
-        ]
+    modal.Image.debian_slim(python_version="3.13")
+    .apt_install("ffmpeg", "libsndfile1", "libsamplerate0")
+    .uv_pip_install(
+        "audio-separator[gpu]>=0.35.2",
+        # librosa 1.0 dropped its audioread/ffmpeg fallback, so it can't read
+        # m4a (and anything else libsndfile can't), and audio-separator doesn't
+        # bound it. 0.11 still falls back, and depends on audioread, which
+        # audio-separator imports without declaring.
+        "librosa>=0.10,<1",
+        # FastAPI and web server dependencies for Modal API deployment
+        "fastapi>=0.104.0",
+        "uvicorn[standard]>=0.24.0",
+        "python-multipart>=0.0.6",
+        # File type detection for response content type
+        "filetype>=1.2.0",
     )
     .env(
         {
             "AUDIO_SEPARATOR_MODEL_DIR": "/models",
-            # CUDA environment for NVENC support
-            "LD_LIBRARY_PATH": "/usr/local/cuda/lib64:$LD_LIBRARY_PATH",
-            "PATH": "/usr/local/cuda/bin:$PATH",
+            # Compile numba code for a generic x86 CPU, so the cache built below
+            # (on Modal's build machines) stays valid on whatever host runs it.
+            "NUMBA_CPU_NAME": "generic",
         }
     )
+    # librosa's numba functions take ~30s to compile on first use -- nearly all
+    # of a cold separation. They're declared cache=True, so compiling them here
+    # bakes the cache into the image.
+    .run_commands("python -c 'import librosa.util.utils'")
 )
+
+# Only installed in the container, not wherever `modal deploy` runs.
+with image.imports():
+    import filetype
+    from audio_separator.separator import Separator
 
 # Create persistent volume for storing separated files
 volume = modal.Volume.from_name("audio-separator-storage", create_if_missing=True)
