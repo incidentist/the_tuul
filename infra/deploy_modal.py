@@ -34,9 +34,6 @@ import typing
 from typing import Optional
 
 # Third-party imports
-from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
-from fastapi.middleware.cors import CORSMiddleware
-from starlette.responses import Response as StarletteResponse, PlainTextResponse
 import modal
 
 # Constants
@@ -102,6 +99,9 @@ image = (
 with image.imports():
     import filetype
     from audio_separator.separator import Separator
+    from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
+    from fastapi.middleware.cors import CORSMiddleware
+    from starlette.responses import Response as StarletteResponse, PlainTextResponse
 
 # Create persistent volume for storing separated files
 volume = modal.Volume.from_name("audio-separator-storage", create_if_missing=True)
@@ -111,21 +111,6 @@ models_volume = modal.Volume.from_name("audio-separator-models", create_if_missi
 
 # Modal Dict for job status tracking is accessed by name in functions
 # job_status_dict = modal.Dict.from_name("audio-separator-job-status", create_if_missing=True)
-
-
-class PrettyJSONResponse(StarletteResponse):
-    """Custom JSON response class for pretty-printing JSON"""
-
-    media_type = "application/json"
-
-    def render(self, content: typing.Any) -> bytes:
-        return json.dumps(
-            content,
-            ensure_ascii=False,
-            allow_nan=False,
-            indent=4,
-            separators=(", ", ": "),
-        ).encode("utf-8")
 
 
 # T4 is Modal's cheapest GPU and plenty for the small ONNX separation models;
@@ -618,377 +603,396 @@ def get_simplified_models(filter_sort_by: str = None) -> dict:
     return simplified_models
 
 
-web_app = FastAPI(
-    title="Audio Separator API",
-    description="Separate vocals from instrumental tracks using AI",
-    version=AUDIO_SEPARATOR_VERSION,
-)
+def create_web_app():
+    """Build the FastAPI app. Only called in the container, where FastAPI is installed."""
 
-web_app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    class PrettyJSONResponse(StarletteResponse):
+        """Custom JSON response class for pretty-printing JSON"""
 
+        media_type = "application/json"
 
-@web_app.post("/separate")
-async def separate_audio(
-    file: UploadFile = File(..., description="Audio file to separate"),
-    # Model selection - support both single model and multiple models
-    model: Optional[str] = Form(
-        None,
-        description="Single model to use for separation (for backwards compatibility)",
-    ),
-    models: Optional[str] = Form(
-        None,
-        description='JSON list of models to use for separation, e.g. ["model1.ckpt", "model2.onnx"]',
-    ),
-    # Output parameters
-    output_format: str = Form("flac", description="Output format for separated files"),
-    output_bitrate: Optional[str] = Form(
-        None, description="Output bitrate for separated files"
-    ),
-    normalization_threshold: float = Form(
-        0.9, description="Max peak amplitude to normalize audio to"
-    ),
-    amplification_threshold: float = Form(
-        0.0, description="Min peak amplitude to amplify audio to"
-    ),
-    output_single_stem: Optional[str] = Form(
-        None, description="Output only single stem (e.g. Vocals, Instrumental)"
-    ),
-    invert_using_spec: bool = Form(
-        False, description="Invert secondary stem using spectrogram"
-    ),
-    sample_rate: int = Form(44100, description="Sample rate of output audio"),
-    use_soundfile: bool = Form(False, description="Use soundfile for output writing"),
-    use_autocast: bool = Form(
-        False, description="Use PyTorch autocast for faster inference"
-    ),
-    custom_output_names: Optional[str] = Form(
-        None, description="JSON dict of custom output names"
-    ),
-    # MDX parameters
-    mdx_segment_size: int = Form(256, description="MDX segment size"),
-    mdx_overlap: float = Form(0.25, description="MDX overlap"),
-    mdx_batch_size: int = Form(1, description="MDX batch size"),
-    mdx_hop_length: int = Form(1024, description="MDX hop length"),
-    mdx_enable_denoise: bool = Form(False, description="Enable MDX denoising"),
-    # VR parameters
-    vr_batch_size: int = Form(1, description="VR batch size"),
-    vr_window_size: int = Form(512, description="VR window size"),
-    vr_aggression: int = Form(5, description="VR aggression"),
-    vr_enable_tta: bool = Form(False, description="Enable VR Test-Time-Augmentation"),
-    vr_high_end_process: bool = Form(
-        False, description="Enable VR high end processing"
-    ),
-    vr_enable_post_process: bool = Form(False, description="Enable VR post processing"),
-    vr_post_process_threshold: float = Form(
-        0.2, description="VR post process threshold"
-    ),
-    # Demucs parameters
-    demucs_segment_size: str = Form("Default", description="Demucs segment size"),
-    demucs_shifts: int = Form(2, description="Demucs shifts"),
-    demucs_overlap: float = Form(0.25, description="Demucs overlap"),
-    demucs_segments_enabled: bool = Form(True, description="Enable Demucs segments"),
-    # MDXC parameters
-    mdxc_segment_size: int = Form(256, description="MDXC segment size"),
-    mdxc_override_model_segment_size: bool = Form(
-        False, description="Override MDXC model segment size"
-    ),
-    mdxc_overlap: int = Form(8, description="MDXC overlap"),
-    mdxc_batch_size: int = Form(1, description="MDXC batch size"),
-    mdxc_pitch_shift: int = Form(0, description="MDXC pitch shift"),
-) -> dict:
-    """
-    Upload an audio file and separate it into stems using one or more models (asynchronous processing)
-    """
-    if not file.filename:
-        raise HTTPException(status_code=400, detail="No file provided")
+        def render(self, content: typing.Any) -> bytes:
+            return json.dumps(
+                content,
+                ensure_ascii=False,
+                allow_nan=False,
+                indent=4,
+                separators=(", ", ": "),
+            ).encode("utf-8")
 
-    try:
-        # Parse models parameter
-        models_list = None
-        if models:
-            try:
-                models_list = json.loads(models)
-                if not isinstance(models_list, list):
-                    raise ValueError("Models must be a JSON list")
-            except json.JSONDecodeError as e:
-                raise HTTPException(
-                    status_code=400, detail=f"Invalid JSON in models parameter: {e}"
-                )
-        elif model:
-            # Backwards compatibility: single model parameter
-            models_list = [model]
-        # If neither provided, models_list stays None (will use default)
+    web_app = FastAPI(
+        title="Audio Separator API",
+        description="Separate vocals from instrumental tracks using AI",
+        version=AUDIO_SEPARATOR_VERSION,
+    )
 
-        # Parse custom_output_names if provided
-        custom_output_names_dict = None
-        if custom_output_names:
-            try:
-                custom_output_names_dict = json.loads(custom_output_names)
-                if not isinstance(custom_output_names_dict, dict):
-                    raise ValueError("Custom output names must be a JSON object")
-            except json.JSONDecodeError as e:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"Invalid JSON in custom_output_names parameter: {e}",
-                )
-
-        # Read file data
-        audio_data = await file.read()
-
-        # Generate task ID
-        task_id = str(uuid.uuid4())
-
-        # Create initial status in Modal Dict
-        initial_status = {
-            "task_id": task_id,
-            "status": "submitted",
-            "progress": 0,
-            "original_filename": file.filename,
-            "models_used": models_list or ["default"],
-            "total_models": len(models_list) if models_list else 1,
-            "current_model_index": 0,
-            "files": [],
-        }
-
-        # Access Modal Dict by name to ensure proper scope
-        job_status = modal.Dict.from_name(
-            "audio-separator-job-status", create_if_missing=True
-        )
-        job_status[task_id] = initial_status
-
-        # Submit job asynchronously with all parameters
-        separate_audio_function.spawn(
-            audio_data,
-            file.filename,
-            models_list,
-            task_id,
-            # Separator parameters
-            output_format,
-            output_bitrate,
-            normalization_threshold,
-            amplification_threshold,
-            output_single_stem,
-            invert_using_spec,
-            sample_rate,
-            use_soundfile,
-            use_autocast,
-            custom_output_names_dict,
-            # MDX parameters
-            mdx_segment_size,
-            mdx_overlap,
-            mdx_batch_size,
-            mdx_hop_length,
-            mdx_enable_denoise,
-            # VR parameters
-            vr_batch_size,
-            vr_window_size,
-            vr_aggression,
-            vr_enable_tta,
-            vr_high_end_process,
-            vr_enable_post_process,
-            vr_post_process_threshold,
-            # Demucs parameters
-            demucs_segment_size,
-            demucs_shifts,
-            demucs_overlap,
-            demucs_segments_enabled,
-            # MDXC parameters
-            mdxc_segment_size,
-            mdxc_override_model_segment_size,
-            mdxc_overlap,
-            mdxc_batch_size,
-            mdxc_pitch_shift,
-        )
-
-        return {
-            "task_id": task_id,
-            "status": "submitted",
-            "message": "Job submitted for processing. Use /status/{task_id} to check progress.",
-            "models_used": models_list or ["default"],
-            "total_models": len(models_list) if models_list else 1,
-            "original_filename": file.filename,
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Separation failed: {str(e)}"
-        ) from e
+    web_app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 
-@web_app.get("/status/{task_id}")
-async def get_job_status(task_id: str) -> dict:
-    """
-    Get the status of a separation job
-    """
-    try:
-        status_data = get_job_status_function.remote(task_id)
-        return status_data
-    except Exception as e:
-        raise HTTPException(
-            status_code=500, detail=f"Failed to get job status: {str(e)}"
-        ) from e
+    @web_app.post("/separate")
+    async def separate_audio(
+        file: UploadFile = File(..., description="Audio file to separate"),
+        # Model selection - support both single model and multiple models
+        model: Optional[str] = Form(
+            None,
+            description="Single model to use for separation (for backwards compatibility)",
+        ),
+        models: Optional[str] = Form(
+            None,
+            description='JSON list of models to use for separation, e.g. ["model1.ckpt", "model2.onnx"]',
+        ),
+        # Output parameters
+        output_format: str = Form("flac", description="Output format for separated files"),
+        output_bitrate: Optional[str] = Form(
+            None, description="Output bitrate for separated files"
+        ),
+        normalization_threshold: float = Form(
+            0.9, description="Max peak amplitude to normalize audio to"
+        ),
+        amplification_threshold: float = Form(
+            0.0, description="Min peak amplitude to amplify audio to"
+        ),
+        output_single_stem: Optional[str] = Form(
+            None, description="Output only single stem (e.g. Vocals, Instrumental)"
+        ),
+        invert_using_spec: bool = Form(
+            False, description="Invert secondary stem using spectrogram"
+        ),
+        sample_rate: int = Form(44100, description="Sample rate of output audio"),
+        use_soundfile: bool = Form(False, description="Use soundfile for output writing"),
+        use_autocast: bool = Form(
+            False, description="Use PyTorch autocast for faster inference"
+        ),
+        custom_output_names: Optional[str] = Form(
+            None, description="JSON dict of custom output names"
+        ),
+        # MDX parameters
+        mdx_segment_size: int = Form(256, description="MDX segment size"),
+        mdx_overlap: float = Form(0.25, description="MDX overlap"),
+        mdx_batch_size: int = Form(1, description="MDX batch size"),
+        mdx_hop_length: int = Form(1024, description="MDX hop length"),
+        mdx_enable_denoise: bool = Form(False, description="Enable MDX denoising"),
+        # VR parameters
+        vr_batch_size: int = Form(1, description="VR batch size"),
+        vr_window_size: int = Form(512, description="VR window size"),
+        vr_aggression: int = Form(5, description="VR aggression"),
+        vr_enable_tta: bool = Form(False, description="Enable VR Test-Time-Augmentation"),
+        vr_high_end_process: bool = Form(
+            False, description="Enable VR high end processing"
+        ),
+        vr_enable_post_process: bool = Form(False, description="Enable VR post processing"),
+        vr_post_process_threshold: float = Form(
+            0.2, description="VR post process threshold"
+        ),
+        # Demucs parameters
+        demucs_segment_size: str = Form("Default", description="Demucs segment size"),
+        demucs_shifts: int = Form(2, description="Demucs shifts"),
+        demucs_overlap: float = Form(0.25, description="Demucs overlap"),
+        demucs_segments_enabled: bool = Form(True, description="Enable Demucs segments"),
+        # MDXC parameters
+        mdxc_segment_size: int = Form(256, description="MDXC segment size"),
+        mdxc_override_model_segment_size: bool = Form(
+            False, description="Override MDXC model segment size"
+        ),
+        mdxc_overlap: int = Form(8, description="MDXC overlap"),
+        mdxc_batch_size: int = Form(1, description="MDXC batch size"),
+        mdxc_pitch_shift: int = Form(0, description="MDXC pitch shift"),
+    ) -> dict:
+        """
+        Upload an audio file and separate it into stems using one or more models (asynchronous processing)
+        """
+        if not file.filename:
+            raise HTTPException(status_code=400, detail="No file provided")
 
+        try:
+            # Parse models parameter
+            models_list = None
+            if models:
+                try:
+                    models_list = json.loads(models)
+                    if not isinstance(models_list, list):
+                        raise ValueError("Models must be a JSON list")
+                except json.JSONDecodeError as e:
+                    raise HTTPException(
+                        status_code=400, detail=f"Invalid JSON in models parameter: {e}"
+                    )
+            elif model:
+                # Backwards compatibility: single model parameter
+                models_list = [model]
+            # If neither provided, models_list stays None (will use default)
 
-@web_app.get("/download/{task_id}/{file_hash}")
-async def download_file(task_id: str, file_hash: str) -> Response:
-    """
-    Download a separated audio file using its hash identifier
-    """
-    try:
-        file_data, actual_filename = get_file_by_hash_function.remote(
-            task_id, file_hash
-        )
+            # Parse custom_output_names if provided
+            custom_output_names_dict = None
+            if custom_output_names:
+                try:
+                    custom_output_names_dict = json.loads(custom_output_names)
+                    if not isinstance(custom_output_names_dict, dict):
+                        raise ValueError("Custom output names must be a JSON object")
+                except json.JSONDecodeError as e:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Invalid JSON in custom_output_names parameter: {e}",
+                    )
 
-        # Detect file type from content
-        detected_type = filetype.guess(file_data)
+            # Read file data
+            audio_data = await file.read()
 
-        if detected_type and detected_type.mime:
-            content_type = detected_type.mime
-        else:
-            # Log when we can't detect the file type
-            print(
-                f"WARNING: Could not detect MIME type for {actual_filename}, using generic type"
+            # Generate task ID
+            task_id = str(uuid.uuid4())
+
+            # Create initial status in Modal Dict
+            initial_status = {
+                "task_id": task_id,
+                "status": "submitted",
+                "progress": 0,
+                "original_filename": file.filename,
+                "models_used": models_list or ["default"],
+                "total_models": len(models_list) if models_list else 1,
+                "current_model_index": 0,
+                "files": [],
+            }
+
+            # Access Modal Dict by name to ensure proper scope
+            job_status = modal.Dict.from_name(
+                "audio-separator-job-status", create_if_missing=True
             )
-            content_type = "application/octet-stream"
+            job_status[task_id] = initial_status
 
-        return Response(
-            content=file_data,
-            media_type=content_type,
-            headers={"Content-Disposition": f"attachment; filename={actual_filename}"},
+            # Submit job asynchronously with all parameters
+            separate_audio_function.spawn(
+                audio_data,
+                file.filename,
+                models_list,
+                task_id,
+                # Separator parameters
+                output_format,
+                output_bitrate,
+                normalization_threshold,
+                amplification_threshold,
+                output_single_stem,
+                invert_using_spec,
+                sample_rate,
+                use_soundfile,
+                use_autocast,
+                custom_output_names_dict,
+                # MDX parameters
+                mdx_segment_size,
+                mdx_overlap,
+                mdx_batch_size,
+                mdx_hop_length,
+                mdx_enable_denoise,
+                # VR parameters
+                vr_batch_size,
+                vr_window_size,
+                vr_aggression,
+                vr_enable_tta,
+                vr_high_end_process,
+                vr_enable_post_process,
+                vr_post_process_threshold,
+                # Demucs parameters
+                demucs_segment_size,
+                demucs_shifts,
+                demucs_overlap,
+                demucs_segments_enabled,
+                # MDXC parameters
+                mdxc_segment_size,
+                mdxc_override_model_segment_size,
+                mdxc_overlap,
+                mdxc_batch_size,
+                mdxc_pitch_shift,
+            )
+
+            return {
+                "task_id": task_id,
+                "status": "submitted",
+                "message": "Job submitted for processing. Use /status/{task_id} to check progress.",
+                "models_used": models_list or ["default"],
+                "total_models": len(models_list) if models_list else 1,
+                "original_filename": file.filename,
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, detail=f"Separation failed: {str(e)}"
+            ) from e
+
+
+    @web_app.get("/status/{task_id}")
+    async def get_job_status(task_id: str) -> dict:
+        """
+        Get the status of a separation job
+        """
+        try:
+            status_data = get_job_status_function.remote(task_id)
+            return status_data
+        except Exception as e:
+            raise HTTPException(
+                status_code=500, detail=f"Failed to get job status: {str(e)}"
+            ) from e
+
+
+    @web_app.get("/download/{task_id}/{file_hash}")
+    async def download_file(task_id: str, file_hash: str) -> Response:
+        """
+        Download a separated audio file using its hash identifier
+        """
+        try:
+            file_data, actual_filename = get_file_by_hash_function.remote(
+                task_id, file_hash
+            )
+
+            # Detect file type from content
+            detected_type = filetype.guess(file_data)
+
+            if detected_type and detected_type.mime:
+                content_type = detected_type.mime
+            else:
+                # Log when we can't detect the file type
+                print(
+                    f"WARNING: Could not detect MIME type for {actual_filename}, using generic type"
+                )
+                content_type = "application/octet-stream"
+
+            return Response(
+                content=file_data,
+                media_type=content_type,
+                headers={"Content-Disposition": f"attachment; filename={actual_filename}"},
+            )
+
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="File not found") from exc
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}") from e
+
+
+    @web_app.get("/models-json")
+    async def get_available_models() -> PrettyJSONResponse:
+        """
+        Get list of available separation models
+        """
+        models = list_available_models.remote()
+
+        # Return pretty-printed JSON for better readability
+        return PrettyJSONResponse(content=models)
+
+
+    @web_app.get("/models")
+    async def get_simplified_models_list(filter_sort_by: str = None) -> PlainTextResponse:
+        """
+        Get simplified model list in plain text format (like CLI --list_models)
+        """
+        models = get_simplified_models.remote(filter_sort_by=filter_sort_by)
+
+        if not models:
+            return PlainTextResponse("No models found")
+
+        # Calculate maximum widths for each column
+        filename_width = max(
+            len("Model Filename"), max(len(filename) for filename in models.keys())
+        )
+        arch_width = max(len("Arch"), max(len(info["Type"]) for info in models.values()))
+        stems_width = max(
+            len("Output Stems (SDR)"),
+            max(len(", ".join(info["Stems"])) for info in models.values()),
+        )
+        name_width = max(
+            len("Friendly Name"), max(len(info["Name"]) for info in models.values())
         )
 
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail="File not found") from exc
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}") from e
+        # Calculate total width for separator line
+        total_width = (
+            filename_width + arch_width + stems_width + name_width + 15
+        )  # 15 accounts for spacing between columns
 
-
-@web_app.get("/models-json")
-async def get_available_models() -> PrettyJSONResponse:
-    """
-    Get list of available separation models
-    """
-    models = list_available_models.remote()
-
-    # Return pretty-printed JSON for better readability
-    return PrettyJSONResponse(content=models)
-
-
-@web_app.get("/models")
-async def get_simplified_models_list(filter_sort_by: str = None) -> PlainTextResponse:
-    """
-    Get simplified model list in plain text format (like CLI --list_models)
-    """
-    models = get_simplified_models.remote(filter_sort_by=filter_sort_by)
-
-    if not models:
-        return PlainTextResponse("No models found")
-
-    # Calculate maximum widths for each column
-    filename_width = max(
-        len("Model Filename"), max(len(filename) for filename in models.keys())
-    )
-    arch_width = max(len("Arch"), max(len(info["Type"]) for info in models.values()))
-    stems_width = max(
-        len("Output Stems (SDR)"),
-        max(len(", ".join(info["Stems"])) for info in models.values()),
-    )
-    name_width = max(
-        len("Friendly Name"), max(len(info["Name"]) for info in models.values())
-    )
-
-    # Calculate total width for separator line
-    total_width = (
-        filename_width + arch_width + stems_width + name_width + 15
-    )  # 15 accounts for spacing between columns
-
-    # Format the output with dynamic widths and extra spacing
-    output_lines = []
-    output_lines.append("-" * total_width)
-    output_lines.append(
-        f"{'Model Filename':<{filename_width}}  {'Arch':<{arch_width}}  {'Output Stems (SDR)':<{stems_width}}  {'Friendly Name'}"
-    )
-    output_lines.append("-" * total_width)
-
-    for filename, info in models.items():
-        stems = ", ".join(info["Stems"])
+        # Format the output with dynamic widths and extra spacing
+        output_lines = []
+        output_lines.append("-" * total_width)
         output_lines.append(
-            f"{filename:<{filename_width}}  {info['Type']:<{arch_width}}  {stems:<{stems_width}}  {info['Name']}"
+            f"{'Model Filename':<{filename_width}}  {'Arch':<{arch_width}}  {'Output Stems (SDR)':<{stems_width}}  {'Friendly Name'}"
         )
+        output_lines.append("-" * total_width)
 
-    return PlainTextResponse("\n".join(output_lines))
+        for filename, info in models.items():
+            stems = ", ".join(info["Stems"])
+            output_lines.append(
+                f"{filename:<{filename_width}}  {info['Type']:<{arch_width}}  {stems:<{stems_width}}  {info['Name']}"
+            )
 
-
-@web_app.get("/health")
-async def health_check() -> dict:
-    """
-    Health check endpoint
-    """
-    return {
-        "status": "healthy",
-        "service": "audio-separator-api",
-        "version": AUDIO_SEPARATOR_VERSION,
-    }
+        return PlainTextResponse("\n".join(output_lines))
 
 
-@web_app.get("/")
-async def root() -> dict:
-    """
-    Root endpoint with API information
-    """
-    return {
-        "message": "Audio Separator API",
-        "version": AUDIO_SEPARATOR_VERSION,
-        "description": (
-            "Separate vocals from instrumental tracks using AI - "
-            "supports all formats and parameters that audio-separator CLI supports"
-        ),
-        "features": [
-            "Multiple model processing in single job",
-            "Full separator parameter compatibility",
-            "Asynchronous processing with progress tracking",
-            "All MDX, VR, Demucs, and MDXC architectures supported",
-            "Custom output naming and format options",
-        ],
-        "endpoints": {
-            "POST /separate": "Upload and separate audio file (supports multiple models and all separator parameters)",
-            "GET /status/{task_id}": "Get job status and progress (includes model-specific progress and file hashes)",
-            "GET /download/{task_id}/{file_hash}": "Download separated file using hash identifier (avoids URL length limits)",
-            "GET /models-json": "List available models (JSON format)",
-            "GET /models": "List available models (plain text format like CLI --list_models)",
-            "GET /health": "Health check",
-        },
-        "note": (
-            "Full-featured wrapper around audio-separator with complete parameter compatibility"
-        ),
-        "remote_cli": {
-            "install": "pip install audio-separator",
-            "setup": 'export AUDIO_SEPARATOR_API_URL="https://your-deployment-url.modal.run"',
-            "usage": [
-                "audio-separator-remote separate song.mp3",
-                "audio-separator-remote separate song.mp3 --model UVR-MDX-NET-Inst_HQ_4",
-                "audio-separator-remote separate song.mp3 --models model1.ckpt model2.onnx",
-                'audio-separator-remote separate song.mp3 --custom_output_names \'{"Vocals": "lead_vocals"}\'',
-                "audio-separator-remote status <task_id>",
-                "audio-separator-remote models --filter vocals",
+    @web_app.get("/health")
+    async def health_check() -> dict:
+        """
+        Health check endpoint
+        """
+        return {
+            "status": "healthy",
+            "service": "audio-separator-api",
+            "version": AUDIO_SEPARATOR_VERSION,
+        }
+
+
+    @web_app.get("/")
+    async def root() -> dict:
+        """
+        Root endpoint with API information
+        """
+        return {
+            "message": "Audio Separator API",
+            "version": AUDIO_SEPARATOR_VERSION,
+            "description": (
+                "Separate vocals from instrumental tracks using AI - "
+                "supports all formats and parameters that audio-separator CLI supports"
+            ),
+            "features": [
+                "Multiple model processing in single job",
+                "Full separator parameter compatibility",
+                "Asynchronous processing with progress tracking",
+                "All MDX, VR, Demucs, and MDXC architectures supported",
+                "Custom output naming and format options",
             ],
-        },
-    }
+            "endpoints": {
+                "POST /separate": "Upload and separate audio file (supports multiple models and all separator parameters)",
+                "GET /status/{task_id}": "Get job status and progress (includes model-specific progress and file hashes)",
+                "GET /download/{task_id}/{file_hash}": "Download separated file using hash identifier (avoids URL length limits)",
+                "GET /models-json": "List available models (JSON format)",
+                "GET /models": "List available models (plain text format like CLI --list_models)",
+                "GET /health": "Health check",
+            },
+            "note": (
+                "Full-featured wrapper around audio-separator with complete parameter compatibility"
+            ),
+            "remote_cli": {
+                "install": "pip install audio-separator",
+                "setup": 'export AUDIO_SEPARATOR_API_URL="https://your-deployment-url.modal.run"',
+                "usage": [
+                    "audio-separator-remote separate song.mp3",
+                    "audio-separator-remote separate song.mp3 --model UVR-MDX-NET-Inst_HQ_4",
+                    "audio-separator-remote separate song.mp3 --models model1.ckpt model2.onnx",
+                    'audio-separator-remote separate song.mp3 --custom_output_names \'{"Vocals": "lead_vocals"}\'',
+                    "audio-separator-remote status <task_id>",
+                    "audio-separator-remote models --filter vocals",
+                ],
+            },
+        }
+
+    return web_app
 
 
 @app.function(
     image=image, timeout=600, scaledown_window=300, volumes={"/storage": volume}
 )
 @modal.asgi_app()
-def api() -> FastAPI:
+def api():
     """
     Deploy the FastAPI app as a Modal ASGI application
     """
-    return web_app
+    return create_web_app()
