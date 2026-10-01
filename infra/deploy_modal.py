@@ -99,9 +99,13 @@ image = (
 with image.imports():
     import filetype
     from audio_separator.separator import Separator
-    from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
+    from fastapi import FastAPI, File, Form, HTTPException, UploadFile
     from fastapi.middleware.cors import CORSMiddleware
-    from starlette.responses import Response as StarletteResponse, PlainTextResponse
+    from starlette.responses import (
+        FileResponse,
+        PlainTextResponse,
+        Response as StarletteResponse,
+    )
 
 # Create persistent volume for storing separated files
 volume = modal.Volume.from_name("audio-separator-storage", create_if_missing=True)
@@ -477,87 +481,12 @@ def get_file_function(task_id: str, filename: str) -> bytes:
         return f.read()
 
 
-@app.function(image=image, timeout=300, volumes={"/storage": volume})
-def get_file_by_hash_function(task_id: str, file_hash: str) -> tuple[bytes, str]:
-    """
-    Retrieve a separated audio file by its hash identifier.
-    Returns tuple of (file_data, actual_filename)
-    """
-    print(
-        f"🔍 get_file_by_hash_function called - Task ID: {task_id}, File hash: {file_hash}"
-    )
-
-    # Reload the volume to ensure we see the latest files written by other function executions
-    print(f"🔍 Reloading volume to see latest files...")
-    volume.reload()
-
-    # Access Modal Dict to get the job status with file hash mappings
-    job_status = modal.Dict.from_name(
-        "audio-separator-job-status", create_if_missing=True
-    )
-
-    if task_id not in job_status:
-        print(f"❌ Task not found in job_status: {task_id}")
-        raise FileNotFoundError(f"Task not found: {task_id}")
-
-    status_data = job_status[task_id]
-    files_dict = status_data.get("files", {})
-    print(f"🔍 Retrieved files_dict: {files_dict}")
-    print(f"🔍 files_dict type: {type(files_dict)}")
-
-    # Check if files is still a list (backward compatibility)
-    if isinstance(files_dict, list):
-        print(f"🔍 Using legacy list format with {len(files_dict)} files")
-        # For backward compatibility, try to find file by regenerating hash
-        for filename in files_dict:
-            generated_hash = generate_file_hash(filename)
-            print(
-                f"🔍 Checking filename '{filename}' -> hash '{generated_hash}' vs requested '{file_hash}'"
-            )
-            if generated_hash == file_hash:
-                file_path = f"/storage/outputs/{task_id}/{filename}"
-                print(f"🔍 Hash match! Checking file path: {file_path}")
-                if os.path.exists(file_path):
-                    print(f"✅ File exists, returning content")
-                    with open(file_path, "rb") as f:
-                        return f.read(), filename
-                else:
-                    print(f"❌ File does not exist at path: {file_path}")
-        raise FileNotFoundError(
-            f"File with hash {file_hash} not found in legacy format"
-        )
-
-    # Normal case: files is a dictionary mapping hashes to filenames
-    print(f"🔍 Using new hash format with {len(files_dict)} files")
-    print(f"🔍 Available hashes: {list(files_dict.keys())}")
-
-    if file_hash not in files_dict:
-        print(f"❌ Hash {file_hash} not found in files_dict")
-        raise FileNotFoundError(f"File with hash {file_hash} not found")
-
-    actual_filename = files_dict[file_hash]
-    file_path = f"/storage/outputs/{task_id}/{actual_filename}"
-    print(f"🔍 Hash found! Filename: '{actual_filename}'")
-    print(f"🔍 Checking file path: {file_path}")
-
-    if not os.path.exists(file_path):
-        print(f"❌ File does not exist at path: {file_path}")
-        # List what files actually exist in the directory
-        task_dir = f"/storage/outputs/{task_id}"
-        if os.path.exists(task_dir):
-            actual_files = os.listdir(task_dir)
-            print(f"🔍 Files actually in directory ({len(actual_files)}):")
-            for i, actual_file in enumerate(actual_files):
-                print(f"  [{i}] '{actual_file}'")
-                if actual_file == actual_filename:
-                    print(f"    ✅ EXACT MATCH found!")
-        else:
-            print(f"❌ Task directory does not exist: {task_dir}")
-        raise FileNotFoundError(f"File not found: {actual_filename}")
-
-    print(f"✅ File exists, returning content")
-    with open(file_path, "rb") as f:
-        return f.read(), actual_filename
+def output_filename_for_hash(files, file_hash: str) -> Optional[str]:
+    """Find the output filename a job recorded under file_hash, or None."""
+    # Jobs from before file hashes were introduced recorded a plain list.
+    if isinstance(files, list):
+        files = {generate_file_hash(filename): filename for filename in files}
+    return files.get(file_hash)
 
 
 @app.function(image=image, timeout=60, volumes={"/models": models_volume})
@@ -762,10 +691,10 @@ def create_web_app():
             job_status = modal.Dict.from_name(
                 "audio-separator-job-status", create_if_missing=True
             )
-            job_status[task_id] = initial_status
+            await job_status.put.aio(task_id, initial_status)
 
             # Submit job asynchronously with all parameters
-            separate_audio_function.spawn(
+            await separate_audio_function.spawn.aio(
                 audio_data,
                 file.filename,
                 models_list,
@@ -830,7 +759,7 @@ def create_web_app():
         Get the status of a separation job
         """
         try:
-            status_data = get_job_status_function.remote(task_id)
+            status_data = await get_job_status_function.remote.aio(task_id)
             return status_data
         except Exception as e:
             raise HTTPException(
@@ -839,37 +768,45 @@ def create_web_app():
 
 
     @web_app.get("/download/{task_id}/{file_hash}")
-    async def download_file(task_id: str, file_hash: str) -> Response:
+    async def download_file(task_id: str, file_hash: str) -> FileResponse:
         """
         Download a separated audio file using its hash identifier
         """
-        try:
-            file_data, actual_filename = get_file_by_hash_function.remote(
-                task_id, file_hash
+        job_status = modal.Dict.from_name(
+            "audio-separator-job-status", create_if_missing=True
+        )
+        status_data = await job_status.get.aio(task_id)
+        if status_data is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+
+        actual_filename = output_filename_for_hash(
+            status_data.get("files", {}), file_hash
+        )
+        if actual_filename is None:
+            raise HTTPException(status_code=404, detail="File not found")
+
+        # Read from this container's mount of the volume instead of shipping the
+        # bytes through another function, which cost a cold start plus ~10s per
+        # file. The separation committed from another container, so reload if
+        # this container hasn't seen the file yet.
+        file_path = f"/storage/outputs/{task_id}/{actual_filename}"
+        if not os.path.exists(file_path):
+            await volume.reload.aio()
+        if not os.path.exists(file_path):
+            raise HTTPException(status_code=404, detail="File not found")
+
+        detected_type = filetype.guess(file_path)
+        if detected_type and detected_type.mime:
+            content_type = detected_type.mime
+        else:
+            print(
+                f"WARNING: Could not detect MIME type for {actual_filename}, using generic type"
             )
+            content_type = "application/octet-stream"
 
-            # Detect file type from content
-            detected_type = filetype.guess(file_data)
-
-            if detected_type and detected_type.mime:
-                content_type = detected_type.mime
-            else:
-                # Log when we can't detect the file type
-                print(
-                    f"WARNING: Could not detect MIME type for {actual_filename}, using generic type"
-                )
-                content_type = "application/octet-stream"
-
-            return Response(
-                content=file_data,
-                media_type=content_type,
-                headers={"Content-Disposition": f"attachment; filename={actual_filename}"},
-            )
-
-        except FileNotFoundError as exc:
-            raise HTTPException(status_code=404, detail="File not found") from exc
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Download failed: {str(e)}") from e
+        return FileResponse(
+            file_path, media_type=content_type, filename=actual_filename
+        )
 
 
     @web_app.get("/models-json")
@@ -877,7 +814,7 @@ def create_web_app():
         """
         Get list of available separation models
         """
-        models = list_available_models.remote()
+        models = await list_available_models.remote.aio()
 
         # Return pretty-printed JSON for better readability
         return PrettyJSONResponse(content=models)
@@ -888,7 +825,7 @@ def create_web_app():
         """
         Get simplified model list in plain text format (like CLI --list_models)
         """
-        models = get_simplified_models.remote(filter_sort_by=filter_sort_by)
+        models = await get_simplified_models.remote.aio(filter_sort_by=filter_sort_by)
 
         if not models:
             return PlainTextResponse("No models found")
