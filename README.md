@@ -3,7 +3,7 @@
 Normally it takes a long time to make a decent karaoke video. You need to separate the music from the vocals, and painstakingly adjust the timing of every syllable. What we try to do here is use some shortcuts to make videos that are 80% perfect in 20% of the time.
 
 ## Install
-Requires [mise](https://mise.jdx.dev/), npm and ffmpeg.
+Requires Docker, [mise](https://mise.jdx.dev/), npm and ffmpeg.
 
 mise manages the `uv` install (see `mise.toml`), and `uv` in turn manages the pinned Python version (see `requires-python` in `pyproject.toml`) and project dependencies. mise also wraps the common commands as tasks. Install dependencies with:
 ```
@@ -33,17 +33,44 @@ To build the Docker image:
 
 ## Self Hosting
 
-Want to run your own copy of The Tüül? Start with the plain version, which
-needs nothing but Docker:
-
-```
-> mise run selfhosted --build
-```
+The simplest way to get up and running is `mise run selfhosted --build`. This runs the app with a balanced separation setup: on a desktop computer, separation will happen in the web browser. On a mobile device, separation happens in the backend, using CPU only, so it's a little slower. Separation also happens *syncronously*, so browsers holds connections open until separation is done.
 
 The app is then at http://localhost:8080. Set `TUUL_PORT` to use a different
 port, and see `.env.example` for the other variables it reads.
 
-### Pick a flavor
+### Using a GPU
+Audio separation using a GPU is a lot faster!
+
+#### MacOS
+
+Docker containers can't use a GPU on a Mac, so we use a special setup that runs a small server directly on the host, not in a container. That small server only does audio separation, and returns separated files to the backend. To run this setup:
+
+`mise run selfhosted-host-gpu --build up`
+
+If you open up `compose.host-gpu.yaml` you'll see the `separator` service that runs `infra/compose-separation-provider/tuul-separator`. That's the small server that uses your GPU to separate audio. You'll need `uv` installed on your host machine: `brew install uv`.
+
+#### NVidia GPUs
+
+On Windows or Linux with Nvidia, run:
+
+`mise run selfhosted-cuda`
+
+This runs the Tuul in a container that can access your GPU.
+
+#### Modal Cloud GPUs
+
+Modal.com is a provider of serverless GPUs. You load a bit of code into Modal that only does audio separation, and tell the backend hosted on your machine to use Modal for separation.
+
+To deploy this:
+1. Sign up for a Modal account.
+2. Install the Modal cli tool: `brew install modal` or whatever.
+3. Log into the cli tool.
+4. `modal deploy infra/deploy_modal.py` Note the URL it prints: `Created web function api => https://mystuff--audio-separator-api.modal.run`
+5. In your .env, set `SEPARATION_METHOD=modal_api` and `SEPARATOR_MODAL_API_URL=https://<the URL from the preceding step>` (or add that to your docker compose file)
+
+### Adding Async Polling
+
+Async separation tells the browser to poll a Google Cloud Storage file, and the backend places the separated audio at that location when it's done. To enable this, set 
 
 The slow part of making a karaoke video is separating the vocals from the
 music, which runs an ONNX model and wants a GPU. Where that model runs is the
@@ -67,33 +94,6 @@ lifecycle. Add `--build` to rebuild the image first:
 > mise run selfhosted-cuda down      # stop
 ```
 
-The host-gpu flavor needs Docker Compose v2.36+ and `uv` on your machine; the
-task checks for both and tells you if either is missing. `up` starts the host
-separator and `down` stops it, so it is still one command either way.
-
-Each task is a thin wrapper over the Compose files, which you can also run
-directly:
-
-```sh
-> docker compose -f compose.yaml -f compose.cuda.yaml up --build
-```
-
-**Why a Mac needs its own flavor:** the only GPU-backed onnxruntime provider on
-a Mac is CoreML, which ships only in the macOS build, and a Linux container
-cannot reach Metal at all — there is no GPU passthrough for Metal in
-containers, in Docker or in Apple's `container`. So on a Mac the choice is
-CPU-only or a host process; there is no in-container GPU option to offer.
-
-If you pick a GPU flavor and the GPU is not actually visible, nothing breaks
-loudly — onnxruntime falls back to the CPU and separation just gets slow. To
-check which provider you got:
-
-```sh
-> docker compose -f compose.yaml -f compose.cuda.yaml \
-    exec app python -c "import onnxruntime; print(onnxruntime.get_available_providers())"
-```
-
-`infra/README.md` has the details of how each file is put together.
 
 ### Just the image
 
@@ -119,6 +119,7 @@ When the `SEPARATED_TRACKS_BUCKET` environment variable is set, separated tracks
 ```
 
 The task reads `SEPARATED_TRACKS_BUCKET` from the environment or `.env` and needs an authenticated `gcloud`. Re-run it whenever the site's origins change.
+
 
 ## Contributing
 

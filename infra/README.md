@@ -12,6 +12,7 @@ them.
 | `../compose.yaml` | Self-hosted stack, CPU-only: the app in a single container, separating in-process. Runs on its own. | `mise run selfhosted` |
 | `../compose.cuda.yaml` | Overlay that builds the CUDA image and hands the app container an NVIDIA GPU, so it separates with CUDA. | `mise run selfhosted-cuda` |
 | `../compose.host-gpu.yaml` | Overlay that moves separation to a **host** process via the provider above, for accelerators a container cannot reach (notably a Mac GPU). | `mise run selfhosted-host-gpu` |
+| `deploy_modal.py` | The audio-separator API as a [Modal](https://modal.com) app, which the API server calls when `SEPARATION_METHOD=modal_api`. Each separation runs on a serverless GPU. | `modal deploy infra/deploy_modal.py` |
 
 The compose files live in the repo root, next to the `Dockerfile` they build,
 so a plain `docker compose up` works. The `Dockerfile` is the same one
@@ -150,3 +151,74 @@ gives you the GPU.
 `audio-separator` detects this at runtime (`setup_torch_device`) and selects
 CUDA, then CoreML, then DirectML, falling back to CPU when a host has no GPU —
 so an accelerator-less machine still works, just slower.
+
+## Modal separator
+
+`deploy_modal.py` deploys the audio-separator HTTP API to Modal as the app
+`audio-separator`. The API server's `modal_api` separation method talks to it
+through audio-separator's own `AudioSeparatorAPIClient`: it uploads the song to
+`/separate`, polls `/status/{task_id}`, and downloads the stems from
+`/download/{task_id}/{file_hash}`. Separation runs in `separate_audio_function`
+on a GPU; the web endpoints run in `api()` on CPU. Job status lives in the
+Modal Dict `audio-separator-job-status`, and uploads and stems are kept in the
+Volume `audio-separator-storage`. Downloaded models are cached in the Volume
+`audio-separator-models`.
+
+```sh
+modal deploy infra/deploy_modal.py     # deploy, or redeploy to the same URL
+modal app logs audio-separator         # tail the deployed app's logs
+modal app rollback audio-separator     # go back to the previous version
+modal serve infra/deploy_modal.py      # a temporary copy at ...-api-dev.modal.run
+```
+
+`modal serve` is the way to test a change before deploying it: point
+`SEPARATOR_MODAL_API_URL` at the `-dev` URL it prints and separate a song. The
+temporary copy uses the same named Dict and Volumes as the deployed app, so
+test jobs show up alongside real ones. Stop it when you're done; if it still
+lists running tasks in `modal app list`, stop it with `modal app stop`.
+
+Web and container-only imports (`fastapi`, `audio_separator`, `filetype`) sit
+under `with image.imports()`, and the FastAPI app is built by
+`create_web_app()` inside `api()`. That is so the bare `modal` CLI can import
+the file to deploy it without any of those packages installed locally.
+
+### Cost
+
+Modal bills by the second for whatever GPU each container gets, including the
+time a container sits idle waiting for more work. Two settings on
+`separate_audio_function` keep that down:
+
+- `gpu=["T4", "L4"]`: T4 is Modal's cheapest GPU and has plenty of headroom for
+  the small ONNX models; L4 is the fallback when T4s are scarce. `gpu="ANY"`
+  often landed on L40S and A10G instead, at roughly 2–3x the price.
+- `scaledown_window=60`: songs arrive one at a time and rarely reuse a warm
+  container, so a longer window mostly bills idle GPU time.
+
+`modal billing report --for "this month" --show-resources` breaks the bill
+down by GPU type.
+
+### The image
+
+The image is `debian_slim` with ffmpeg and a few audio libraries, not a CUDA
+base image. Modal provides the NVIDIA driver, and torch's pip wheels bring the
+CUDA runtime libraries, which `onnxruntime-gpu` picks up because
+audio-separator imports torch first. If that ever breaks, onnxruntime quietly
+falls back to the CPU and separation just gets slow, so after changing the
+image check that the logs say `CUDAExecutionProvider available, enabling
+acceleration`.
+
+Python dependencies are pinned exactly. audio-separator leaves its own
+dependencies unbounded, and librosa 1.0 broke a rebuild once already. Bump
+`torch` and `onnxruntime-gpu` together, since onnxruntime runs on torch's CUDA
+libraries.
+
+Two details keep a cold start short:
+
+- **Uploads are decoded to WAV with ffmpeg before separation.** librosa 1.0
+  only reads what libsndfile can, which leaves out m4a, aac and webm, the
+  formats songs from YouTube usually arrive in.
+- **The build step `import librosa.util.utils` compiles librosa's numba
+  functions into the image.** They take ~30s to compile on first use, which
+  would otherwise land on every new container. `NUMBA_CPU_NAME=generic` keeps
+  that cache valid on the GPU hosts, whose CPUs differ from the build
+  machine's.
