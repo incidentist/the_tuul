@@ -1911,15 +1911,15 @@ wheels = [
 
 [[package]]
 name = "pytubefix"
-version = "10.11.0"
+version = "11.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiohttp" },
     { name = "nodejs-wheel-binaries" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/33/12/7c8bcedf3cb60a310420c8eabfbdeec81ba7fa4c11fa71e9c5a330539732/pytubefix-10.11.0.tar.gz", hash = "sha256:7fdba0a641aaf72b33df4983ddf26f5798f7e81e5fa72ae00d39bce99c821a99", size = 1523498, upload-time = "2026-07-29T02:11:40.86Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/35/a0/9a03870306ccdb6d36d16ae8a132553788654496da895dd078cd2ea2c98d/pytubefix-11.2.0.tar.gz", hash = "sha256:388138c1b3533d5de623ef925946d830642e56dcc4fab72de8e3a2af9c18c6a7", size = 1585748, upload-time = "2026-09-30T00:13:56.958Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/62/c6/b202c03110cf35b129483042692a7471da435d14d9d2b508963afaad9f90/pytubefix-10.11.0-py3-none-any.whl", hash = "sha256:d1b0a01f38853e9cdf3e047c91e82d022c9054650340e19f65fe4cb4af65d7f1", size = 1531538, upload-time = "2026-07-29T02:11:37.43Z" },
+    { url = "https://files.pythonhosted.org/packages/1a/ce/e1a1662e370930a902412907bf489675a7b03f47ed5930fbf633976cb5af/pytubefix-11.2.0-py3-none-any.whl", hash = "sha256:12b4fb60a639eb59aed46a4e64d0bd165ee63075ab3402d3d283b4f2c5c8cf6c", size = 1594647, upload-time = "2026-09-30T00:13:55.129Z" },
 ]
 
 [[package]]
@@ -2280,7 +2280,7 @@ requires-dist = [
     { name = "gunicorn", specifier = ">=26.0.0,<27.0.0" },
     { name = "httpx2", specifier = ">=2.9.1,<3.0.0" },
     { name = "librosa", specifier = "<1.0" },
-    { name = "pytubefix", specifier = ">=10.11.0,<11.0.0" },
+    { name = "pytubefix", specifier = ">=11.2.0,<12.0.0" },
     { name = "structlog", specifier = ">=26.1.0,<27.0.0" },
 ]
 
