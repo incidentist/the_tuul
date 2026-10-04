@@ -24,8 +24,11 @@ def test_log_error_success():
     assert response.status_code == 200
     assert response.json() == {"success": True}
 
+    unsent_fields = dict.fromkeys(
+        ["file", "type", "info", "userAgent", "timestamp", "vue"]
+    )
     mock_logger.error.assert_called_once_with(
-        "Client error: JavaScript error occurred", extra=log_data
+        "Client error: JavaScript error occurred", extra={**log_data, **unsent_fields}
     )
 
 
@@ -68,6 +71,42 @@ def test_log_rejects_unknown_severity():
         getattr(mock_logger, level).assert_not_called()
 
 
+def test_log_keeps_the_full_payload_the_frontend_sends():
+    client = TestClient(app)
+
+    log_data = {
+        "severity": "error",
+        "message": "boom",
+        "stack": "Error: boom\n    at doThing (http://localhost/src/app.ts:42:7)",
+        "file": "src/app.ts",
+        "line": 42,
+        "column": 7,
+        "type": "TypeError",
+        "info": "setup function",
+        "userAgent": "Mozilla/5.0 (test)",
+        "timestamp": "2026-10-04T13:40:00.000Z",
+        "vue": {"component": "TimingAdjuster", "props": {"lyrics": ["la la"]}},
+    }
+
+    with mock.patch("api.main.logger") as mock_logger:
+        response = client.post("/log", json=log_data)
+
+    assert response.status_code == 200
+    extra = mock_logger.error.call_args.kwargs["extra"]
+    assert extra == {**log_data, "url": None}
+
+
+def test_log_accepts_vue_context_without_props():
+    client = TestClient(app)
+
+    with mock.patch("api.main.logger") as mock_logger:
+        response = client.post("/log", json={"vue": {"component": "unknown"}})
+
+    assert response.status_code == 200
+    extra = mock_logger.error.call_args.kwargs["extra"]
+    assert extra["vue"] == {"component": "unknown", "props": None}
+
+
 def test_log_no_message():
     """The /log view handles a missing message field."""
     client = TestClient(app)
@@ -90,6 +129,12 @@ def test_log_no_message():
         "url": "https://example.com/page",
         "line": None,
         "column": None,
+        "file": None,
+        "type": None,
+        "info": None,
+        "userAgent": None,
+        "timestamp": None,
+        "vue": None,
     }
     mock_logger.error.assert_called_once_with(
         "Client error: <no message>", extra=expected_data
@@ -113,6 +158,12 @@ def test_log_empty_data():
         "url": None,
         "line": None,
         "column": None,
+        "file": None,
+        "type": None,
+        "info": None,
+        "userAgent": None,
+        "timestamp": None,
+        "vue": None,
     }
     mock_logger.error.assert_called_once_with(
         "Client error: <no message>", extra=expected_data

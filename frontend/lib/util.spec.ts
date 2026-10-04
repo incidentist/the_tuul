@@ -57,6 +57,58 @@ describe("setupErrorHandling", () => {
         expect(body).not.toHaveProperty("column");
     });
 
+    it("sends the error type, browser and a timestamp", () => {
+        const logError = setupErrorHandling();
+
+        logError(new TypeError("bad"), null, "render function");
+
+        const { body } = lastLoggedBody();
+        expect(body.type).toBe("TypeError");
+        expect(body.userAgent).toBe(navigator.userAgent);
+        expect(new Date(body.timestamp).toISOString()).toBe(body.timestamp);
+    });
+
+    describe("Vue component context", () => {
+        function logWithProps(props: unknown, $options: object = { name: "TimingAdjuster" }) {
+            const logError = setupErrorHandling();
+            logError(new Error("boom"), { $options, $props: props }, "setup function");
+            return lastLoggedBody().body.vue;
+        }
+
+        it("sends the component name and its props", () => {
+            expect(logWithProps({ lyrics: ["la la"] })).toEqual({
+                component: "TimingAdjuster",
+                props: { lyrics: ["la la"] },
+            });
+        });
+
+        it("falls back to 'unknown' for components without a name", () => {
+            expect(logWithProps({}, {}).component).toBe("unknown");
+        });
+
+        it("still logs the error when props are circular", () => {
+            const circular: Record<string, unknown> = {};
+            circular.self = circular;
+
+            expect(logWithProps(circular).props).toEqual({ unserializable: true });
+        });
+
+        it("replaces oversized props with their size", () => {
+            const huge = { lyrics: "la ".repeat(20_000) };
+
+            const { props } = logWithProps(huge);
+
+            expect(props.truncated).toBe(true);
+            expect(props.sizeInChars).toBeGreaterThan(10_000);
+        });
+
+        it("sends no vue context when the error has no component", () => {
+            const logError = setupErrorHandling();
+            logError(new Error("boom"), null, "");
+            expect(lastLoggedBody().body).not.toHaveProperty("vue");
+        });
+    });
+
     it("reports console.error calls to /log with error severity", () => {
         setupErrorHandling();
 

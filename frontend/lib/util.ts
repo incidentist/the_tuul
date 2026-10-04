@@ -14,6 +14,24 @@ export function readFileAsync(file: File): Promise<string | ArrayBuffer> {
 
 
 
+const MAX_LOGGED_PROPS_CHARS = 10_000;
+
+// Props may be circular or huge, and the error path must never throw.
+function loggableProps(props: unknown): Record<string, unknown> | undefined {
+    if (!props) {
+        return undefined;
+    }
+    try {
+        const json = JSON.stringify(props);
+        if (json.length > MAX_LOGGED_PROPS_CHARS) {
+            return { truncated: true, sizeInChars: json.length };
+        }
+        return JSON.parse(json);
+    } catch {
+        return { unserializable: true };
+    }
+}
+
 export function setupErrorHandling() {
     const LOG_ERRORS_TO_SERVER = true;
     const originalConsoleError = console.error;
@@ -51,7 +69,7 @@ export function setupErrorHandling() {
                 timestamp: new Date().toISOString(),
                 vue: vm ? {
                     component: vm.$options?.name || 'unknown',
-                    props: vm.$props,
+                    props: loggableProps(vm.$props),
                 } : undefined
             }),
         }).catch(e => {

@@ -1,6 +1,6 @@
 import tempfile
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 import structlog
 from fastapi import (
@@ -70,13 +70,24 @@ templates = Jinja2Templates(directory=settings.TEMPLATES_DIR)
 
 
 # Pydantic models
+class VueLogContext(BaseModel):
+    component: Optional[str] = None
+    props: Optional[dict[str, Any]] = None
+
+
 class LogRequest(BaseModel):
     severity: Literal["debug", "info", "warning", "error"] = "error"
     message: Optional[str] = None
     stack: Optional[str] = None
     url: Optional[str] = None
+    file: Optional[str] = None
     line: Optional[int] = None
     column: Optional[int] = None
+    type: Optional[str] = None
+    info: Optional[str] = None
+    userAgent: Optional[str] = None
+    timestamp: Optional[str] = None
+    vue: Optional[VueLogContext] = None
 
 
 class SeparationPollResponse(BaseModel):
