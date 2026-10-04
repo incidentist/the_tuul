@@ -178,19 +178,23 @@ describe('Media Store', () => {
   });
 
   describe('song metadata', () => {
-    // happy-dom has no Web Audio, so stand in for the duration lookup
+    // happy-dom has no Web Audio. The decoded duration is deliberately different
+    // from any fixture's real duration, so tests can tell which path was taken.
+    const DECODED_DURATION = 99;
+    const decodeAudioData = vi.fn();
     class FakeAudioContext {
-      decodeAudioData(_buffer: ArrayBuffer, onSuccess: (b: { duration: number }) => void) {
-        onSuccess({ duration: 3 });
-      }
+      decodeAudioData = decodeAudioData;
+      close() {}
     }
 
     beforeEach(() => {
+      decodeAudioData.mockReset().mockResolvedValue({ duration: DECODED_DURATION });
       vi.stubGlobal('AudioContext', FakeAudioContext);
     });
 
     afterEach(() => {
       vi.unstubAllGlobals();
+      vi.restoreAllMocks();
     });
 
     function fixtureFile(name: string, type: string): File {
@@ -198,40 +202,59 @@ describe('Media Store', () => {
       return new File([data], name, { type });
     }
 
-    test('sets the duration of a file with no readable tags', async () => {
-      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    test('reads the duration of a file with no tags from its headers', async () => {
       const mediaStore = useMediaStore();
 
       mediaStore.songFile = fixtureFile('no_metadata.wav', 'audio/wav');
 
-      await vi.waitFor(() => expect(mediaStore.songDuration).toBe(3));
+      await vi.waitFor(() => expect(mediaStore.songDuration).toBeCloseTo(3));
       expect(mediaStore.songTitle).toBeNull();
       expect(mediaStore.songArtist).toBeNull();
-      expect(warn).toHaveBeenCalled();
-      warn.mockRestore();
+      expect(decodeAudioData).not.toHaveBeenCalled();
     });
 
     test('keeps a user-entered title and artist for a file with no tags', async () => {
-      vi.spyOn(console, 'warn').mockImplementation(() => {});
       const mediaStore = useMediaStore();
       mediaStore.songTitle = 'Typed Title';
       mediaStore.songArtist = 'Typed Artist';
 
       mediaStore.songFile = fixtureFile('no_metadata.wav', 'audio/wav');
 
-      await vi.waitFor(() => expect(mediaStore.songDuration).toBe(3));
+      await vi.waitFor(() => expect(mediaStore.songDuration).toBeCloseTo(3));
       expect(mediaStore.songTitle).toBe('Typed Title');
       expect(mediaStore.songArtist).toBe('Typed Artist');
     });
 
-    test('reads the title and artist from a tagged file', async () => {
+    test('reads the title, artist and duration from a tagged file', async () => {
       const mediaStore = useMediaStore();
 
       mediaStore.songFile = fixtureFile('my_fair_lady.mp3', 'audio/mpeg');
 
-      await vi.waitFor(() => expect(mediaStore.songDuration).toBe(3));
+      await vi.waitFor(() => expect(mediaStore.songDuration).toBeCloseTo(212.04, 1));
       expect(mediaStore.songTitle).toBe('My Fair Lady');
       expect(mediaStore.songArtist).toBe('David Byrne');
+      expect(decodeAudioData).not.toHaveBeenCalled();
+    });
+
+    test('falls back to decoding the audio when the headers give no duration', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const mediaStore = useMediaStore();
+
+      mediaStore.songFile = new File(['not really audio'], 'song.mp3', { type: 'audio/mpeg' });
+
+      await vi.waitFor(() => expect(mediaStore.songDuration).toBe(DECODED_DURATION));
+    });
+
+    test('leaves the duration unset when the audio can\'t be decoded either', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      decodeAudioData.mockRejectedValue(new Error('EncodingError'));
+      const mediaStore = useMediaStore();
+
+      mediaStore.songFile = new File(['not really audio'], 'song.mp3', { type: 'audio/mpeg' });
+
+      await vi.waitFor(() => expect(error).toHaveBeenCalled());
+      expect(mediaStore.songDuration).toBeNull();
     });
   });
 });
