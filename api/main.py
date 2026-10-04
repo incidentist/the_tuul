@@ -24,6 +24,7 @@ from pydantic import BaseModel
 
 from . import settings
 from . import app_logging
+from .error_reporting import v8_stack_trace
 from .karaoke import music_separation
 from .karaoke.music_separation import SeparationMethod
 from .karaoke.separation_queue import SeparationQueue, SeparationQueueFullError
@@ -364,9 +365,15 @@ async def download_youtube_video(
 async def log(log_data: LogRequest):
     """Log a client-side message at the severity the client reports."""
     log_at_severity = getattr(logger, log_data.severity)
+    error_reporting_fields = {}
+    if log_data.severity == "error":
+        stack_trace = v8_stack_trace(log_data.stack, log_data.type, log_data.message)
+        if stack_trace:
+            error_reporting_fields["stack_trace"] = stack_trace
     log_at_severity(
         f"Client {log_data.severity}: {log_data.message or '<no message>'}",
         extra=log_data.model_dump(),
+        **error_reporting_fields,
     )
     return {"success": True}
 

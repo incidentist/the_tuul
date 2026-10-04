@@ -28,7 +28,9 @@ def test_log_error_success():
         ["file", "type", "info", "userAgent", "timestamp", "vue", "context", "repeatCount"]
     )
     mock_logger.error.assert_called_once_with(
-        "Client error: JavaScript error occurred", extra={**log_data, **unsent_fields}
+        "Client error: JavaScript error occurred",
+        extra={**log_data, **unsent_fields},
+        stack_trace="Error: JavaScript error occurred\n    at function1 (app.js:10:5)",
     )
 
 
@@ -151,7 +153,9 @@ def test_log_no_message():
         "repeatCount": None,
     }
     mock_logger.error.assert_called_once_with(
-        "Client error: <no message>", extra=expected_data
+        "Client error: <no message>",
+        extra=expected_data,
+        stack_trace="Error\n    at function1 (app.js:10:5)",
     )
 
 
@@ -184,3 +188,39 @@ def test_log_empty_data():
     mock_logger.error.assert_called_once_with(
         "Client error: <no message>", extra=expected_data
     )
+
+
+def test_log_error_sends_firefox_stack_to_error_reporting_in_v8_format():
+    client = TestClient(app)
+
+    log_data = {
+        "severity": "error",
+        "message": "x is undefined",
+        "type": "TypeError",
+        "stack": "doThing@https://tuul.example/assets/index.js:42:7\n"
+        "@https://tuul.example/assets/index.js:1:99\n",
+    }
+
+    with mock.patch("api.main.logger") as mock_logger:
+        client.post("/log", json=log_data)
+
+    assert mock_logger.error.call_args.kwargs["stack_trace"] == (
+        "TypeError: x is undefined\n"
+        "    at doThing (https://tuul.example/assets/index.js:42:7)\n"
+        "    at https://tuul.example/assets/index.js:1:99"
+    )
+
+
+def test_log_warning_with_stack_is_not_sent_to_error_reporting():
+    client = TestClient(app)
+
+    log_data = {
+        "severity": "warning",
+        "message": "careful",
+        "stack": "Error: careful\n    at function1 (app.js:10:5)",
+    }
+
+    with mock.patch("api.main.logger") as mock_logger:
+        client.post("/log", json=log_data)
+
+    assert "stack_trace" not in mock_logger.warning.call_args.kwargs
