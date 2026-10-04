@@ -52,10 +52,14 @@ const REPEAT_WINDOW_MS = 60_000;
 const MAX_REPORTS_PER_PAGE_LOAD = 100;
 const MAX_TRACKED_ERRORS = 200;
 
+// The frame of whoever called console.error/warn, not of our override of it.
+function callerFrame(err: Error): string | undefined {
+    return err.stack?.split('\n').slice(1).find(line => !/console\.(error|warn)/.test(line));
+}
+
 // Digits are collapsed so errors that differ only in ids or indexes count as the same one.
 function errorFingerprint(err: Error): string {
-    const callerFrame = err.stack?.split('\n').slice(1).find(line => !line.includes('console.error'));
-    return [err.name, err.message.replace(/\d+/g, '#'), callerFrame?.trim()].join('|');
+    return [err.name, err.message.replace(/\d+/g, '#'), callerFrame(err)?.trim()].join('|');
 }
 
 // Returns a function that answers, for each error, how many identical errors were suppressed
@@ -97,31 +101,31 @@ export function setupErrorHandling(getContext?: () => Record<string, unknown>) {
         return originalConsoleError;
     }
 
-    const suppressedCountIfReportable = createErrorThrottle();
+    const originalConsoleWarn = console.warn;
 
-    function logError(error: Error | string, vm: any, info: string) {
-        // Convert string errors to Error objects to get stack traces
-        const err = error instanceof Error ? error : new Error(error);
+    // Each severity is throttled separately so a flood of one can't use up the other's budget.
+    const suppressedCountIfReportable = {
+        error: createErrorThrottle(),
+        warning: createErrorThrottle(),
+    };
 
-        // Extract file and line information from stack trace
-        const stackLines = err.stack?.split('\n') || [];
-        const errorLocation = stackLines[1]?.match(/\((.*):(\d+):(\d+)\)/) || [];
-        const [, filePath, lineNumber, columnNumber] = errorLocation;
-        originalConsoleError(err);
-
-        const repeatCount = suppressedCountIfReportable(err);
+    function sendLog(severity: keyof typeof suppressedCountIfReportable, err: Error, vm: any, info: string) {
+        const repeatCount = suppressedCountIfReportable[severity](err);
         if (repeatCount === null) {
             return;
         }
 
-        // Send the error to the server
+        // Extract file and line information from the stack trace
+        const errorLocation = callerFrame(err)?.match(/\((.*):(\d+):(\d+)\)/) || [];
+        const [, filePath, lineNumber, columnNumber] = errorLocation;
+
         fetch("/log", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                severity: "error",
+                severity,
                 message: err.message,
                 stack: err.stack,
                 file: filePath?.split('/').slice(-2).join('/') || 'unknown', // Last two parts of path
@@ -140,8 +144,15 @@ export function setupErrorHandling(getContext?: () => Record<string, unknown>) {
             }),
         }).catch(e => {
             // Fallback to original console if server logging fails
-            originalConsoleError('Failed to log error to server:', e);
+            originalConsoleError('Failed to log to server:', e);
         });
+    }
+
+    function logError(error: Error | string, vm: any, info: string) {
+        // Convert string errors to Error objects to get stack traces
+        const err = error instanceof Error ? error : new Error(error);
+        originalConsoleError(err);
+        sendLog("error", err, vm, info);
     }
 
     console.error = function (...args: any[]) {
@@ -153,6 +164,17 @@ export function setupErrorHandling(getContext?: () => Record<string, unknown>) {
             logError(error, null, args.join(" "));
         } catch (error) {
             originalConsoleError.apply(console, [error]);
+        }
+    };
+
+    console.warn = function (...args: any[]) {
+        try {
+            originalConsoleWarn.apply(console, args);
+
+            const warning = args.find(arg => arg instanceof Error) || new Error(args.join(" "));
+            sendLog("warning", warning, null, args.join(" "));
+        } catch (error) {
+            originalConsoleWarn.apply(console, [error]);
         }
     };
     return logError;

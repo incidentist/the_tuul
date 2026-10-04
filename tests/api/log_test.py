@@ -49,6 +49,16 @@ def test_log_uses_logger_method_matching_severity(severity):
         getattr(mock_logger, other).assert_not_called()
 
 
+@pytest.mark.parametrize("severity", ["debug", "info", "warning", "error"])
+def test_log_works_with_the_real_logger_at_every_severity(severity):
+    client = TestClient(app)
+
+    response = client.post("/log", json={"severity": severity, "message": "real"})
+
+    assert response.status_code == 200
+    assert response.json() == {"success": True}
+
+
 def test_log_defaults_to_error_severity():
     client = TestClient(app)
 

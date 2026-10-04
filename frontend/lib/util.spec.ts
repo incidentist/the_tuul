@@ -3,16 +3,19 @@ import { setupErrorHandling } from "./util";
 
 describe("setupErrorHandling", () => {
     const realConsoleError = console.error;
+    const realConsoleWarn = console.warn;
     let fetchMock: ReturnType<typeof vi.fn>;
 
     beforeEach(() => {
         fetchMock = vi.fn().mockResolvedValue({ ok: true });
         vi.stubGlobal("fetch", fetchMock);
         console.error = vi.fn();
+        console.warn = vi.fn();
     });
 
     afterEach(() => {
         console.error = realConsoleError;
+        console.warn = realConsoleWarn;
         vi.unstubAllGlobals();
     });
 
@@ -279,6 +282,105 @@ describe("setupErrorHandling", () => {
 
             expect(fetchMock).toHaveBeenCalledTimes(1);
         });
+    });
+
+    describe("warnings", () => {
+        let localConsoleWarn: typeof console.warn;
+
+        beforeEach(() => {
+            localConsoleWarn = console.warn;
+        });
+
+        it("reports console.warn calls to /log with warning severity", () => {
+            setupErrorHandling();
+
+            console.warn("Invalid value for currentTime:", NaN);
+
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            const { url, body } = lastLoggedBody();
+            expect(url).toBe("/log");
+            expect(body.severity).toBe("warning");
+            expect(body.message).toBe("Invalid value for currentTime: NaN");
+            expect(body.userAgent).toBe(navigator.userAgent);
+        });
+
+        it("reports a warning given as an Error with that error's own stack", () => {
+            setupErrorHandling();
+            const warning = new Error("Couldn't read song metadata");
+            warning.stack = "Error: Couldn't read song metadata\n    at readTags (http://localhost/media.ts:111:5)";
+
+            console.warn("Couldn't read song metadata:", warning);
+
+            const { body } = lastLoggedBody();
+            expect(body.severity).toBe("warning");
+            expect(body.message).toBe("Couldn't read song metadata");
+            expect(body.line).toBe(111);
+        });
+
+        it("still prints the warning to the local console, once, with its original arguments", () => {
+            setupErrorHandling();
+
+            console.warn("Invalid value for currentTime:", NaN);
+
+            expect(localConsoleWarn).toHaveBeenCalledTimes(1);
+            expect(localConsoleWarn).toHaveBeenCalledWith("Invalid value for currentTime:", NaN);
+        });
+
+        it("includes the log context", () => {
+            setupErrorHandling(() => ({ lyrics: "la la" }));
+
+            console.warn("Can't create subtitles");
+
+            expect(lastLoggedBody().body.context).toEqual({ lyrics: "la la" });
+        });
+
+        it("throttles repeated warnings", () => {
+            setupErrorHandling();
+
+            for (let i = 0; i < 100; i++) {
+                console.warn("Invalid value for currentTime:", i);
+            }
+
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+        });
+
+        it("doesn't let a flood of errors suppress the same text as a warning", () => {
+            const logError = setupErrorHandling();
+
+            logError(new Error("Invalid value"), null, "");
+            console.warn("Invalid value");
+
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+            expect(lastLoggedBody().body.severity).toBe("warning");
+        });
+
+        it("keeps reporting warnings after the error cap is reached", () => {
+            const logError = setupErrorHandling();
+            for (let i = 0; i < 150; i++) {
+                logError(new Error(`distinct problem ${"x".repeat(i)}`), null, "");
+            }
+            expect(fetchMock).toHaveBeenCalledTimes(100);
+
+            console.warn("A warning after the error flood");
+
+            expect(fetchMock).toHaveBeenCalledTimes(101);
+        });
+    });
+
+    it("points file and line at the caller of console.error, not at our override", () => {
+        const logError = setupErrorHandling();
+        const error = new Error("Invalid linked list");
+        error.stack = [
+            "Error: Invalid linked list",
+            "    at console.error (http://localhost/bundle.js:28:569)",
+            "    at checkRegions (http://localhost/bundle.js:34:2303)",
+        ].join("\n");
+
+        logError(error, null, "");
+
+        const { body } = lastLoggedBody();
+        expect(body.line).toBe(34);
+        expect(body.column).toBe(2303);
     });
 
     it("reports console.error calls to /log with error severity", () => {
