@@ -89,6 +89,8 @@ class LogRequest(BaseModel):
     timestamp: Optional[str] = None
     vue: Optional[VueLogContext] = None
     context: Optional[dict[str, Any]] = None
+    # Identical errors the client suppressed since it last reported this one.
+    repeatCount: Optional[int] = None
 
 
 class SeparationPollResponse(BaseModel):

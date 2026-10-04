@@ -166,6 +166,121 @@ describe("setupErrorHandling", () => {
         });
     });
 
+    describe("throttling repeated errors", () => {
+        let logError: ReturnType<typeof setupErrorHandling>;
+        let localConsoleError: typeof console.error;
+
+        beforeEach(() => {
+            vi.useFakeTimers();
+            localConsoleError = console.error;
+            logError = setupErrorHandling();
+        });
+
+        afterEach(() => {
+            vi.useRealTimers();
+        });
+
+        function report(message: string) {
+            logError(new Error(message), null, "");
+        }
+
+        it("reports the first occurrence immediately, without a repeat count", () => {
+            report("boom");
+
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+            expect(lastLoggedBody().body).not.toHaveProperty("repeatCount");
+        });
+
+        it("suppresses identical errors within the window", () => {
+            for (let i = 0; i < 1000; i++) {
+                report("boom");
+            }
+
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+        });
+
+        it("treats errors that differ only in numbers as identical", () => {
+            report("Invalid linked list: segment_98 should be segment_100");
+            report("Invalid linked list: segment_3 should be segment_5");
+
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+        });
+
+        it("reports different errors independently", () => {
+            report("first problem");
+            report("second problem");
+
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+        });
+
+        it("tells apart the same message thrown from different places", () => {
+            for (const frame of ["at one (app.js:1:1)", "at two (app.js:2:2)"]) {
+                const error = new Error("Cannot read properties of undefined");
+                error.stack = `Error: Cannot read properties of undefined\n    ${frame}`;
+                logError(error, null, "");
+            }
+
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+        });
+
+        it("reports again after the window with the number suppressed", () => {
+            report("boom");
+            for (let i = 0; i < 5; i++) {
+                report("boom");
+            }
+
+            vi.advanceTimersByTime(60_000);
+            report("boom");
+
+            expect(fetchMock).toHaveBeenCalledTimes(2);
+            expect(lastLoggedBody().body.repeatCount).toBe(5);
+        });
+
+        it("keeps suppressing until a full window has passed since the last report", () => {
+            report("boom");
+            vi.advanceTimersByTime(59_999);
+            report("boom");
+
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+        });
+
+        it("starts a fresh count after each report", () => {
+            report("boom");
+            report("boom");
+            vi.advanceTimersByTime(60_000);
+            report("boom");
+            vi.advanceTimersByTime(60_000);
+            report("boom");
+
+            expect(fetchMock).toHaveBeenCalledTimes(3);
+            expect(lastLoggedBody().body).not.toHaveProperty("repeatCount");
+        });
+
+        it("stops reporting after 100 reports in a page load", () => {
+            for (let i = 0; i < 150; i++) {
+                report(`distinct problem ${"x".repeat(i)}`);
+            }
+
+            expect(fetchMock).toHaveBeenCalledTimes(100);
+        });
+
+        it("still shows every occurrence in the local console", () => {
+            for (let i = 0; i < 10; i++) {
+                report("boom");
+            }
+
+            expect(localConsoleError).toHaveBeenCalledTimes(10);
+        });
+
+        it("throttles console.error calls too", () => {
+            for (let i = 0; i < 10; i++) {
+                console.error("Invalid linked list");
+            }
+
+            expect(fetchMock).toHaveBeenCalledTimes(1);
+        });
+    });
+
     it("reports console.error calls to /log with error severity", () => {
         setupErrorHandling();
 
