@@ -109,6 +109,63 @@ describe("setupErrorHandling", () => {
         });
     });
 
+    describe("log context", () => {
+        function logWithContext(getContext?: () => Record<string, unknown>) {
+            const logError = setupErrorHandling(getContext);
+            logError(new Error("boom"), null, "");
+            return lastLoggedBody().body;
+        }
+
+        it("sends the context gathered when the error fires", () => {
+            const body = logWithContext(() => ({ lyrics: "la la", timings: [[1.5, 1]] }));
+
+            expect(body.context).toEqual({ lyrics: "la la", timings: [[1.5, 1]] });
+        });
+
+        it("reads the context at error time, not at setup time", () => {
+            let lyrics = "before";
+            const logError = setupErrorHandling(() => ({ lyrics }));
+            lyrics = "after";
+
+            logError(new Error("boom"), null, "");
+
+            expect(lastLoggedBody().body.context).toEqual({ lyrics: "after" });
+        });
+
+        it("sends context for console.error calls too", () => {
+            setupErrorHandling(() => ({ lyrics: "la la" }));
+
+            console.error(new Error("boom"));
+
+            expect(lastLoggedBody().body.context).toEqual({ lyrics: "la la" });
+        });
+
+        it("omits context when there is none", () => {
+            expect(logWithContext()).not.toHaveProperty("context");
+            expect(logWithContext(() => ({}))).not.toHaveProperty("context");
+        });
+
+        it("still logs the error when gathering context throws", () => {
+            const body = logWithContext(() => {
+                throw new Error("no active pinia");
+            });
+
+            expect(body.message).toBe("boom");
+            expect(body).not.toHaveProperty("context");
+        });
+
+        it("caps an oversized value without dropping the others", () => {
+            const body = logWithContext(() => ({
+                lyrics: "la la",
+                timings: Array.from({ length: 20_000 }, (_, i) => [i + 0.123456, 1]),
+            }));
+
+            expect(body.context.lyrics).toBe("la la");
+            expect(body.context.timings.truncated).toBe(true);
+            expect(body.context.timings.sizeInChars).toBeGreaterThan(50_000);
+        });
+    });
+
     it("reports console.error calls to /log with error severity", () => {
         setupErrorHandling();
 

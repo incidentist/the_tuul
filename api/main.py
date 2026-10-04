@@ -88,6 +88,7 @@ class LogRequest(BaseModel):
     userAgent: Optional[str] = None
     timestamp: Optional[str] = None
     vue: Optional[VueLogContext] = None
+    context: Optional[dict[str, Any]] = None
 
 
 class SeparationPollResponse(BaseModel):

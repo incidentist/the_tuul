@@ -1,3 +1,5 @@
+import { isEmpty, mapValues, pickBy } from "lodash-es";
+
 export function readFileAsync(file: File): Promise<string | ArrayBuffer> {
     return new Promise((resolve, reject) => {
         let reader = new FileReader();
@@ -15,15 +17,16 @@ export function readFileAsync(file: File): Promise<string | ArrayBuffer> {
 
 
 const MAX_LOGGED_PROPS_CHARS = 10_000;
+const MAX_LOGGED_CONTEXT_VALUE_CHARS = 50_000;
 
-// Props may be circular or huge, and the error path must never throw.
-function loggableProps(props: unknown): Record<string, unknown> | undefined {
-    if (!props) {
+// Logged values may be circular or huge, and the error path must never throw.
+function loggable(value: unknown, maxChars: number): unknown {
+    if (!value) {
         return undefined;
     }
     try {
-        const json = JSON.stringify(props);
-        if (json.length > MAX_LOGGED_PROPS_CHARS) {
+        const json = JSON.stringify(value);
+        if (json.length > maxChars) {
             return { truncated: true, sizeInChars: json.length };
         }
         return JSON.parse(json);
@@ -32,7 +35,23 @@ function loggableProps(props: unknown): Record<string, unknown> | undefined {
     }
 }
 
-export function setupErrorHandling() {
+// Each value is capped separately so one oversized entry doesn't drop the rest.
+function loggableContext(getContext?: () => Record<string, unknown>) {
+    try {
+        const values = pickBy(
+            mapValues(getContext?.(), value => loggable(value, MAX_LOGGED_CONTEXT_VALUE_CHARS)),
+            value => value !== undefined,
+        );
+        return isEmpty(values) ? undefined : values;
+    } catch {
+        return undefined;
+    }
+}
+
+/**
+ * @param getContext Called when an error fires; its result is sent along as `context`.
+ */
+export function setupErrorHandling(getContext?: () => Record<string, unknown>) {
     const LOG_ERRORS_TO_SERVER = true;
     const originalConsoleError = console.error;
 
@@ -69,8 +88,9 @@ export function setupErrorHandling() {
                 timestamp: new Date().toISOString(),
                 vue: vm ? {
                     component: vm.$options?.name || 'unknown',
-                    props: loggableProps(vm.$props),
-                } : undefined
+                    props: loggable(vm.$props, MAX_LOGGED_PROPS_CHARS),
+                } : undefined,
+                context: loggableContext(getContext),
             }),
         }).catch(e => {
             // Fallback to original console if server logging fails

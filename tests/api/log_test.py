@@ -25,7 +25,7 @@ def test_log_error_success():
     assert response.json() == {"success": True}
 
     unsent_fields = dict.fromkeys(
-        ["file", "type", "info", "userAgent", "timestamp", "vue"]
+        ["file", "type", "info", "userAgent", "timestamp", "vue", "context"]
     )
     mock_logger.error.assert_called_once_with(
         "Client error: JavaScript error occurred", extra={**log_data, **unsent_fields}
@@ -86,6 +86,7 @@ def test_log_keeps_the_full_payload_the_frontend_sends():
         "userAgent": "Mozilla/5.0 (test)",
         "timestamp": "2026-10-04T13:40:00.000Z",
         "vue": {"component": "TimingAdjuster", "props": {"lyrics": ["la la"]}},
+        "context": {"lyrics": "la la\n\n", "timings": [[1.5, 1], [2.25, 2]]},
     }
 
     with mock.patch("api.main.logger") as mock_logger:
@@ -135,6 +136,7 @@ def test_log_no_message():
         "userAgent": None,
         "timestamp": None,
         "vue": None,
+        "context": None,
     }
     mock_logger.error.assert_called_once_with(
         "Client error: <no message>", extra=expected_data
@@ -164,6 +166,7 @@ def test_log_empty_data():
         "userAgent": None,
         "timestamp": None,
         "vue": None,
+        "context": None,
     }
     mock_logger.error.assert_called_once_with(
         "Client error: <no message>", extra=expected_data
