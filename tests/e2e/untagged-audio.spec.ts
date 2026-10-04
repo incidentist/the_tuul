@@ -66,6 +66,22 @@ test.describe('Untagged audio file', () => {
     // Seek the preview to where the first lyrics screen is up (after the
     // 4-second title screen) and check that something is drawn
     const audio = submitTab.locator('audio');
+
+    // The preview audio should be the delay followed by the 3-second song,
+    // with no trailing silence
+    await expect(audio).toHaveAttribute('src', /^blob:/);
+    const { duration, songStart } = await audio.evaluate(async (el: HTMLAudioElement) => {
+      const data = await (await fetch(el.src)).arrayBuffer();
+      const context = new AudioContext();
+      const buffer = await context.decodeAudioData(data);
+      await context.close();
+      const samples = buffer.getChannelData(0);
+      const firstSound = samples.findIndex((s) => Math.abs(s) > 0.01);
+      return { duration: buffer.duration, songStart: firstSound / buffer.sampleRate };
+    });
+    expect(songStart).toBeGreaterThan(0);
+    expect(duration - songStart).toBeCloseTo(3, 1);
+
     await audio.evaluate((el: HTMLAudioElement) => {
       el.currentTime = 6;
       el.dispatchEvent(new Event('timeupdate'));

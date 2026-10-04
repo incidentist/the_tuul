@@ -33,12 +33,13 @@ export function setupErrorHandling() {
         originalConsoleError(err);
 
         // Send the error to the server
-        fetch("/log_error", {
+        fetch("/log", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
+                severity: "error",
                 message: err.message,
                 stack: err.stack,
                 file: filePath?.split('/').slice(-2).join('/') || 'unknown', // Last two parts of path
