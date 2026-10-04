@@ -1,0 +1,46 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { setupErrorHandling } from "./util";
+
+describe("setupErrorHandling", () => {
+    const realConsoleError = console.error;
+    let fetchMock: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+        fetchMock = vi.fn().mockResolvedValue({ ok: true });
+        vi.stubGlobal("fetch", fetchMock);
+        console.error = vi.fn();
+    });
+
+    afterEach(() => {
+        console.error = realConsoleError;
+        vi.unstubAllGlobals();
+    });
+
+    function lastLoggedBody() {
+        const [url, init] = fetchMock.mock.calls.at(-1)!;
+        return { url, body: JSON.parse(init.body) };
+    }
+
+    it("reports Vue errors to /log with error severity", () => {
+        const logError = setupErrorHandling();
+
+        logError(new Error("boom"), null, "setup function");
+
+        const { url, body } = lastLoggedBody();
+        expect(url).toBe("/log");
+        expect(body.severity).toBe("error");
+        expect(body.message).toBe("boom");
+        expect(body.info).toBe("setup function");
+    });
+
+    it("reports console.error calls to /log with error severity", () => {
+        setupErrorHandling();
+
+        console.error("Failed to add region", new Error("bad region"));
+
+        const { url, body } = lastLoggedBody();
+        expect(url).toBe("/log");
+        expect(body.severity).toBe("error");
+        expect(body.message).toBe("bad region");
+    });
+});

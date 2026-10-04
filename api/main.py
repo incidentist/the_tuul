@@ -1,6 +1,6 @@
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 import structlog
 from fastapi import (
@@ -70,7 +70,8 @@ templates = Jinja2Templates(directory=settings.TEMPLATES_DIR)
 
 
 # Pydantic models
-class LogErrorRequest(BaseModel):
+class LogRequest(BaseModel):
+    severity: Literal["debug", "info", "warning", "error"] = "error"
     message: Optional[str] = None
     stack: Optional[str] = None
     url: Optional[str] = None
@@ -345,12 +346,13 @@ async def download_youtube_video(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.post("/log_error")
-async def log_error(error_data: LogErrorRequest):
-    """Log client errors."""
-    logger.error(
-        f"Client error: {error_data.message or '<no message>'}",
-        extra=error_data.model_dump(),
+@app.post("/log")
+async def log(log_data: LogRequest):
+    """Log a client-side message at the severity the client reports."""
+    log_at_severity = getattr(logger, log_data.severity)
+    log_at_severity(
+        f"Client {log_data.severity}: {log_data.message or '<no message>'}",
+        extra=log_data.model_dump(),
     )
     return {"success": True}
 

@@ -1,0 +1,119 @@
+from unittest import mock
+
+import pytest
+from fastapi.testclient import TestClient
+from api.main import app
+
+
+def test_log_error_success():
+    """The /log view logs client errors and returns success."""
+    client = TestClient(app)
+
+    log_data = {
+        "severity": "error",
+        "message": "JavaScript error occurred",
+        "stack": "Error: test error\n    at function1 (app.js:10:5)",
+        "url": "https://example.com/page",
+        "line": 10,
+        "column": 5,
+    }
+
+    with mock.patch("api.main.logger") as mock_logger:
+        response = client.post("/log", json=log_data)
+
+    assert response.status_code == 200
+    assert response.json() == {"success": True}
+
+    mock_logger.error.assert_called_once_with(
+        "Client error: JavaScript error occurred", extra=log_data
+    )
+
+
+@pytest.mark.parametrize("severity", ["debug", "info", "warning", "error"])
+def test_log_uses_logger_method_matching_severity(severity):
+    client = TestClient(app)
+
+    with mock.patch("api.main.logger") as mock_logger:
+        response = client.post(
+            "/log", json={"severity": severity, "message": "something happened"}
+        )
+
+    assert response.status_code == 200
+    getattr(mock_logger, severity).assert_called_once()
+    message = getattr(mock_logger, severity).call_args.args[0]
+    assert message == f"Client {severity}: something happened"
+    for other in {"debug", "info", "warning", "error"} - {severity}:
+        getattr(mock_logger, other).assert_not_called()
+
+
+def test_log_defaults_to_error_severity():
+    client = TestClient(app)
+
+    with mock.patch("api.main.logger") as mock_logger:
+        response = client.post("/log", json={"message": "no severity given"})
+
+    assert response.status_code == 200
+    mock_logger.error.assert_called_once()
+    assert mock_logger.error.call_args.kwargs["extra"]["severity"] == "error"
+
+
+def test_log_rejects_unknown_severity():
+    client = TestClient(app)
+
+    with mock.patch("api.main.logger") as mock_logger:
+        response = client.post("/log", json={"severity": "catastrophic"})
+
+    assert response.status_code == 422
+    for level in ("debug", "info", "warning", "error"):
+        getattr(mock_logger, level).assert_not_called()
+
+
+def test_log_no_message():
+    """The /log view handles a missing message field."""
+    client = TestClient(app)
+
+    log_data = {
+        "stack": "Error: test error\n    at function1 (app.js:10:5)",
+        "url": "https://example.com/page",
+    }
+
+    with mock.patch("api.main.logger") as mock_logger:
+        response = client.post("/log", json=log_data)
+
+    assert response.status_code == 200
+    assert response.json() == {"success": True}
+
+    expected_data = {
+        "severity": "error",
+        "message": None,
+        "stack": "Error: test error\n    at function1 (app.js:10:5)",
+        "url": "https://example.com/page",
+        "line": None,
+        "column": None,
+    }
+    mock_logger.error.assert_called_once_with(
+        "Client error: <no message>", extra=expected_data
+    )
+
+
+def test_log_empty_data():
+    """The /log view handles empty request data."""
+    client = TestClient(app)
+
+    with mock.patch("api.main.logger") as mock_logger:
+        response = client.post("/log", json={})
+
+    assert response.status_code == 200
+    assert response.json() == {"success": True}
+
+    expected_data = {
+        "severity": "error",
+        "message": None,
+        "stack": None,
+        "url": None,
+        "line": None,
+        "column": None,
+    }
+    mock_logger.error.assert_called_once_with(
+        "Client error: <no message>", extra=expected_data
+    )
