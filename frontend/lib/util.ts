@@ -43,8 +43,8 @@ export function setupErrorHandling() {
                 message: err.message,
                 stack: err.stack,
                 file: filePath?.split('/').slice(-2).join('/') || 'unknown', // Last two parts of path
-                line: lineNumber || 'unknown',
-                column: columnNumber || 'unknown',
+                line: lineNumber ? Number(lineNumber) : undefined,
+                column: columnNumber ? Number(columnNumber) : undefined,
                 type: err.name,
                 info,
                 userAgent: navigator.userAgent,

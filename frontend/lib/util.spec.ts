@@ -33,6 +33,30 @@ describe("setupErrorHandling", () => {
         expect(body.info).toBe("setup function");
     });
 
+    it("sends line and column as numbers when the stack frame parses", () => {
+        const logError = setupErrorHandling();
+        const error = new Error("boom");
+        error.stack = "Error: boom\n    at doThing (http://localhost/src/app.ts:42:7)";
+
+        logError(error, null, "");
+
+        const { body } = lastLoggedBody();
+        expect(body.line).toBe(42);
+        expect(body.column).toBe(7);
+    });
+
+    it("omits line and column when the stack frame can't be parsed", () => {
+        const logError = setupErrorHandling();
+        const error = new Error("boom");
+        error.stack = "Error: boom";
+
+        logError(error, null, "");
+
+        const { body } = lastLoggedBody();
+        expect(body).not.toHaveProperty("line");
+        expect(body).not.toHaveProperty("column");
+    });
+
     it("reports console.error calls to /log with error severity", () => {
         setupErrorHandling();
 
