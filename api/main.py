@@ -92,6 +92,8 @@ class LogRequest(BaseModel):
     context: Optional[dict[str, Any]] = None
     # Identical errors the client suppressed since it last reported this one.
     repeatCount: Optional[int] = None
+    # Cloud Logging entry labels, for filtering, e.g. labels.tag="performance:local-separation".
+    labels: Optional[dict[str, str]] = None
 
 
 class SeparationPollResponse(BaseModel):
@@ -365,15 +367,17 @@ async def download_youtube_video(
 async def log(log_data: LogRequest):
     """Log a client-side message at the severity the client reports."""
     log_at_severity = getattr(logger, log_data.severity)
-    error_reporting_fields = {}
+    gcp_fields = {}
     if log_data.severity == "error":
         stack_trace = v8_stack_trace(log_data.stack, log_data.type, log_data.message)
         if stack_trace:
-            error_reporting_fields["stack_trace"] = stack_trace
+            gcp_fields["stack_trace"] = stack_trace
+    if log_data.labels:
+        gcp_fields["labels"] = log_data.labels
     log_at_severity(
         f"Client {log_data.severity}: {log_data.message or '<no message>'}",
-        extra=log_data.model_dump(),
-        **error_reporting_fields,
+        extra=log_data.model_dump(exclude={"labels"}),
+        **gcp_fields,
     )
     return {"success": True}
 

@@ -224,3 +224,25 @@ def test_log_warning_with_stack_is_not_sent_to_error_reporting():
         client.post("/log", json=log_data)
 
     assert "stack_trace" not in mock_logger.warning.call_args.kwargs
+
+
+def test_log_passes_labels_through_as_cloud_logging_labels():
+    client = TestClient(app)
+    labels = {"tag": "performance:local-separation"}
+
+    with mock.patch("api.main.logger") as mock_logger:
+        response = client.post(
+            "/log", json={"severity": "info", "message": "timed", "labels": labels}
+        )
+
+    assert response.status_code == 200
+    assert mock_logger.info.call_args.kwargs["labels"] == labels
+
+
+def test_log_sends_no_labels_when_the_client_sends_none():
+    client = TestClient(app)
+
+    with mock.patch("api.main.logger") as mock_logger:
+        client.post("/log", json={"severity": "info", "message": "plain"})
+
+    assert "labels" not in mock_logger.info.call_args.kwargs
