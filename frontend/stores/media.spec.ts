@@ -1,5 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 // separateTrack posts to the separation API, so stub the network call.
 vi.mock('@/lib/audioSeparation', () => ({
@@ -172,6 +174,64 @@ describe('Media Store', () => {
 
       expect(mediaStore.error).toBe('boom');
       expect(mediaStore.separationProgress).toBeNull();
+    });
+  });
+
+  describe('song metadata', () => {
+    // happy-dom has no Web Audio, so stand in for the duration lookup
+    class FakeAudioContext {
+      decodeAudioData(_buffer: ArrayBuffer, onSuccess: (b: { duration: number }) => void) {
+        onSuccess({ duration: 3 });
+      }
+    }
+
+    beforeEach(() => {
+      vi.stubGlobal('AudioContext', FakeAudioContext);
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    function fixtureFile(name: string, type: string): File {
+      const data = readFileSync(resolve(import.meta.dirname, '../../tests/fixtures', name));
+      return new File([data], name, { type });
+    }
+
+    test('sets the duration of a file with no readable tags', async () => {
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const mediaStore = useMediaStore();
+
+      mediaStore.songFile = fixtureFile('no_metadata.wav', 'audio/wav');
+
+      await vi.waitFor(() => expect(mediaStore.songDuration).toBe(3));
+      expect(mediaStore.songTitle).toBeNull();
+      expect(mediaStore.songArtist).toBeNull();
+      expect(warn).toHaveBeenCalled();
+      warn.mockRestore();
+    });
+
+    test('keeps a user-entered title and artist for a file with no tags', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const mediaStore = useMediaStore();
+      mediaStore.songTitle = 'Typed Title';
+      mediaStore.songArtist = 'Typed Artist';
+
+      mediaStore.songFile = fixtureFile('no_metadata.wav', 'audio/wav');
+
+      await vi.waitFor(() => expect(mediaStore.songDuration).toBe(3));
+      expect(mediaStore.songTitle).toBe('Typed Title');
+      expect(mediaStore.songArtist).toBe('Typed Artist');
+    });
+
+    test('reads the title and artist from a tagged file', async () => {
+      const mediaStore = useMediaStore();
+
+      mediaStore.songFile = fixtureFile('my_fair_lady.mp3', 'audio/mpeg');
+
+      await vi.waitFor(() => expect(mediaStore.songDuration).toBe(3));
+      expect(mediaStore.songTitle).toBe('My Fair Lady');
+      expect(mediaStore.songArtist).toBe('David Byrne');
     });
   });
 });

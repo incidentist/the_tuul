@@ -135,23 +135,20 @@ export const useMediaStore = defineStore('media', () => {
     };
 
     async function getMetadata(songFile: File): Promise<{ title: string | null; artist: string | null }> {
-        return new Promise((resolve, reject) => {
+        // Never rejects: a file without readable tags (e.g. a WAV) is normal, and the
+        // user can fill in the title and artist by hand.
+        return new Promise((resolve) => {
             if (!songFile) {
                 resolve({ title: null, artist: null });
                 return;
             }
             jsmediatags.read(songFile, {
-                async onSuccess(tag) {
-                    resolve({ title: tag.tags.title, artist: tag.tags.artist });
+                onSuccess(tag) {
+                    resolve({ title: tag.tags.title ?? null, artist: tag.tags.artist ?? null });
                 },
-                onFailure(error) {
-                    console.error(error);
-                    reject(
-                        new Error(
-                            "Failed to read metadata: " +
-                            (error?.message || "Unknown error")
-                        )
-                    );
+                onError(error) {
+                    console.warn("Couldn't read song metadata:", error?.info ?? error);
+                    resolve({ title: null, artist: null });
                 },
             });
         });
@@ -162,7 +159,10 @@ export const useMediaStore = defineStore('media', () => {
         if (songFile.value) {
             const [metadata, durationValue] = await Promise.all([
                 getMetadata(songFile.value),
-                duration(songFile.value)
+                duration(songFile.value).catch((e) => {
+                    console.error(e);
+                    return null;
+                }),
             ]);
             songTitle.value = metadata.title || songTitle.value;
             songArtist.value = metadata.artist || songArtist.value;
