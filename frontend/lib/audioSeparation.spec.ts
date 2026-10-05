@@ -7,6 +7,12 @@ vi.mock('./localSeparation', () => ({
 }));
 
 // separateTrack's local/remote choice reads this constant at call time, so
+// Separation timing is reported to the backend; capture it instead.
+vi.mock('./util', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('./util')>()),
+    logInfo: vi.fn(),
+}));
+
 // tests toggle it directly rather than depending on the build-time env var.
 vi.mock('@/constants', async (importOriginal) => ({
     ...(await importOriginal<typeof import('@/constants')>()),
@@ -25,12 +31,16 @@ import {
     separateTrackRemotely,
 } from './audioSeparation';
 import { isMobile } from './device';
+import { logInfo } from './util';
+import { LOCAL_SEPARATION_LOG_TAG } from './separationTelemetry';
 import { mainThreadRunner } from './localSeparation';
 import {
     BACKING_VOCALS_SEPARATOR_MODEL,
     NO_VOCALS_SEPARATOR_MODEL,
 } from './separationModels';
 import { SeparationPhase } from '@/types';
+import { useMediaStore } from '@/stores/media';
+import { createPinia, setActivePinia } from 'pinia';
 import * as constants from '@/constants';
 
 // Mock fetch globally
@@ -283,6 +293,7 @@ describe('chooseSeparationMethod', () => {
 describe('separateTrack', () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        setActivePinia(createPinia());
         vi.mocked(constants).USE_REMOTE_SEPARATION = false;
         vi.mocked(isMobile).mockReturnValue(false);
     });
@@ -298,9 +309,66 @@ describe('separateTrack', () => {
         expect(returned).toBe(result);
         expect(mainThreadRunner.run).toHaveBeenCalledWith(
             { songFile, localModelName: BACKING_VOCALS_SEPARATOR_MODEL.modelName },
-            onProgress
+            expect.any(Function)
         );
         expect(fetch).not.toHaveBeenCalled();
+    });
+
+    it('logs how long a local separation took', async () => {
+        const songFile = new File(['song'], 'song.mp3', { type: 'audio/mpeg' });
+        vi.mocked(mainThreadRunner.run).mockImplementation(async (_request, onProgress) => {
+            onProgress?.({ phase: SeparationPhase.LoadingModel, fraction: null });
+            onProgress?.({ phase: SeparationPhase.Separating, fraction: 0.5 });
+            return { backing: new Blob(), vocals: new Blob() };
+        });
+
+        useMediaStore().songDuration = 200;
+
+        await separateTrack(songFile, BACKING_VOCALS_SEPARATOR_MODEL);
+
+        await vi.waitFor(() => expect(logInfo).toHaveBeenCalledTimes(1));
+        const [tag, message, details] = vi.mocked(logInfo).mock.calls[0];
+        expect(tag).toBe(LOCAL_SEPARATION_LOG_TAG);
+        expect(message).toMatch(/^Local separation succeeded in [\d.]+s$/);
+        expect(details).toMatchObject({
+            outcome: 'succeeded',
+            songDurationSeconds: 200,
+            model: { id: BACKING_VOCALS_SEPARATOR_MODEL.id, modelName: BACKING_VOCALS_SEPARATOR_MODEL.modelName },
+            songFile: { sizeBytes: 4, type: 'audio/mpeg' },
+        });
+        expect(details.durationSeconds).toEqual(expect.any(Number));
+        expect(details.secondsPerSongSecond).toEqual(expect.any(Number));
+        expect(Object.keys(details.phaseSeconds as object)).toEqual([
+            SeparationPhase.LoadingModel,
+            SeparationPhase.Separating,
+        ]);
+        expect(details.machine).toHaveProperty('crossOriginIsolated');
+    });
+
+    it('logs a failed local separation and still rejects', async () => {
+        const songFile = new File(['song'], 'song.mp3', { type: 'audio/mpeg' });
+        vi.mocked(mainThreadRunner.run).mockRejectedValue(new Error('out of memory'));
+
+        await expect(separateTrack(songFile, BACKING_VOCALS_SEPARATOR_MODEL)).rejects.toThrow('out of memory');
+
+        await vi.waitFor(() => expect(logInfo).toHaveBeenCalledTimes(1));
+        const [, message, details] = vi.mocked(logInfo).mock.calls[0];
+        expect(message).toMatch(/^Local separation failed/);
+        expect(details).toMatchObject({ outcome: 'failed', error: 'out of memory', songDurationSeconds: null, secondsPerSongSecond: null });
+    });
+
+    it('does not log timing for server separation', async () => {
+        vi.mocked(isMobile).mockReturnValue(true);
+        (fetch as any).mockResolvedValueOnce({
+            ok: true,
+            headers: { get: vi.fn().mockReturnValue('application/zip') },
+            blob: vi.fn().mockResolvedValue(new Blob([new ArrayBuffer(8)], { type: 'application/zip' }))
+        });
+        await mockZipResponse();
+
+        await separateTrack(new File(['song'], 'song.mp3'), BACKING_VOCALS_SEPARATOR_MODEL);
+
+        expect(logInfo).not.toHaveBeenCalled();
     });
 
     it('forwards progress from the local runner', async () => {

@@ -91,6 +91,32 @@ function createErrorThrottle() {
 }
 
 /**
+ * Print an informational message and report it to /log. Unlike errors these
+ * are not throttled, so call it for one-off events, not in loops.
+ * @param tag Machine-readable label for filtering logs, e.g. "performance:local-separation".
+ *   Sent as a Cloud Logging label, so filter with `labels.tag="..."`.
+ */
+export function logInfo(tag: string, message: string, details: Record<string, unknown>) {
+    console.info(`[${tag}] ${message}`, details);
+    fetch("/log", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            severity: "info",
+            message,
+            labels: { tag },
+            userAgent: navigator.userAgent,
+            timestamp: new Date().toISOString(),
+            context: details,
+        }),
+    }).catch(e => {
+        console.info('Failed to log to server:', e);
+    });
+}
+
+/**
  * @param getContext Called when an error fires; its result is sent along as `context`.
  */
 export function setupErrorHandling(getContext?: () => Record<string, unknown>) {

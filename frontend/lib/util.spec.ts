@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { setupErrorHandling } from "./util";
+import { logInfo, setupErrorHandling } from "./util";
 
 describe("setupErrorHandling", () => {
     const realConsoleError = console.error;
@@ -392,5 +392,43 @@ describe("setupErrorHandling", () => {
         expect(url).toBe("/log");
         expect(body.severity).toBe("error");
         expect(body.message).toBe("bad region");
+    });
+});
+
+describe("logInfo", () => {
+    const realConsoleInfo = console.info;
+    let fetchMock: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+        fetchMock = vi.fn().mockResolvedValue({ ok: true });
+        vi.stubGlobal("fetch", fetchMock);
+        console.info = vi.fn();
+    });
+
+    afterEach(() => {
+        console.info = realConsoleInfo;
+        vi.unstubAllGlobals();
+    });
+
+    it("reports to /log with info severity, the tag as a label and the details as context", () => {
+        logInfo("performance:test", "It took 3s", { durationSeconds: 3 });
+
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+        const [url, init] = fetchMock.mock.calls[0];
+        const body = JSON.parse(init.body);
+        expect(url).toBe("/log");
+        expect(body).toMatchObject({
+            severity: "info",
+            message: "It took 3s",
+            labels: { tag: "performance:test" },
+            context: { durationSeconds: 3 },
+            userAgent: navigator.userAgent,
+        });
+    });
+
+    it("prints to the local console with the tag", () => {
+        logInfo("performance:test", "It took 3s", { durationSeconds: 3 });
+
+        expect(console.info).toHaveBeenCalledWith("[performance:test] It took 3s", { durationSeconds: 3 });
     });
 });
