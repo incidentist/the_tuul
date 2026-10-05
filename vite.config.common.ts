@@ -6,8 +6,8 @@ import { resolve } from 'path'
 
 const commonConfig: UserConfig = {
     root: resolve(import.meta.dirname, './frontend'),
-    // URL prefix for assets, should be the same as DJANGO_VITE.static_url_prefix
-    // in settings.py
+    // URL prefix for assets. This is where the Vite dev server serves them;
+    // vite.config.prod.ts overrides it for built bundles.
     base: '/bundles/',
     // Env vars prefixed with TUUL_ will be available in the frontend
     envDir: process.cwd(),
