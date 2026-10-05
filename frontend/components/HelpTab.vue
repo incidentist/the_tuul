@@ -67,6 +67,20 @@
         </li>
       </ul>
       <h3>What's New</h3>
+      <h5>0.21 - October 4, 2026</h5>
+      <ul>
+        <li>
+          <strong>On-Device Separation</strong> - Instrumental tracks can now
+          be created right in your browser, for both the backup-vocals and
+          remove-all-vocals models.
+        </li>
+        <li>
+          <strong>Video Progress</strong> - See how far along your video is
+          while it's being created.
+        </li>
+        <li>More reliable YouTube downloads.</li>
+        <li>Better error reporting, bug fixes, and under-the-hood improvements.</li>
+      </ul>
       <h5>0.18 - August 24, 2026</h5>
       <ul>
         <li>Bug fixes and under-the-hood improvements.</li>

@@ -2235,7 +2235,7 @@ wheels = [
 
 [[package]]
 name = "the-tuul"
-version = "0.20.0"
+version = "0.21.0"
 source = { virtual = "." }
 dependencies = [
     { name = "audio-separator" },
