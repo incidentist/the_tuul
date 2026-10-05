@@ -230,3 +230,56 @@ def mark_cache_failed(
             error=str(e),
         )
         return False
+
+
+def fetch_completed_or_clear_error(
+    cache_hash: str, bucket_name: Optional[str] = None, folder: str = "separated_tracks"
+) -> Optional[str]:
+    """
+    Look up a finished zip, deleting a cached error file in its place.
+
+    For jobs with no placeholder (YouTube downloads), the cached blob is either
+    the finished zip or the JSON error from a failed attempt. The error must go
+    before a retry starts: it lives at the URL clients poll, so the retry's
+    first poll would otherwise report the old failure and give up.
+    Returns the public URL of a finished zip, or None if the caller should
+    start the job.
+    """
+    if bucket_name is None:
+        bucket_name = settings.SEPARATED_TRACKS_BUCKET
+    if not bucket_name:
+        return None
+
+    blob_name = f"{folder}/{cache_hash}.zip"
+
+    try:
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.get_blob(blob_name)
+        if blob is None:
+            logger.info("cache_miss", cache_hash=cache_hash, blob_name=blob_name)
+            return None
+
+        if blob.content_type == "application/json":
+            blob.delete()
+            logger.info(
+                "cached_error_cleared", cache_hash=cache_hash, blob_name=blob_name
+            )
+            return None
+
+        logger.info("cache_hit", cache_hash=cache_hash, blob_name=blob_name)
+        return blob.public_url
+
+    except NotFound:
+        logger.info("cache_miss", cache_hash=cache_hash, blob_name=blob_name)
+        return None
+    except Exception as e:
+        # Fall back to redoing the job. If an error file survived, the retry's
+        # first poll may still see it, as it did before this check existed.
+        logger.error(
+            "cache_fetch_error",
+            cache_hash=cache_hash,
+            blob_name=blob_name,
+            error=str(e),
+        )
+        return None

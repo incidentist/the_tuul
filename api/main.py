@@ -342,6 +342,15 @@ async def download_youtube_video(
         bucket_name = settings.SEPARATED_TRACKS_BUCKET
         poll_url = f"https://storage.googleapis.com/{bucket_name}/downloaded_videos/{video_id}.zip"
 
+        cached_url = await run_in_threadpool(
+            cloud_storage.fetch_completed_or_clear_error,
+            video_id,
+            folder="downloaded_videos",
+        )
+        if cached_url:
+            logger.info("youtube_cache_hit", video_id=video_id)
+            return DownloadPollResponse(finishedDownloadURL=cached_url)
+
         # Start background task to process download
         background_tasks.add_task(
             youtube_helper.process_youtube_download_background, video_id, youtube_url

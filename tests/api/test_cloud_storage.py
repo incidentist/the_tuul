@@ -166,3 +166,58 @@ def test_mark_cache_failed_reports_an_upload_error(mock_storage):
     mock_blob.upload_from_string.side_effect = Exception("Upload failed")
 
     assert cloud_storage.mark_cache_failed("test_hash", "test-bucket") is False
+
+
+def _mock_existing_blob(mock_storage, content_type) -> mock.MagicMock:
+    blob = mock.MagicMock()
+    blob.content_type = content_type
+    blob.public_url = "https://example.com/abc.zip"
+    mock_storage.Client.return_value.bucket.return_value.get_blob.return_value = blob
+    return blob
+
+
+@mock.patch("api.helpers.cloud_storage.storage")
+def test_fetch_completed_or_clear_error_returns_a_finished_zip(mock_storage):
+    blob = _mock_existing_blob(mock_storage, "application/zip")
+
+    result = cloud_storage.fetch_completed_or_clear_error(
+        "abc", "bucket", "downloaded_videos"
+    )
+
+    assert result == "https://example.com/abc.zip"
+    mock_storage.Client.return_value.bucket.return_value.get_blob.assert_called_once_with(
+        "downloaded_videos/abc.zip"
+    )
+    blob.delete.assert_not_called()
+
+
+@mock.patch("api.helpers.cloud_storage.storage")
+def test_fetch_completed_or_clear_error_deletes_an_error_file(mock_storage):
+    blob = _mock_existing_blob(mock_storage, "application/json")
+
+    result = cloud_storage.fetch_completed_or_clear_error(
+        "abc", "bucket", "downloaded_videos"
+    )
+
+    assert result is None
+    blob.delete.assert_called_once()
+
+
+@mock.patch("api.helpers.cloud_storage.storage")
+def test_fetch_completed_or_clear_error_with_nothing_cached(mock_storage):
+    mock_storage.Client.return_value.bucket.return_value.get_blob.return_value = None
+
+    assert (
+        cloud_storage.fetch_completed_or_clear_error("abc", "bucket", "downloaded_videos")
+        is None
+    )
+
+
+@mock.patch("api.helpers.cloud_storage.storage")
+def test_fetch_completed_or_clear_error_swallows_storage_errors(mock_storage):
+    mock_storage.Client.side_effect = Exception("boom")
+
+    assert (
+        cloud_storage.fetch_completed_or_clear_error("abc", "bucket", "downloaded_videos")
+        is None
+    )
