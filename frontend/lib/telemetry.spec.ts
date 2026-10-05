@@ -1,12 +1,25 @@
 import { describe, expect, it, vi } from "vitest";
-import { createSeparationTimer } from "./separationTelemetry";
+import { createPhaseTimer, createSeparationTimer } from "./telemetry";
 import { SeparationPhase } from "@/types";
 
-describe("createSeparationTimer", () => {
-    function fakeClock(...times: number[]) {
-        return () => times.shift()!;
-    }
+describe("createPhaseTimer", () => {
+    it("times phases started explicitly", () => {
+        const timer = createPhaseTimer<"load" | "encode">(fakeClock(0, 0, 2000, 10_000));
 
+        timer.startPhase("load");
+        timer.startPhase("encode");
+        const timing = timer.finish();
+
+        expect(timing.durationSeconds).toBe(10);
+        expect(timing.phaseSeconds).toEqual({ load: 2, encode: 8 });
+    });
+});
+
+function fakeClock(...times: number[]) {
+    return () => times.shift()!;
+}
+
+describe("createSeparationTimer", () => {
     it("times the whole separation and each reported phase", () => {
         const timer = createSeparationTimer(undefined, fakeClock(0, 0, 1500, 61_500, 64_000));
 

@@ -32,7 +32,7 @@ import {
 } from './audioSeparation';
 import { isMobile } from './device';
 import { logInfo } from './util';
-import { LOCAL_SEPARATION_LOG_TAG } from './separationTelemetry';
+import { PerformanceLogTag } from './telemetry';
 import { mainThreadRunner } from './localSeparation';
 import {
     BACKING_VOCALS_SEPARATOR_MODEL,
@@ -328,7 +328,7 @@ describe('separateTrack', () => {
 
         await vi.waitFor(() => expect(logInfo).toHaveBeenCalledTimes(1));
         const [tag, message, details] = vi.mocked(logInfo).mock.calls[0];
-        expect(tag).toBe(LOCAL_SEPARATION_LOG_TAG);
+        expect(tag).toBe(PerformanceLogTag.LocalSeparation);
         expect(message).toMatch(/^Local separation succeeded in [\d.]+s$/);
         expect(details).toMatchObject({
             outcome: 'succeeded',

@@ -3,7 +3,7 @@ import { API_HOSTNAME, USE_REMOTE_SEPARATION } from "@/constants";
 import { SeparationModel, SeparationProgressCallback } from "@/types";
 import { isMobile } from "./device";
 import { LocalSeparationRunner, mainThreadRunner } from "./localSeparation";
-import { createSeparationTimer, logLocalSeparation, SeparationOutcome } from "./separationTelemetry";
+import { createSeparationTimer, logLocalSeparation, Outcome } from "./telemetry";
 
 // Splitting a song into a backing track and a vocals track, either on the
 // server or in the browser depending on the device and deployment.
@@ -107,7 +107,7 @@ export async function separateTrackLocally(
     runner: LocalSeparationRunner = mainThreadRunner
 ): Promise<TrackSeparationResult> {
     const timer = createSeparationTimer(onProgress);
-    let outcome: SeparationOutcome = "failed";
+    let outcome: Outcome = "failed";
     let error: string | undefined;
     try {
         const result = await runner.run({ songFile, localModelName: model.modelName }, timer.onProgress);
