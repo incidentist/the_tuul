@@ -1,5 +1,6 @@
 [tools]
 uv = "latest"
+pnpm = "12"
 
 [settings]
 python.uv_venv_auto = "create|source"
@@ -7,14 +8,14 @@ python.uv_venv_auto = "create|source"
 [tasks.install]
 description = "Install frontend and backend dependencies"
 run = '''
-npm install
+pnpm install
 uv lock
 uv sync
 '''
 
 [tasks.frontend-dev]
 description = "Run the Vite frontend dev server"
-run = "npm run dev"
+run = "pnpm dev"
 
 [tasks.backend-dev]
 description = "Run the backend dev server with gunicorn (auto-reload via DEBUG)"
@@ -37,12 +38,12 @@ description = "Smoke-test that the FastAPI app loads"
 run = "uv run python -c \"from api.main import app; print('✅ FastAPI app loads successfully')\""
 
 [tasks.bump-version-minor]
-description = "Bump the minor version (via npm version, which also bumps the Python version)"
-run = "npm version minor"
+description = "Bump the minor version (via pnpm version, which also bumps the Python version)"
+run = "pnpm version minor"
 
 [tasks.bump-version-patch]
-description = "Bump the patch version (via npm version, which also bumps the Python version)"
-run = "npm version patch"
+description = "Bump the patch version (via pnpm version, which also bumps the Python version)"
+run = "pnpm version patch"
 
 [tasks.build-docker]
 description = "Build the production Docker image"

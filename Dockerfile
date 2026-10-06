@@ -11,16 +11,20 @@ ENV TUUL_API_HOSTNAME=$TUUL_API_HOSTNAME \
 
 WORKDIR /app
 
+# pnpm, at the version pinned in package.json's packageManager field. The
+# corepack bundled with Node 22 is too old to verify current pnpm releases.
+RUN npm install -g corepack@latest && corepack enable
+
 # Copy frontend source files
-COPY package.json package-lock.json ./
-RUN npm clean-install
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile
 
 # Copy the rest of the frontend source
 COPY frontend/ ./frontend/
 COPY vite.config.*.ts tsconfig.json jsconfig.json ./
 
 # Build the frontend
-RUN npm run build
+RUN pnpm build
 
 # Use an official lightweight Python image.
 # https://hub.docker.com/_/python

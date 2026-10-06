@@ -2,7 +2,7 @@
 dev:
 	@set -e; \
 	trap 'printf "\n↪ shutting down…\n"; kill 0; exit 0' INT TERM; \
-	npm run dev & \
+	pnpm dev & \
 	NPM_PID=$$!; \
 	DEBUG=true poetry run gunicorn --config gunicorn.conf.py api.main:app & \
 	GUNICORN_PID=$$!; \
@@ -10,18 +10,18 @@ dev:
 
 install:
 	@set -e; \
-	npm install; \
+	pnpm install; \
 	poetry lock && poetry install
 
 bump-version-minor:
 	@set -e; \
 	# Uses "version" command in package.json to bump python version
-	npm version minor;
+	pnpm version minor;
 
 bump-version-patch:
 	@set -e; \
 	# Uses "version" command in package.json to bump python version
-	npm version patch;
+	pnpm version patch;
 
 format-backend:
 	@set -e; \
