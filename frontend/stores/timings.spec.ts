@@ -128,6 +128,35 @@ describe('Timings Store', () => {
     expect(timingsStore.subtitles()).toBe('');
   });
 
+  test('subtitles should warn and return empty string if song duration is unknown', () => {
+    const timingsStore = useTimingsStore();
+    const mediaStore = useMediaStore();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // @ts-ignore - Mocking private property
+    timingsStore._timings = [[1.0, LYRIC_MARKERS.SEGMENT_START]];
+    mediaStore.songDuration = null;
+
+    expect(timingsStore.subtitles()).toBe('');
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
+  test('subtitles should use empty strings for a missing title and artist', () => {
+    const timingsStore = useTimingsStore();
+    const mediaStore = useMediaStore();
+    vi.mocked(createAssFile).mockClear();
+    // @ts-ignore - Mocking private property
+    timingsStore._timings = [[1.0, LYRIC_MARKERS.SEGMENT_START]];
+    mediaStore.songDuration = 10;
+    mediaStore.songTitle = null;
+    mediaStore.songArtist = null;
+
+    expect(timingsStore.subtitles()).toBe('mock subtitles content');
+    const [, , , title, artist] = vi.mocked(createAssFile).mock.calls[0];
+    expect(title).toBe('');
+    expect(artist).toBe('');
+  });
+
   test('subtitles should call createAssFile with correct parameters when timings exist', () => {
     // Setup the stores
     const timingsStore = useTimingsStore();

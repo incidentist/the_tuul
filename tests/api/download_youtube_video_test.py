@@ -170,7 +170,10 @@ def test_download_youtube_video_async_with_storage(youtube_url):
     # Mock the background task processing
     with mock.patch(
         "api.helpers.youtube_helper.process_youtube_download_background"
-    ) as mock_background_task:
+    ) as mock_background_task, mock.patch(
+        "api.helpers.cloud_storage.fetch_completed_or_clear_error",
+        return_value=None,
+    ) as mock_cache_lookup:
 
         # Test with storage bucket configured
         with mock.patch("api.settings.SEPARATED_TRACKS_BUCKET", "test-bucket"):
@@ -188,6 +191,29 @@ def test_download_youtube_video_async_with_storage(youtube_url):
             # Verify background task was called with correct parameters
             mock_background_task.assert_called_once_with("gVw-wI1GeqI", youtube_url)
 
+            mock_cache_lookup.assert_called_once_with(
+                "gVw-wI1GeqI", folder="downloaded_videos"
+            )
+
+
+
+def test_download_youtube_video_serves_a_cached_zip():
+    """A finished zip in the cache is returned without downloading again."""
+    client = TestClient(app)
+    youtube_url = "https://www.youtube.com/watch?v=gVw-wI1GeqI"
+    cached_url = "https://storage.googleapis.com/test-bucket/downloaded_videos/gVw-wI1GeqI.zip"
+
+    with mock.patch(
+        "api.helpers.youtube_helper.process_youtube_download_background"
+    ) as mock_background_task, mock.patch(
+        "api.helpers.cloud_storage.fetch_completed_or_clear_error",
+        return_value=cached_url,
+    ), mock.patch("api.settings.SEPARATED_TRACKS_BUCKET", "test-bucket"):
+        response = client.get(f"/download_video?url={youtube_url}")
+
+    assert response.status_code == 200
+    assert response.json()["finishedDownloadURL"] == cached_url
+    mock_background_task.assert_not_called()
 
 def test_download_youtube_video_invalid_url():
     """Test that invalid YouTube URLs return 400 error."""

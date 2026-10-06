@@ -6,6 +6,7 @@ import {
   TabId,
   loadAndEnterLyrics,
   mockSeparateTrackApi,
+  setIncludeBackingVocals,
   expectTabToBeDisabled,
   expectTabToBeEnabled,
   loadAndEnterTimings,
@@ -40,6 +41,8 @@ test.describe('YouTube Karaoke Video Creation', () => {
       'Beastie Boys - Topic',
       'Now Get Busy'
     );
+    // The server-side model keeps separation on the mocked API
+    await setIncludeBackingVocals(page, false);
 
     // 3. Verify Song Timing tab is initially disabled
     await expectTabToBeDisabled(page, TabId.SongTiming);

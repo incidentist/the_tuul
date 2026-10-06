@@ -2,6 +2,12 @@
 export const API_HOSTNAME = import.meta.env.TUUL_API_HOSTNAME || "";
 export const DONATE_URL = import.meta.env.TUUL_DONATE_URL || "";
 
+// Forces separation onto the server (POST /separate_track) on every device.
+// When false, desktops separate in the browser via web-audio-separation and
+// mobile devices still use the server (see chooseSeparationMethod).
+export const USE_REMOTE_SEPARATION = import.meta.env.TUUL_USE_REMOTE_SEPARATION === "true";
+console.info("USE_REMOTE_SEPARATION:", USE_REMOTE_SEPARATION);
+
 export const KEY_CODES = {
   SPACEBAR: 32, // code: "Space"
   ENTER: 13, // code: "Enter"

@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["https://beta.the-tuul.com", "https://the-tuul.com"],
+    "method": ["GET"],
+    "responseHeader": ["Content-Type"],
+    "maxAgeSeconds": 3600
+  }
+]

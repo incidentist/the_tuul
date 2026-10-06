@@ -115,3 +115,34 @@ export async function mockYouTubeDownloadApi(context: BrowserContext): Promise<v
     console.log('Mocked YouTube download endpoint with fixture files');
   });
 }
+
+/**
+ * Serves a tiny pass-through ONNX model in place of the real UVR_MDXNET_KARA_2
+ * download, so in-browser separation runs end to end without fetching 30MB
+ * from Hugging Face. See tests/fixtures/make_identity_mdx_model.py.
+ *
+ * Returns the URLs served so far, so a test can assert the mock was used.
+ */
+export async function mockLocalSeparationModel(context: BrowserContext): Promise<{ servedUrls: string[] }> {
+  const servedUrls: string[] = [];
+  await context.route('https://huggingface.co/**/UVR_MDXNET_KARA_2.onnx', async (route) => {
+    const modelPath = getFixturePath('identity_mdx_kara2.onnx');
+    const fileBuffer = await fs.readFile(modelPath);
+    servedUrls.push(route.request().url());
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/octet-stream',
+      body: fileBuffer,
+      headers: {
+        // The app is cross-origin isolated (COEP: require-corp), so a
+        // cross-origin response must opt in or the browser discards it.
+        'Access-Control-Allow-Origin': '*',
+        'Cross-Origin-Resource-Policy': 'cross-origin',
+      },
+    });
+
+    console.log('Mocked UVR_MDXNET_KARA_2 model download with fixture:', modelPath);
+  });
+  return { servedUrls };
+}

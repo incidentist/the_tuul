@@ -66,33 +66,46 @@ export default defineComponent({
     this.setVideoPlayhead = throttle(this.setVideoPlayhead, 1000 / 15);
   },
   mounted() {
-    const canvas = this.$refs.subtitleCanvas;
-    // SubtitleOctopus expects font names to be lowercase
-    const fontMap = mapKeys(this.fonts, (_, key) => key.toLowerCase());
-    // Create a subtitle renderer and tie it to our player and canvas
-    var options = {
-      debug: false,
-      canvas: canvas,
-      subContent: this.subtitles,
-      lazyFileLoading: true,
-      availableFonts: fontMap,
-      // workerUrl: require("!!file-loader?name=[name].[ext]!libass-wasm/dist/subtitles-octopus-worker.js"),
-      // workerUrl: workerUrl,
-      workerUrl: "/static/subtitles-octopus-worker.js", // Link to WebAssembly-based file "libassjs-worker.js"
-      legacyWorkerUrl: "/static/subtitles-octopus-worker-legacy.js", // Link to non-WebAssembly worker
-    };
-    this.subtitleManager = new SubtitlesOctopus(options);
     this.currentTime = 0.0;
+    this.createSubtitleManager();
   },
   watch: {
     subtitles(newSubs: string) {
-      this.subtitleManager.setTrack(newSubs);
+      if (this.subtitleManager) {
+        this.subtitleManager.setTrack(newSubs);
+      } else {
+        this.createSubtitleManager();
+      }
     },
     currentTime(newTime: number) {
-      this.subtitleManager.setCurrentTime(newTime);
+      this.subtitleManager?.setCurrentTime(newTime);
     },
   },
   methods: {
+    createSubtitleManager() {
+      // The worker can't start without subtitle content (it falls back to an
+      // unset subUrl and crashes), so wait until we have some.
+      if (!this.subtitles) {
+        return;
+      }
+      const canvas = this.$refs.subtitleCanvas;
+      // SubtitleOctopus expects font names to be lowercase
+      const fontMap = mapKeys(this.fonts, (_, key) => key.toLowerCase());
+      // Create a subtitle renderer and tie it to our player and canvas
+      var options = {
+        debug: false,
+        canvas: canvas,
+        subContent: this.subtitles,
+        lazyFileLoading: true,
+        availableFonts: fontMap,
+        // workerUrl: require("!!file-loader?name=[name].[ext]!libass-wasm/dist/subtitles-octopus-worker.js"),
+        // workerUrl: workerUrl,
+        workerUrl: "/static/subtitles-octopus-worker.js", // Link to WebAssembly-based file "libassjs-worker.js"
+        legacyWorkerUrl: "/static/subtitles-octopus-worker-legacy.js", // Link to non-WebAssembly worker
+      };
+      this.subtitleManager = new SubtitlesOctopus(options);
+      this.subtitleManager.setCurrentTime(this.currentTime);
+    },
     setPlayhead(playhead: number) {
       this.currentTime = playhead;
       this.setVideoPlayhead(Math.max(0, playhead - this.audioDelay));
@@ -103,10 +116,10 @@ export default defineComponent({
       }
     },
     pause() {
-      this.subtitleManager.setIsPaused(true, this.currentTime);
+      this.subtitleManager?.setIsPaused(true, this.currentTime);
     },
     play() {
-      this.subtitleManager.setIsPaused(false, this.currentTime);
+      this.subtitleManager?.setIsPaused(false, this.currentTime);
     },
   },
 });

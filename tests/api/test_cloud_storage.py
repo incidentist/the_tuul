@@ -1,10 +1,13 @@
 import hashlib
+import json
 import tempfile
+import time
 from pathlib import Path
 from unittest import mock
 
 import pytest
 
+from api import settings
 from api.helpers import cloud_storage
 
 
@@ -100,3 +103,121 @@ def test_upload_to_cache(mock_storage, bucket_exists, upload_succeeds, expected_
         result = cloud_storage.upload_to_cache("test_hash", temp_path, "test-bucket")
 
         assert result is expected_result
+
+
+def _mock_placeholder_blob(mock_storage, placeholder: dict) -> mock.MagicMock:
+    """Point cloud_storage at a bucket holding one JSON placeholder."""
+    mock_blob = mock.MagicMock()
+    mock_storage.Client.return_value.bucket.return_value.blob.return_value = mock_blob
+    mock_blob.exists.return_value = True
+    mock_blob.content_type = "application/json"
+    mock_blob.public_url = "https://example.com/url"
+    mock_blob.download_as_text.return_value = json.dumps(placeholder)
+    return mock_blob
+
+
+@mock.patch("api.helpers.cloud_storage.storage")
+def test_fetch_from_cache_returns_a_fresh_processing_placeholder(mock_storage):
+    _mock_placeholder_blob(
+        mock_storage, {"status": "processing", "startTime": int(time.time())}
+    )
+
+    assert cloud_storage.fetch_from_cache("test_hash", "test-bucket") == (
+        "https://example.com/url"
+    )
+
+
+@mock.patch("api.helpers.cloud_storage.storage")
+def test_fetch_from_cache_misses_on_a_failed_placeholder(mock_storage):
+    _mock_placeholder_blob(mock_storage, {"status": "failed", "failedTime": 0})
+
+    assert cloud_storage.fetch_from_cache("test_hash", "test-bucket") is None
+
+
+@mock.patch("api.helpers.cloud_storage.storage")
+def test_fetch_from_cache_misses_on_a_stale_processing_placeholder(mock_storage):
+    started = time.time() - settings.SEPARATION_PLACEHOLDER_STALE_SECONDS - 60
+    _mock_placeholder_blob(
+        mock_storage, {"status": "processing", "startTime": int(started)}
+    )
+
+    assert cloud_storage.fetch_from_cache("test_hash", "test-bucket") is None
+
+
+@mock.patch("api.helpers.cloud_storage.storage")
+def test_mark_cache_failed_overwrites_the_placeholder(mock_storage):
+    mock_blob = mock_storage.Client.return_value.bucket.return_value.blob.return_value
+
+    assert cloud_storage.mark_cache_failed("test_hash", "test-bucket") is True
+
+    mock_storage.Client.return_value.bucket.return_value.blob.assert_called_once_with(
+        "separated_tracks/test_hash.zip"
+    )
+    data, = mock_blob.upload_from_string.call_args.args
+    assert json.loads(data)["status"] == "failed"
+    assert mock_blob.upload_from_string.call_args.kwargs == {
+        "content_type": "application/json"
+    }
+
+
+@mock.patch("api.helpers.cloud_storage.storage")
+def test_mark_cache_failed_reports_an_upload_error(mock_storage):
+    mock_blob = mock_storage.Client.return_value.bucket.return_value.blob.return_value
+    mock_blob.upload_from_string.side_effect = Exception("Upload failed")
+
+    assert cloud_storage.mark_cache_failed("test_hash", "test-bucket") is False
+
+
+def _mock_existing_blob(mock_storage, content_type) -> mock.MagicMock:
+    blob = mock.MagicMock()
+    blob.content_type = content_type
+    blob.public_url = "https://example.com/abc.zip"
+    mock_storage.Client.return_value.bucket.return_value.get_blob.return_value = blob
+    return blob
+
+
+@mock.patch("api.helpers.cloud_storage.storage")
+def test_fetch_completed_or_clear_error_returns_a_finished_zip(mock_storage):
+    blob = _mock_existing_blob(mock_storage, "application/zip")
+
+    result = cloud_storage.fetch_completed_or_clear_error(
+        "abc", "bucket", "downloaded_videos"
+    )
+
+    assert result == "https://example.com/abc.zip"
+    mock_storage.Client.return_value.bucket.return_value.get_blob.assert_called_once_with(
+        "downloaded_videos/abc.zip"
+    )
+    blob.delete.assert_not_called()
+
+
+@mock.patch("api.helpers.cloud_storage.storage")
+def test_fetch_completed_or_clear_error_deletes_an_error_file(mock_storage):
+    blob = _mock_existing_blob(mock_storage, "application/json")
+
+    result = cloud_storage.fetch_completed_or_clear_error(
+        "abc", "bucket", "downloaded_videos"
+    )
+
+    assert result is None
+    blob.delete.assert_called_once()
+
+
+@mock.patch("api.helpers.cloud_storage.storage")
+def test_fetch_completed_or_clear_error_with_nothing_cached(mock_storage):
+    mock_storage.Client.return_value.bucket.return_value.get_blob.return_value = None
+
+    assert (
+        cloud_storage.fetch_completed_or_clear_error("abc", "bucket", "downloaded_videos")
+        is None
+    )
+
+
+@mock.patch("api.helpers.cloud_storage.storage")
+def test_fetch_completed_or_clear_error_swallows_storage_errors(mock_storage):
+    mock_storage.Client.side_effect = Exception("boom")
+
+    assert (
+        cloud_storage.fetch_completed_or_clear_error("abc", "bucket", "downloaded_videos")
+        is None
+    )

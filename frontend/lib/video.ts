@@ -4,6 +4,7 @@ import type { Log } from '@ffmpeg/ffmpeg/dist/esm/types';
 
 
 import { KaraokeOptions } from "@/lib/timing";
+import { createPhaseTimer, logVideoCreation, Outcome } from "@/lib/telemetry";
 import jszip from "jszip";
 
 // Functions related to video file creation
@@ -109,6 +110,14 @@ function getProgressParser(fps: number, videoDuration: number, onProgress?: Prog
     };
 }
 
+/** The steps of createVideo, for timing. */
+export enum VideoCreationStep {
+    LoadingFfmpeg = "loading-ffmpeg",
+    WritingInputs = "writing-inputs",
+    Encoding = "encoding",
+    ReadingOutput = "reading-output",
+}
+
 async function createVideo(
     accompanimentDataUrl: string,
     videoBlob: Blob = null,
@@ -119,70 +128,95 @@ async function createVideo(
     fontMap: Record<string, string>,
     onProgress?: ProgressCallback
 ): Promise<Uint8Array> {
-    // Create the video using ffmpeg.wasm v0.12
-    const songFileName = "audio.mp4";
-    const backgroundColor =
-        "0x" + videoOptions.color.background.toString().substring(1);
-    const audioDelayMs = audioDelay * 1000;
+    const timer = createPhaseTimer<VideoCreationStep>();
+    let outcome: Outcome = "failed";
+    let error: string | undefined;
+    let ffmpegExitCode: number | null = null;
+    let videoData: Uint8Array | null = null;
+    try {
+        timer.startPhase(VideoCreationStep.LoadingFfmpeg);
+        // Create the video using ffmpeg.wasm v0.12
+        const songFileName = "audio.mp4";
+        const backgroundColor =
+            "0x" + videoOptions.color.background.toString().substring(1);
+        const audioDelayMs = audioDelay * 1000;
 
-    // Create FFmpeg instance and load multithread core
+        // Create FFmpeg instance and load multithread core
 
-    // Most assets can be pulled from any origin, so let's use a CDN
-    const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.9/dist/esm'
-    // The root worker needs to be served from the same origin as the page to enable SharedArrayBuffer
-    const workerBaseUrl = window.location.origin + '/static/ffmpeg';
-    const ffmpeg = new FFmpeg();
+        // Most assets can be pulled from any origin, so let's use a CDN
+        const baseURL = 'https://cdn.jsdelivr.net/npm/@ffmpeg/core-mt@0.12.9/dist/esm'
+        // The root worker needs to be served from the same origin as the page to enable SharedArrayBuffer
+        const workerBaseUrl = window.location.origin + '/static/ffmpeg';
+        const ffmpeg = new FFmpeg();
 
-    // Download most ffmpeg files to local blobs
-    const [coreURL, wasmURL, workerURL] = await Promise.all([
-        toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript').catch(error => {
-            console.error(`Failed to fetch FFmpeg core from: ${baseURL}/ffmpeg-core.js`, error);
-            throw error;
-        }),
-        toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm').catch(error => {
-            console.error(`Failed to fetch FFmpeg WASM from: ${baseURL}/ffmpeg-core.wasm`, error);
-            throw error;
-        }),
-        toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, 'text/javascript').catch(error => {
-            console.error(`Failed to fetch FFmpeg worker from: ${baseURL}/ffmpeg-core.worker.js`, error);
-            throw error;
-        }),
-    ]);
-    await ffmpeg.load({ coreURL, wasmURL, workerURL, classWorkerURL: `${workerBaseUrl}/worker.js` });
+        // Download most ffmpeg files to local blobs
+        const [coreURL, wasmURL, workerURL] = await Promise.all([
+            toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript').catch(error => {
+                console.error(`Failed to fetch FFmpeg core from: ${baseURL}/ffmpeg-core.js`, error);
+                throw error;
+            }),
+            toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm').catch(error => {
+                console.error(`Failed to fetch FFmpeg WASM from: ${baseURL}/ffmpeg-core.wasm`, error);
+                throw error;
+            }),
+            toBlobURL(`${baseURL}/ffmpeg-core.worker.js`, 'text/javascript').catch(error => {
+                console.error(`Failed to fetch FFmpeg worker from: ${baseURL}/ffmpeg-core.worker.js`, error);
+                throw error;
+            }),
+        ]);
+        await ffmpeg.load({ coreURL, wasmURL, workerURL, classWorkerURL: `${workerBaseUrl}/worker.js` });
 
-    // Configure progress handler if needed
-    const fps = 20; // Using default fps from color generator
-    const videoDuration = metadata.duration || 300; // Default to 5 minutes, could be calculated from metadata
-    if (onProgress) {
-        ffmpeg.on('log', getProgressParser(fps, videoDuration, onProgress));
-    }
+        // Configure progress handler if needed
+        const fps = 20; // Using default fps from color generator
+        const videoDuration = metadata.duration || 300; // Default to 5 minutes, could be calculated from metadata
+        if (onProgress) {
+            ffmpeg.on('log', getProgressParser(fps, videoDuration, onProgress));
+        }
 
-    // Write audio to ffmpeg filesystem
-    await ffmpeg.writeFile(
-        songFileName,
-        await fetchFile(accompanimentDataUrl)
-    );
-
-    // Write the subtitle font to the filesystem
-    await ffmpeg.writeFile(
-        `/tmp/${videoOptions.font.name}.ttf`,
-        await fetchFile(fontMap[videoOptions.font.name])
-    );
-
-    await ffmpeg.writeFile("subtitles.ass", subtitles);
-
-    if (videoBlob) {
+        timer.startPhase(VideoCreationStep.WritingInputs);
+        // Write audio to ffmpeg filesystem
         await ffmpeg.writeFile(
-            "video.mp4",
-            await fetchFile(videoBlob)
+            songFileName,
+            await fetchFile(accompanimentDataUrl)
         );
+
+        // Write the subtitle font to the filesystem
+        await ffmpeg.writeFile(
+            `/tmp/${videoOptions.font.name}.ttf`,
+            await fetchFile(fontMap[videoOptions.font.name])
+        );
+
+        await ffmpeg.writeFile("subtitles.ass", subtitles);
+
+        if (videoBlob) {
+            await ffmpeg.writeFile(
+                "video.mp4",
+                await fetchFile(videoBlob)
+            );
+        }
+
+        timer.startPhase(VideoCreationStep.Encoding);
+        const ffmpegParams = getFfmpegParams(Boolean(videoBlob), backgroundColor, audioDelayMs, metadata);
+        ffmpegExitCode = await ffmpeg.exec(ffmpegParams);
+
+        timer.startPhase(VideoCreationStep.ReadingOutput);
+        videoData = (await ffmpeg.readFile("karaoke.mp4")) as Uint8Array;
+        outcome = "succeeded";
+        return videoData;
+    } catch (e) {
+        error = (e as Error)?.message ?? String(e);
+        throw e;
+    } finally {
+        void logVideoCreation({
+            outcome,
+            error,
+            timing: timer.finish(),
+            backgroundVideoBytes: videoBlob?.size ?? null,
+            audioDelaySeconds: audioDelay,
+            ffmpegExitCode,
+            outputBytes: videoData?.byteLength ?? null,
+        });
     }
-
-    const ffmpegParams = getFfmpegParams(Boolean(videoBlob), backgroundColor, audioDelayMs, metadata);
-    await ffmpeg.exec(ffmpegParams);
-
-    const videoData = (await ffmpeg.readFile("karaoke.mp4")) as Uint8Array;
-    return videoData;
 }
 
 interface DownloadPollResponse {
@@ -304,4 +338,5 @@ function ffmpegMetadataArgs(metadata: VideoMetadata): string[] {
     return ffmpegArgs;
 }
 
+export { createVideo };
 export default { createVideo, fetchYouTubeVideo, parseYouTubeTitle, getProgressParser };

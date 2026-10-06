@@ -33,7 +33,10 @@ def fetch_from_cache(
     Try to fetch a zip file from Google Cloud Storage based on the hash.
     Returns:
     - str with public URL if cache found (either placeholder or completed)
-    - None if not found at all
+    - None if not found at all, or if the placeholder is one nobody should keep
+      waiting on: its separation failed, or it has been "processing" for longer
+      than settings.SEPARATION_PLACEHOLDER_STALE_SECONDS. Returning None lets the
+      caller start the separation over.
     """
     if bucket_name is None:
         bucket_name = settings.SEPARATED_TRACKS_BUCKET
@@ -55,6 +58,13 @@ def fetch_from_cache(
         # Check content type to determine if it's a placeholder or actual cache
         blob.reload()
         if blob.content_type == "application/json":
+            if _is_abandoned_placeholder(blob):
+                logger.info(
+                    "cache_placeholder_abandoned",
+                    cache_hash=cache_hash,
+                    blob_name=blob_name,
+                )
+                return None
             logger.info(
                 "cache_placeholder_found", cache_hash=cache_hash, blob_name=blob_name
             )
@@ -75,6 +85,21 @@ def fetch_from_cache(
             error=str(e),
         )
         return None
+
+
+def _is_abandoned_placeholder(blob) -> bool:
+    """Whether a placeholder marks a separation that will never finish."""
+    try:
+        placeholder = json.loads(blob.download_as_text())
+    except (TypeError, ValueError):
+        # Unreadable: assume it's in progress, as we did before we read them.
+        return False
+
+    if placeholder.get("status") == "failed":
+        return True
+
+    age = time.time() - placeholder.get("startTime", time.time())
+    return age > settings.SEPARATION_PLACEHOLDER_STALE_SECONDS
 
 
 def upload_to_cache(
@@ -155,6 +180,104 @@ def create_cache_placeholder(
     except Exception as e:
         logger.error(
             "cache_placeholder_error",
+            cache_hash=cache_hash,
+            blob_name=blob_name,
+            error=str(e),
+        )
+        return None
+
+
+def mark_cache_failed(
+    cache_hash: str, bucket_name: Optional[str] = None, folder: str = "separated_tracks"
+) -> bool:
+    """
+    Overwrite a placeholder to say its separation failed.
+
+    Clients polling the placeholder see the failure and stop, and the next
+    request for the same song is treated as a cache miss (see fetch_from_cache).
+    The blob is public, so it says only that separation failed, not why.
+    Returns True if successful, False otherwise.
+    """
+    if bucket_name is None:
+        bucket_name = settings.SEPARATED_TRACKS_BUCKET
+    if not bucket_name:
+        return False
+
+    blob_name = f"{folder}/{cache_hash}.zip"
+    failure_data = {
+        "status": "failed",
+        "error": "Separation failed on the server.",
+        "failedTime": int(time.time()),
+    }
+
+    try:
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.blob(blob_name)
+
+        blob.cache_control = "no-cache, no-store, must-revalidate"
+        blob.upload_from_string(
+            json.dumps(failure_data), content_type="application/json"
+        )
+        logger.info("cache_marked_failed", cache_hash=cache_hash, blob_name=blob_name)
+        return True
+
+    except Exception as e:
+        logger.error(
+            "cache_mark_failed_error",
+            cache_hash=cache_hash,
+            blob_name=blob_name,
+            error=str(e),
+        )
+        return False
+
+
+def fetch_completed_or_clear_error(
+    cache_hash: str, bucket_name: Optional[str] = None, folder: str = "separated_tracks"
+) -> Optional[str]:
+    """
+    Look up a finished zip, deleting a cached error file in its place.
+
+    For jobs with no placeholder (YouTube downloads), the cached blob is either
+    the finished zip or the JSON error from a failed attempt. The error must go
+    before a retry starts: it lives at the URL clients poll, so the retry's
+    first poll would otherwise report the old failure and give up.
+    Returns the public URL of a finished zip, or None if the caller should
+    start the job.
+    """
+    if bucket_name is None:
+        bucket_name = settings.SEPARATED_TRACKS_BUCKET
+    if not bucket_name:
+        return None
+
+    blob_name = f"{folder}/{cache_hash}.zip"
+
+    try:
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(bucket_name)
+        blob = bucket.get_blob(blob_name)
+        if blob is None:
+            logger.info("cache_miss", cache_hash=cache_hash, blob_name=blob_name)
+            return None
+
+        if blob.content_type == "application/json":
+            blob.delete()
+            logger.info(
+                "cached_error_cleared", cache_hash=cache_hash, blob_name=blob_name
+            )
+            return None
+
+        logger.info("cache_hit", cache_hash=cache_hash, blob_name=blob_name)
+        return blob.public_url
+
+    except NotFound:
+        logger.info("cache_miss", cache_hash=cache_hash, blob_name=blob_name)
+        return None
+    except Exception as e:
+        # Fall back to redoing the job. If an error file survived, the retry's
+        # first poll may still see it, as it did before this check existed.
+        logger.error(
+            "cache_fetch_error",
             cache_hash=cache_hash,
             blob_name=blob_name,
             error=str(e),

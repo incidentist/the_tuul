@@ -1,0 +1,50 @@
+# Self-hosted Tuul: the web app in a single container, separating in-process.
+#
+# This file on its own is the CPU-only stack. It needs no GPU, no toolkit and
+# no host setup beyond Docker -- separation just runs on the CPU inside the
+# container, which works everywhere and is slow.
+#
+#   docker compose up --build
+#
+# Two overlays make it faster, each layered on top of this file:
+#
+#   # NVIDIA GPU, passed through to the container (builds the CUDA image):
+#   docker compose -f compose.yaml -f compose.cuda.yaml up --build
+#
+#   # Any other accelerator (notably a Mac GPU), by running the separator as a
+#   # host process -- Linux containers cannot reach Metal at all:
+#   PATH="$PWD/infra/compose-separation-provider:$PATH" \
+#     docker compose -f compose.yaml -f compose.host-gpu.yaml up --build
+#
+# Pinned so the project name (which the provider overlay also gets as
+# --project-name) doesn't depend on the checkout's directory name.
+name: the-tuul
+
+services:
+  app:
+    # Tagged per flavor so the CPU and CUDA images can coexist.
+    image: the-tuul:cpu
+    build:
+      context: .
+      args:
+        # CPU-only torch and onnxruntime. compose.cuda.yaml overrides this.
+        TORCH_GROUP: cpu
+        TUUL_API_HOSTNAME: "${TUUL_API_HOSTNAME:-}"
+        TUUL_USE_REMOTE_SEPARATION: "${TUUL_USE_REMOTE_SEPARATION:-true}"
+        TUUL_SENTRY_DSN: "${TUUL_SENTRY_DSN:-}"
+    ports:
+      - "${TUUL_PORT:-8080}:8080"
+    environment:
+      # Separate in this same process, using the audio-separator library that
+      # the image installs. onnxruntime picks an execution provider at runtime;
+      # with no GPU visible that is CPUExecutionProvider.
+      SEPARATION_METHOD: api
+      DEBUG: "${DEBUG:-False}"
+      SECRET_KEY: "${SECRET_KEY:-changeme}"
+      SEPARATED_TRACKS_BUCKET: "${SEPARATED_TRACKS_BUCKET:-}"
+      TUUL_YOUTUBE_PROXY: "${TUUL_YOUTUBE_PROXY:-}"
+      # Sentry-protocol DSN for error/performance reporting (e.g. a
+      # self-hosted Bugsink, GlitchTip, or Sentry instance). Empty disables
+      # it. Not pointed at a service in this stack yet.
+      SENTRY_DSN: "${SENTRY_DSN:-}"
+    restart: unless-stopped

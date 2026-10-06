@@ -1,9 +1,10 @@
 import { defineStore } from 'pinia';
 import { ref, watchEffect } from 'vue';
 
-import { separateTrack, TrackSeparationResult } from '@/lib/audio';
-import { SeparationModel } from '@/types';
-import jsmediatags from "@/jsmediatags.min.js";
+import { separateTrack } from '@/lib/audioSeparation';
+import { BACKING_VOCALS_SEPARATOR_MODEL } from '@/lib/separationModels';
+import { SeparationModel, SeparationProgress } from '@/types';
+import { parseBlob } from "music-metadata";
 
 
 export interface SeparatedTrack {
@@ -13,8 +14,8 @@ export interface SeparatedTrack {
     vocals: Blob;
 }
 
-export const BACKING_VOCALS_SEPARATOR_MODEL = "UVR_MDXNET_KARA_2.onnx";
-export const NO_VOCALS_SEPARATOR_MODEL = "UVR-MDX-NET-Inst_HQ_3.onnx";
+// Re-exported so existing importers keep working; the catalogue lives in lib/separationModels.
+export { BACKING_VOCALS_SEPARATOR_MODEL, NO_VOCALS_SEPARATOR_MODEL } from '@/lib/separationModels';
 
 export const useMediaStore = defineStore('media', () => {
     // The mixed song file (uploaded by user)
@@ -35,19 +36,24 @@ export const useMediaStore = defineStore('media', () => {
     const separatedTrack = ref<SeparatedTrack | null>(null);
     const error = ref<string | null>(null);
     const separationStartTime = ref<Date | null>(null);
+    // Progress reported by the separation backend, or null when it reports none
+    const separationProgress = ref<SeparationProgress | null>(null);
 
     // True when the backing track came from the user rather than from separation
     const isBackingTrackUserUploaded = ref(false);
 
-    async function startSeparation(inputData: any, modelName: SeparationModel): Promise<SeparatedTrack> {
+    async function startSeparation(inputData: File, model: SeparationModel): Promise<SeparatedTrack> {
         if (isProcessing.value) {
             return;
         }
         isProcessing.value = true;
         error.value = null;
         separationStartTime.value = new Date();
+        separationProgress.value = null;
         try {
-            const result = await separateTrack(inputData, modelName);
+            const result = await separateTrack(inputData, model, (progress) => {
+                separationProgress.value = progress;
+            });
             separatedTrack.value = result;
             isBackingTrackUserUploaded.value = false;
             return separatedTrack.value;
@@ -56,6 +62,7 @@ export const useMediaStore = defineStore('media', () => {
             error.value = (err as Error).message;
         } finally {
             isProcessing.value = false;
+            separationProgress.value = null;
         }
     };
 
@@ -73,91 +80,53 @@ export const useMediaStore = defineStore('media', () => {
             separatedTrack.value.backing = file;
         }
         isBackingTrackUserUploaded.value = true;
+        // A user-supplied backing track makes an earlier separation failure moot
+        error.value = null;
     }
 
-    async function duration(songFile: File): Promise<number> {
-        return new Promise<number>((resolve, reject) => {
-            const reader = new FileReader();
+    // Fallback for when the file headers don't give a duration: decode the
+    // whole song, which is slow but works for anything the browser can play.
+    async function decodeDuration(songFile: File): Promise<number> {
+        const audioContext = new AudioContext();
+        try {
+            const audioBuffer = await audioContext.decodeAudioData(await songFile.arrayBuffer());
+            return audioBuffer.duration;
+        } finally {
+            audioContext.close();
+        }
+    }
 
-            reader.onload = async (event) => {
-                try {
-                    const audioContext = new AudioContext();
-                    const arrayBuffer = event.target.result as ArrayBuffer;
-
-                    audioContext.decodeAudioData(
-                        arrayBuffer,
-                        (audioBuffer) => {
-                            const duration = audioBuffer.duration;
-                            resolve(duration);
-                        },
-                        (error) => {
-                            console.error("Error decoding audio data:", error);
-                            reject(
-                                new Error(
-                                    "Failed to decode audio data: " +
-                                    (error?.message || "Unknown error")
-                                )
-                            );
-                        }
-                    );
-                } catch (error) {
-                    console.error("Audio context error:", error);
-                    reject(
-                        new Error(
-                            "Failed to create or use AudioContext: " +
-                            (error?.message || "Unknown error")
-                        )
-                    );
-                }
-            };
-
-            reader.onerror = (event) => {
-                console.error("FileReader error:", reader.error);
-                reject(
-                    new Error(
-                        "Failed to read audio file: " +
-                        (reader.error?.message || "Unknown error")
-                    )
-                );
-            };
-
-            reader.readAsArrayBuffer(songFile);
-        });
-    };
-
-    async function getMetadata(songFile: File): Promise<{ title: string | null; artist: string | null }> {
-        return new Promise((resolve, reject) => {
-            if (!songFile) {
-                resolve({ title: null, artist: null });
-                return;
+    async function readSongInfo(songFile: File): Promise<{ title: string | null; artist: string | null; duration: number | null }> {
+        let title: string | null = null;
+        let artist: string | null = null;
+        let duration: number | null = null;
+        try {
+            // duration: true scans the file when the headers only give an estimate (e.g. VBR MP3s)
+            const { common, format } = await parseBlob(songFile, { duration: true });
+            title = common.title ?? null;
+            artist = common.artist ?? null;
+            duration = format.duration ?? null;
+        } catch (e) {
+            // A file without readable tags is normal; the user can fill in the title and artist
+            console.warn("Couldn't read song metadata:", e);
+        }
+        if (duration === null) {
+            try {
+                duration = await decodeDuration(songFile);
+            } catch (e) {
+                console.error("Couldn't determine song duration:", e);
             }
-            jsmediatags.read(songFile, {
-                async onSuccess(tag) {
-                    resolve({ title: tag.tags.title, artist: tag.tags.artist });
-                },
-                onFailure(error) {
-                    console.error(error);
-                    reject(
-                        new Error(
-                            "Failed to read metadata: " +
-                            (error?.message || "Unknown error")
-                        )
-                    );
-                },
-            });
-        });
+        }
+        return { title, artist, duration };
     }
 
     watchEffect(async () => {
         // Update song metadata when the song file changes
         if (songFile.value) {
-            const [metadata, durationValue] = await Promise.all([
-                getMetadata(songFile.value),
-                duration(songFile.value)
-            ]);
-            songTitle.value = metadata.title || songTitle.value;
-            songArtist.value = metadata.artist || songArtist.value;
-            songDuration.value = durationValue;
+            const info = await readSongInfo(songFile.value);
+            songTitle.value = info.title || songTitle.value;
+            songArtist.value = info.artist || songArtist.value;
+            songDuration.value = info.duration;
         } else {
             songTitle.value = null;
             songArtist.value = null;
@@ -181,6 +150,7 @@ export const useMediaStore = defineStore('media', () => {
         separatedTrack,
         error,
         separationStartTime,
+        separationProgress,
         isBackingTrackUserUploaded,
 
         // Methods

@@ -2,10 +2,12 @@
 FROM node:22-slim AS frontend-builder
 
 ARG TUUL_API_HOSTNAME="" \
-    TUUL_DONATE_URL="https://ko-fi.com/incidentist"
+    TUUL_DONATE_URL="https://ko-fi.com/incidentist" \
+    TUUL_USE_REMOTE_SEPARATION="false"
 
 ENV TUUL_API_HOSTNAME=$TUUL_API_HOSTNAME \
-    TUUL_DONATE_URL=$TUUL_DONATE_URL
+    TUUL_DONATE_URL=$TUUL_DONATE_URL \
+    TUUL_USE_REMOTE_SEPARATION=$TUUL_USE_REMOTE_SEPARATION
 
 WORKDIR /app
 
@@ -24,27 +26,30 @@ RUN npm run build
 # https://hub.docker.com/_/python
 FROM python:3.13-slim AS backend-builder
 
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
 ENV APP_HOME=/app
 # Setting this ensures print statements and log messages
 # promptly appear in Cloud Logging.
 ENV PYTHONUNBUFFERED=TRUE \
-    POETRY_VERSION=2.1.2 \
-    POETRY_VIRTUALENVS_IN_PROJECT=1 \
-    POETRY_VIRTUALENVS_CREATE=1 \
-    POETRY_CACHE_DIR=/tmp/poetry_cache
+    UV_PROJECT_ENVIRONMENT=/app/.venv \
+    UV_CACHE_DIR=/tmp/uv_cache
 WORKDIR $APP_HOME
-
-# prepend poetry and venv to path
-# ENV PATH "$POETRY_HOME/bin:$PATH"
 
 # Install dependencies.
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential \
-    && pip install "poetry==$POETRY_VERSION"
+    && apt-get install -y --no-install-recommends build-essential
 
-COPY ./poetry.lock ./pyproject.toml ./
+COPY ./uv.lock ./pyproject.toml ./
 
-RUN poetry install --without dev --no-root --no-interaction --no-ansi
+# Which torch/onnxruntime flavor to install: "cpu" (the default, used in
+# production) or "cuda" (see compose.cuda.yaml). The two are separate images,
+# because the CUDA userspace that torch and onnxruntime-gpu need weighs several
+# GB and a CPU-only host would carry it for nothing.
+ARG TORCH_GROUP=cpu
+
+RUN uv sync --no-dev --no-install-project --locked \
+    --no-default-groups --group $TORCH_GROUP
 
 #
 # RUNTIME IMAGE
@@ -60,11 +65,13 @@ ENV APP_HOME=/app \
     # This default value facilitates local development.
     PORT=8080 \
     WORKER_COUNT=1 \
+    # Never recycle the worker: it would kill separations queued in it.
+    MAX_REQUESTS=0 \
     DEBUG=False \
     SECRET_KEY=SECRET_KEY \
     TUUL_YOUTUBE_PROXY= \
     SEPARATED_TRACKS_BUCKET= \
-    SEPARATOR_SOCKET_PATH= 
+    SEPARATOR_SOCKET_PATH=
 
 WORKDIR $APP_HOME
 
@@ -81,7 +88,7 @@ RUN apt-get update \
 # Copy local code to the container image.
 COPY api api
 # Copy gunicorn configuration
-COPY gunicorn.conf.py pyproject.toml poetry.lock ${APP_HOME}
+COPY gunicorn.conf.py pyproject.toml uv.lock ${APP_HOME}
 
 # Copy frontend static files from the node builder to the correct location
 # for FastAPI to serve them

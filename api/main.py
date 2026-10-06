@@ -1,6 +1,6 @@
 import tempfile
 from pathlib import Path
-from typing import Optional
+from typing import Any, Literal, Optional
 
 import structlog
 from fastapi import (
@@ -14,6 +14,7 @@ from fastapi import (
     Response,
     UploadFile,
 )
+from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
@@ -23,8 +24,10 @@ from pydantic import BaseModel
 
 from . import settings
 from . import app_logging
+from .error_reporting import v8_stack_trace
 from .karaoke import music_separation
 from .karaoke.music_separation import SeparationMethod
+from .karaoke.separation_queue import SeparationQueue, SeparationQueueFullError
 from .helpers import youtube_helper, zip_helper, cloud_storage
 from .helpers.youtube_helper import YouTubeException
 from .vite_assets import vite_assets
@@ -35,6 +38,13 @@ logger = structlog.get_logger(__name__)
 
 # Create FastAPI app
 app = FastAPI(title="The Tuul API", debug=settings.DEBUG)
+
+# In-process separations ("api"/"cli") run one at a time through here. With
+# "compose_provider" the separator server does its own queueing instead, and
+# with "modal_api" Modal runs concurrent separations in separate containers.
+separation_queue = SeparationQueue(
+    max_pending=settings.SEPARATION_QUEUE_MAX_PENDING, name="app"
+)
 
 # CORS middleware
 app.add_middleware(
@@ -61,12 +71,29 @@ templates = Jinja2Templates(directory=settings.TEMPLATES_DIR)
 
 
 # Pydantic models
-class LogErrorRequest(BaseModel):
+class VueLogContext(BaseModel):
+    component: Optional[str] = None
+    props: Optional[dict[str, Any]] = None
+
+
+class LogRequest(BaseModel):
+    severity: Literal["debug", "info", "warning", "error"] = "error"
     message: Optional[str] = None
     stack: Optional[str] = None
     url: Optional[str] = None
+    file: Optional[str] = None
     line: Optional[int] = None
     column: Optional[int] = None
+    type: Optional[str] = None
+    info: Optional[str] = None
+    userAgent: Optional[str] = None
+    timestamp: Optional[str] = None
+    vue: Optional[VueLogContext] = None
+    context: Optional[dict[str, Any]] = None
+    # Identical errors the client suppressed since it last reported this one.
+    repeatCount: Optional[int] = None
+    # Cloud Logging entry labels, for filtering, e.g. labels.tag="performance:local-separation".
+    labels: Optional[dict[str, str]] = None
 
 
 class SeparationPollResponse(BaseModel):
@@ -101,6 +128,10 @@ def perform_music_separation(
 ) -> Path:
     """Perform music separation and return the path to the created zip file.
 
+    Blocks until the separation is done, including any wait in the queue, so
+    call it from a thread, never from the event loop. Raises
+    SeparationQueueFullError if the queue is already full.
+
     Args:
         song_content: The audio file content as bytes
         song_filename: The name of the song file
@@ -116,11 +147,7 @@ def perform_music_separation(
     with song_file_path.open("wb") as f:
         f.write(song_content)
 
-    separation_method = (
-        SeparationMethod.MODAL_API
-        if settings.SEPARATOR_MODAL_API_URL
-        else SeparationMethod.API
-    )
+    separation_method = SeparationMethod(settings.SEPARATION_METHOD)
 
     logger.info(
         "separation_started",
@@ -128,15 +155,19 @@ def perform_music_separation(
         cache_hash=cache_hash,
     )
 
-    accompaniment_path, vocal_path = music_separation.split_song(
-        song_file_path,
-        song_files_dir,
-        model_name=model_name,
-        method=separation_method,
-        host=settings.SEPARATOR_HOST,
-        port=settings.SEPARATOR_PORT,
-        modal_api_url=settings.SEPARATOR_MODAL_API_URL,
-    )
+    split_args = (song_file_path, song_files_dir)
+    split_kwargs = {"model_name": model_name, "method": separation_method}
+    if separation_method.runs_in_process:
+        # Separates right here in our process, one at a time via the queue.
+        accompaniment_path, vocal_path = separation_queue.run(
+            music_separation.split_song, *split_args, **split_kwargs
+        )
+    else:
+        # Calls out to a remote separator (the Compose provider's host process,
+        # or Modal), which handles its own concurrency.
+        accompaniment_path, vocal_path = music_separation.split_song(
+            *split_args, **split_kwargs
+        )
     zip_path = zip_helper.create_zip_file(
         song_files_dir / "split_song.zip",
         [(accompaniment_path, "accompaniment.wav"), (vocal_path, "vocals.wav")],
@@ -150,22 +181,51 @@ def perform_music_separation(
 def process_track_separation_background(
     cache_hash: str, model_name: str, song_content: bytes, song_filename: str
 ):
-    """Background task to process track separation and upload to cache."""
+    """Background task to process track separation and upload to cache.
+
+    Runs after the response has gone out, on a threadpool thread (FastAPI runs
+    sync background tasks that way), so it is free to block on the queue.
+
+    The client is polling the cache placeholder, so any failure has to be
+    written there -- otherwise the client polls a "processing" placeholder
+    forever.
+    """
     logger.info("background_separation_started", cache_hash=cache_hash)
 
+    try:
+        with tempfile.TemporaryDirectory() as song_files_dir:
+            song_files_dir_path = Path(song_files_dir)
+
+            zip_path = perform_music_separation(
+                song_content, song_filename, model_name, song_files_dir_path, cache_hash
+            )
+
+            # Upload to cache
+            blob_name = f"separated_tracks/{cache_hash}.zip"
+            logger.info(
+                "background_uploading_to_cache",
+                cache_hash=cache_hash,
+                blob_name=blob_name,
+            )
+            uploaded = cloud_storage.upload_to_cache(cache_hash, zip_path)
+    except Exception:
+        logger.exception("background_separation_failed", cache_hash=cache_hash)
+        uploaded = False
+
+    if not uploaded:
+        cloud_storage.mark_cache_failed(cache_hash)
+
+
+def separate_to_zip_response(
+    song_content: bytes, song_filename: str, model_name: str
+) -> StreamingResponse:
+    """Separate a song and return the zip as a response. Blocking: run it on a
+    thread, never on the event loop."""
     with tempfile.TemporaryDirectory() as song_files_dir:
-        song_files_dir_path = Path(song_files_dir)
-
         zip_path = perform_music_separation(
-            song_content, song_filename, model_name, song_files_dir_path, cache_hash
+            song_content, song_filename, model_name, Path(song_files_dir)
         )
-
-        # Upload to cache
-        blob_name = f"separated_tracks/{cache_hash}.zip"
-        logger.info(
-            "background_uploading_to_cache", cache_hash=cache_hash, blob_name=blob_name
-        )
-        cloud_storage.upload_to_cache(cache_hash, zip_path)
+        return streamed_response(zip_path)
 
 
 @app.get("/")
@@ -199,14 +259,22 @@ async def separate_track(
         model_name=modelName,
     )
 
-    # Check if we can fetch from cache
+    song_filename = songFile.filename or "uploaded_song"
+
+    # Everything below blocks -- hashing a whole song, GCS round trips,
+    # separation -- so it runs on threadpool threads. On the event loop it would
+    # stall every other request for its duration.
     if settings.SEPARATED_TRACKS_BUCKET:
-        cache_hash = cloud_storage.get_cache_hash(modelName, song_content)
+        cache_hash = await run_in_threadpool(
+            cloud_storage.get_cache_hash, modelName, song_content
+        )
         blob_name = f"separated_tracks/{cache_hash}.zip"
         logger.info("checking_cache", cache_hash=cache_hash, blob_name=blob_name)
 
         # Try to fetch from cache
-        cache_result = cloud_storage.fetch_from_cache(cache_hash)
+        cache_result = await run_in_threadpool(
+            cloud_storage.fetch_from_cache, cache_hash
+        )
         if cache_result:
             # Cache found (either placeholder or completed) - return URL for client polling
             logger.info(
@@ -217,11 +285,10 @@ async def separate_track(
             )
             return SeparationPollResponse(finishedTrackURL=cache_result)
 
-    # If no cache hit or caching is disabled, proceed with track separation
-    if settings.SEPARATED_TRACKS_BUCKET:
-        # Create placeholder and get public URL for polling
-        cache_hash = cloud_storage.get_cache_hash(modelName, song_content)
-        poll_url = cloud_storage.create_cache_placeholder(cache_hash)
+        # Cache miss: create placeholder and get public URL for polling
+        poll_url = await run_in_threadpool(
+            cloud_storage.create_cache_placeholder, cache_hash
+        )
 
         if poll_url:
             # Start background task to process separation
@@ -230,7 +297,7 @@ async def separate_track(
                 cache_hash,
                 modelName,
                 song_content,
-                songFile.filename or "uploaded_song",
+                song_filename,
             )
 
             # Return URL immediately for client to poll
@@ -241,18 +308,15 @@ async def separate_track(
     else:
         # No caching - process synchronously
         logger.info("synchronous_separation_started")
-
-        with tempfile.TemporaryDirectory() as song_files_dir:
-            song_files_dir_path = Path(song_files_dir)
-
-            zip_path = perform_music_separation(
-                song_content,
-                songFile.filename or "uploaded_song",
-                modelName,
-                song_files_dir_path,
+        try:
+            return await run_in_threadpool(
+                separate_to_zip_response, song_content, song_filename, modelName
             )
-
-            return streamed_response(zip_path)
+        except SeparationQueueFullError as e:
+            logger.warning("separation_queue_full", error=str(e))
+            raise HTTPException(
+                status_code=503, detail="The server is busy. Try again later."
+            )
 
 
 @app.get("/download_video")
@@ -278,6 +342,15 @@ async def download_youtube_video(
         bucket_name = settings.SEPARATED_TRACKS_BUCKET
         poll_url = f"https://storage.googleapis.com/{bucket_name}/downloaded_videos/{video_id}.zip"
 
+        cached_url = await run_in_threadpool(
+            cloud_storage.fetch_completed_or_clear_error,
+            video_id,
+            folder="downloaded_videos",
+        )
+        if cached_url:
+            logger.info("youtube_cache_hit", video_id=video_id)
+            return DownloadPollResponse(finishedDownloadURL=cached_url)
+
         # Start background task to process download
         background_tasks.add_task(
             youtube_helper.process_youtube_download_background, video_id, youtube_url
@@ -299,12 +372,21 @@ async def download_youtube_video(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@app.post("/log_error")
-async def log_error(error_data: LogErrorRequest):
-    """Log client errors."""
-    logger.error(
-        f"Client error: {error_data.message or '<no message>'}",
-        extra=error_data.model_dump(),
+@app.post("/log")
+async def log(log_data: LogRequest):
+    """Log a client-side message at the severity the client reports."""
+    log_at_severity = getattr(logger, log_data.severity)
+    gcp_fields = {}
+    if log_data.severity == "error":
+        stack_trace = v8_stack_trace(log_data.stack, log_data.type, log_data.message)
+        if stack_trace:
+            gcp_fields["stack_trace"] = stack_trace
+    if log_data.labels:
+        gcp_fields["labels"] = log_data.labels
+    log_at_severity(
+        f"Client {log_data.severity}: {log_data.message or '<no message>'}",
+        extra=log_data.model_dump(exclude={"labels"}),
+        **gcp_fields,
     )
     return {"success": True}
 

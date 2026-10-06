@@ -1,12 +1,15 @@
 import { createPinia, setActivePinia } from 'pinia';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 // separateTrack posts to the separation API, so stub the network call.
-vi.mock('@/lib/audio', () => ({
+vi.mock('@/lib/audioSeparation', () => ({
   separateTrack: vi.fn(),
 }));
 
-import { separateTrack } from '@/lib/audio';
+import { separateTrack } from '@/lib/audioSeparation';
+import { SeparationPhase, SeparationProgress } from '@/types';
 import {
   useMediaStore,
   BACKING_VOCALS_SEPARATOR_MODEL,
@@ -21,7 +24,8 @@ describe('Media Store', () => {
 
   test('defaults to the backing-vocals separation model', () => {
     const mediaStore = useMediaStore();
-    expect(mediaStore.separationModel).toBe(BACKING_VOCALS_SEPARATOR_MODEL);
+    // Pinia proxies the stored object, so compare by id rather than identity
+    expect(mediaStore.separationModel.id).toBe(BACKING_VOCALS_SEPARATOR_MODEL.id);
   });
 
   describe('setBackingTrack', () => {
@@ -62,6 +66,17 @@ describe('Media Store', () => {
       expect(mediaStore.separatedTrack).toBeNull();
       expect(mediaStore.isBackingTrackUserUploaded).toBe(false);
     });
+
+    test('clears an earlier separation error', async () => {
+      const mediaStore = useMediaStore();
+      mediaStore.error = 'separation blew up';
+
+      await mediaStore.setBackingTrack(
+        new File(['backing'], 'backing.mp3', { type: 'audio/mpeg' })
+      );
+
+      expect(mediaStore.error).toBeNull();
+    });
   });
 
   describe('startSeparation', () => {
@@ -78,7 +93,8 @@ describe('Media Store', () => {
 
       expect(separateTrack).toHaveBeenCalledWith(
         songFile,
-        NO_VOCALS_SEPARATOR_MODEL
+        NO_VOCALS_SEPARATOR_MODEL,
+        expect.any(Function)
       );
       expect(await mediaStore.separatedTrack?.backing.text()).toBe(
         'backing-payload'
@@ -118,6 +134,127 @@ describe('Media Store', () => {
       expect(mediaStore.error).toBe('separation blew up');
       expect(mediaStore.separatedTrack).toBeNull();
       expect(mediaStore.isProcessing).toBe(false);
+    });
+
+    test('exposes progress reported by the backend while separating', async () => {
+      const mediaStore = useMediaStore();
+      const seen: (SeparationProgress | null)[] = [];
+      vi.mocked(separateTrack).mockImplementation(async (_file, _model, onProgress) => {
+        onProgress?.({ phase: SeparationPhase.LoadingModel, fraction: null });
+        seen.push(mediaStore.separationProgress);
+        onProgress?.({ phase: SeparationPhase.Separating, fraction: 0.5 });
+        seen.push(mediaStore.separationProgress);
+        return { backing: new Blob(['b']), vocals: new Blob(['v']) };
+      });
+
+      await mediaStore.startSeparation(
+        new File(['song'], 'song.mp3', { type: 'audio/mpeg' }),
+        BACKING_VOCALS_SEPARATOR_MODEL
+      );
+
+      expect(seen).toEqual([
+        { phase: SeparationPhase.LoadingModel, fraction: null },
+        { phase: SeparationPhase.Separating, fraction: 0.5 },
+      ]);
+      // Cleared once separation finishes, so the next run starts fresh
+      expect(mediaStore.separationProgress).toBeNull();
+    });
+
+    test('clears progress when separation fails', async () => {
+      const mediaStore = useMediaStore();
+      vi.mocked(separateTrack).mockImplementation(async (_file, _model, onProgress) => {
+        onProgress?.({ phase: SeparationPhase.Separating, fraction: 0.2 });
+        throw new Error('boom');
+      });
+
+      await mediaStore.startSeparation(
+        new File(['song'], 'song.mp3', { type: 'audio/mpeg' }),
+        BACKING_VOCALS_SEPARATOR_MODEL
+      );
+
+      expect(mediaStore.error).toBe('boom');
+      expect(mediaStore.separationProgress).toBeNull();
+    });
+  });
+
+  describe('song metadata', () => {
+    // happy-dom has no Web Audio. The decoded duration is deliberately different
+    // from any fixture's real duration, so tests can tell which path was taken.
+    const DECODED_DURATION = 99;
+    const decodeAudioData = vi.fn();
+    class FakeAudioContext {
+      decodeAudioData = decodeAudioData;
+      close() {}
+    }
+
+    beforeEach(() => {
+      decodeAudioData.mockReset().mockResolvedValue({ duration: DECODED_DURATION });
+      vi.stubGlobal('AudioContext', FakeAudioContext);
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+      vi.restoreAllMocks();
+    });
+
+    function fixtureFile(name: string, type: string): File {
+      const data = readFileSync(resolve(import.meta.dirname, '../../tests/fixtures', name));
+      return new File([data], name, { type });
+    }
+
+    test('reads the duration of a file with no tags from its headers', async () => {
+      const mediaStore = useMediaStore();
+
+      mediaStore.songFile = fixtureFile('no_metadata.wav', 'audio/wav');
+
+      await vi.waitFor(() => expect(mediaStore.songDuration).toBeCloseTo(3));
+      expect(mediaStore.songTitle).toBeNull();
+      expect(mediaStore.songArtist).toBeNull();
+      expect(decodeAudioData).not.toHaveBeenCalled();
+    });
+
+    test('keeps a user-entered title and artist for a file with no tags', async () => {
+      const mediaStore = useMediaStore();
+      mediaStore.songTitle = 'Typed Title';
+      mediaStore.songArtist = 'Typed Artist';
+
+      mediaStore.songFile = fixtureFile('no_metadata.wav', 'audio/wav');
+
+      await vi.waitFor(() => expect(mediaStore.songDuration).toBeCloseTo(3));
+      expect(mediaStore.songTitle).toBe('Typed Title');
+      expect(mediaStore.songArtist).toBe('Typed Artist');
+    });
+
+    test('reads the title, artist and duration from a tagged file', async () => {
+      const mediaStore = useMediaStore();
+
+      mediaStore.songFile = fixtureFile('my_fair_lady.mp3', 'audio/mpeg');
+
+      await vi.waitFor(() => expect(mediaStore.songDuration).toBeCloseTo(212.04, 1));
+      expect(mediaStore.songTitle).toBe('My Fair Lady');
+      expect(mediaStore.songArtist).toBe('David Byrne');
+      expect(decodeAudioData).not.toHaveBeenCalled();
+    });
+
+    test('falls back to decoding the audio when the headers give no duration', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const mediaStore = useMediaStore();
+
+      mediaStore.songFile = new File(['not really audio'], 'song.mp3', { type: 'audio/mpeg' });
+
+      await vi.waitFor(() => expect(mediaStore.songDuration).toBe(DECODED_DURATION));
+    });
+
+    test('leaves the duration unset when the audio can\'t be decoded either', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+      decodeAudioData.mockRejectedValue(new Error('EncodingError'));
+      const mediaStore = useMediaStore();
+
+      mediaStore.songFile = new File(['not really audio'], 'song.mp3', { type: 'audio/mpeg' });
+
+      await vi.waitFor(() => expect(error).toHaveBeenCalled());
+      expect(mediaStore.songDuration).toBeNull();
     });
   });
 });

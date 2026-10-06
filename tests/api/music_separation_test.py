@@ -1,16 +1,25 @@
+import base64
 import tempfile
+from contextlib import contextmanager
 from pathlib import Path
 from unittest import mock
 
+import httpx2 as httpx
 import pytest
 
-from karaoke.music_separation import split_song, DEFAULT_MODEL, SeparationMethod
+from api import settings
+from karaoke.music_separation import (
+    split_song,
+    DEFAULT_MODEL,
+    SeparationError,
+    SeparationMethod,
+)
 
 
 @pytest.fixture
 def audio_file():
     """Fixture providing a test audio file."""
-    return Path("assets/dev/understand/audio.m4a")
+    return Path(__file__).parent.parent.parent / "api/staticroot/understand/audio.m4a"
 
 
 @pytest.fixture
@@ -152,3 +161,234 @@ def test_split_song_subprocess_command_fails(audio_file, temp_output_dir):
             split_song(
                 audio_file, temp_output_dir, DEFAULT_MODEL, method=SeparationMethod.CLI
             )
+
+
+def _separator_response(vocals: bytes, accompaniment: bytes) -> mock.Mock:
+    """Build a mock httpx response mimicking a successful separator server reply."""
+    response = mock.Mock()
+    response.raise_for_status.return_value = None
+    response.json.return_value = {
+        "success": True,
+        "vocals_base64": base64.b64encode(vocals).decode("utf-8"),
+        "accompaniment_base64": base64.b64encode(accompaniment).decode("utf-8"),
+    }
+    return response
+
+
+@contextmanager
+def _mock_separator_post(response=None, side_effect=None):
+    """Patch the httpx client's post, the one call that leaves the process."""
+    with mock.patch("karaoke.music_separation.httpx.Client") as mock_client:
+        post = mock_client.return_value.__enter__.return_value.post
+        if side_effect is not None:
+            post.side_effect = side_effect
+        else:
+            post.return_value = response
+        yield post
+
+
+def test_split_song_compose_provider_writes_returned_audio(audio_file, temp_output_dir):
+    """COMPOSE_PROVIDER decodes the server's response into vocals/accompaniment."""
+    with mock.patch.object(
+        settings, "SEPARATOR_URL", "http://host.docker.internal:8001"
+    ):
+        with _mock_separator_post(
+            _separator_response(b"vocal-audio", b"accompaniment-audio")
+        ) as post:
+            accompaniment_path, vocals_path = split_song(
+                audio_file,
+                temp_output_dir,
+                DEFAULT_MODEL,
+                method=SeparationMethod.COMPOSE_PROVIDER,
+            )
+
+    assert vocals_path.read_bytes() == b"vocal-audio"
+    assert accompaniment_path.read_bytes() == b"accompaniment-audio"
+    assert post.call_args.args[0] == "http://host.docker.internal:8001/separate"
+    assert post.call_args.kwargs["json"]["model_name"] == DEFAULT_MODEL
+
+
+def test_split_song_compose_provider_requires_separator_url(
+    audio_file, temp_output_dir
+):
+    """Without SEPARATOR_URL the provider clearly wasn't wired up; say so."""
+    with mock.patch.object(settings, "SEPARATOR_URL", ""):
+        with pytest.raises(SeparationError, match="SEPARATOR_URL is not set"):
+            split_song(
+                audio_file,
+                temp_output_dir,
+                DEFAULT_MODEL,
+                method=SeparationMethod.COMPOSE_PROVIDER,
+            )
+
+
+def test_split_song_compose_provider_raises_when_unreachable(
+    audio_file, temp_output_dir
+):
+    """An unreachable separator raises rather than silently falling back to CPU."""
+    with mock.patch.object(
+        settings, "SEPARATOR_URL", "http://host.docker.internal:8001"
+    ):
+        with _mock_separator_post(side_effect=httpx.ConnectError("refused")):
+            with pytest.raises(SeparationError, match="unreachable"):
+                split_song(
+                    audio_file,
+                    temp_output_dir,
+                    DEFAULT_MODEL,
+                    method=SeparationMethod.COMPOSE_PROVIDER,
+                )
+
+
+def test_split_song_compose_provider_raises_on_server_error(
+    audio_file, temp_output_dir
+):
+    """A server-reported failure surfaces the server's own error message."""
+    response = mock.Mock()
+    response.raise_for_status.return_value = None
+    response.json.return_value = {"success": False, "error": "model exploded"}
+
+    with mock.patch.object(
+        settings, "SEPARATOR_URL", "http://host.docker.internal:8001"
+    ):
+        with _mock_separator_post(response):
+            with pytest.raises(SeparationError, match="model exploded"):
+                split_song(
+                    audio_file,
+                    temp_output_dir,
+                    DEFAULT_MODEL,
+                    method=SeparationMethod.COMPOSE_PROVIDER,
+                )
+
+
+def test_split_song_compose_provider_waits_hours_but_connects_fast(
+    audio_file, temp_output_dir
+):
+    """The separator queues requests, so the answer can take hours to arrive;
+    but a server that is up accepts the connection right away."""
+    with mock.patch.object(
+        settings, "SEPARATOR_URL", "http://host.docker.internal:8001"
+    ):
+        with _mock_separator_post(_separator_response(b"v", b"a")) as post:
+            split_song(
+                audio_file,
+                temp_output_dir,
+                DEFAULT_MODEL,
+                method=SeparationMethod.COMPOSE_PROVIDER,
+            )
+
+    timeout = post.call_args.kwargs["timeout"]
+    assert timeout.read == settings.SEPARATOR_TIMEOUT_SECONDS
+    assert timeout.connect < 60
+
+
+def test_split_song_compose_provider_raises_when_the_queue_is_full(
+    audio_file, temp_output_dir
+):
+    """A full separator queue is reported as such, not as a generic HTTP error."""
+    response = mock.Mock()
+    response.status_code = 503
+
+    with mock.patch.object(
+        settings, "SEPARATOR_URL", "http://host.docker.internal:8001"
+    ):
+        with _mock_separator_post(response):
+            with pytest.raises(SeparationError, match="queue is full"):
+                split_song(
+                    audio_file,
+                    temp_output_dir,
+                    DEFAULT_MODEL,
+                    method=SeparationMethod.COMPOSE_PROVIDER,
+                )
+
+
+MODAL_URL = "https://tuul--audio-separator.modal.run"
+
+
+@contextmanager
+def _mock_modal_client(result=None, side_effect=None, write_outputs=True):
+    """Patch the Modal API client; on success it "downloads" the stems into
+    output_dir the way the real client does."""
+
+    def separate_audio_and_wait(file_path, **kwargs):
+        if side_effect is not None:
+            raise side_effect
+        if write_outputs:
+            output_dir = Path(kwargs["output_dir"])
+            (output_dir / "vocals.wav").write_bytes(b"vocal-audio")
+            (output_dir / "accompaniment.wav").write_bytes(b"accompaniment-audio")
+        return result
+
+    with mock.patch(
+        "audio_separator.remote.AudioSeparatorAPIClient"
+    ) as mock_client_class:
+        client = mock_client_class.return_value
+        client.separate_audio_and_wait.side_effect = separate_audio_and_wait
+        yield mock_client_class, client
+
+
+def _split_modal(audio_file, temp_output_dir):
+    return split_song(
+        audio_file, temp_output_dir, DEFAULT_MODEL, method=SeparationMethod.MODAL_API
+    )
+
+
+def test_split_song_modal_api_returns_downloaded_stems(audio_file, temp_output_dir):
+    with mock.patch.object(settings, "SEPARATOR_MODAL_API_URL", MODAL_URL):
+        with _mock_modal_client({"status": "completed"}) as (client_class, client):
+            accompaniment_path, vocals_path = _split_modal(audio_file, temp_output_dir)
+
+    assert vocals_path.read_bytes() == b"vocal-audio"
+    assert accompaniment_path.read_bytes() == b"accompaniment-audio"
+    assert client_class.call_args.args[0] == MODAL_URL
+    kwargs = client.separate_audio_and_wait.call_args.kwargs
+    assert kwargs["model"] == DEFAULT_MODEL
+    assert kwargs["output_format"] == "wav"
+    assert kwargs["custom_output_names"] == {
+        "Vocals": "vocals",
+        "Instrumental": "accompaniment",
+    }
+
+
+def test_split_song_modal_api_requires_url(audio_file, temp_output_dir):
+    with mock.patch.object(settings, "SEPARATOR_MODAL_API_URL", ""):
+        with pytest.raises(SeparationError, match="SEPARATOR_MODAL_API_URL"):
+            _split_modal(audio_file, temp_output_dir)
+
+
+def test_split_song_modal_api_raises_on_reported_failure(audio_file, temp_output_dir):
+    """A failed job raises rather than falling back to unqueued local separation."""
+    with mock.patch.object(settings, "SEPARATOR_MODAL_API_URL", MODAL_URL):
+        with _mock_modal_client(
+            {"status": "error", "error": "out of GPUs"}, write_outputs=False
+        ):
+            with pytest.raises(SeparationError, match="out of GPUs"):
+                _split_modal(audio_file, temp_output_dir)
+
+
+def test_split_song_modal_api_raises_when_unreachable(audio_file, temp_output_dir):
+    with mock.patch.object(settings, "SEPARATOR_MODAL_API_URL", MODAL_URL):
+        with _mock_modal_client(side_effect=ConnectionError("refused")):
+            with pytest.raises(SeparationError, match="refused"):
+                _split_modal(audio_file, temp_output_dir)
+
+
+def test_split_song_modal_api_raises_when_outputs_missing(
+    audio_file, temp_output_dir
+):
+    with mock.patch.object(settings, "SEPARATOR_MODAL_API_URL", MODAL_URL):
+        with _mock_modal_client({"status": "completed"}, write_outputs=False):
+            with pytest.raises(SeparationError, match="missing"):
+                _split_modal(audio_file, temp_output_dir)
+
+
+@pytest.mark.parametrize(
+    "method,in_process",
+    [
+        (SeparationMethod.API, True),
+        (SeparationMethod.CLI, True),
+        (SeparationMethod.COMPOSE_PROVIDER, False),
+        (SeparationMethod.MODAL_API, False),
+    ],
+)
+def test_runs_in_process(method, in_process):
+    assert method.runs_in_process is in_process

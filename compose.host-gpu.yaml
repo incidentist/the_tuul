@@ -1,0 +1,51 @@
+# Overlay: run the separator as a HOST process instead of inside the container.
+#
+#   PATH="$PWD/infra/compose-separation-provider:$PATH" \
+#     docker compose -f compose.yaml -f compose.host-gpu.yaml up --build
+#
+# Requires Docker Compose v2.36+ (for provider services) and `uv` on the host.
+# The PATH entry is how Compose finds the `tuul-separator` provider binary.
+#
+# Why bother: separation runs ONNX models, and the only GPU-backed onnxruntime
+# execution provider on a Mac is CoreML, which exists solely in the macOS
+# build. A Linux container -- Docker or Apple's `container` -- cannot reach
+# Metal at all, so anything separating inside the container is CPU-bound.
+# Docker hit the same wall with Model Runner and reached the same conclusion:
+# "there is no GPU passthrough for Metal in containers."
+#
+# So the separator has to be a host process. Compose provider services let us
+# declare it here anyway, so `up` brings up both and `down` tears down both.
+#
+# This is not macOS-only. Because the separator runs on the host, it uses
+# whatever acceleration that machine has -- including CUDA on a Linux host
+# where you would rather not pass the GPU into a container. For passing an
+# NVIDIA GPU *into* the container instead, use compose.cuda.yaml.
+
+services:
+  # Not a container. Compose runs the tuul-separator provider in
+  # infra/compose-separation-provider/ on the host, which starts the separator
+  # and reports its URL back via `setenv`.
+  # Compose prefixes that as SEPARATOR_URL for services that depend on us.
+  separator:
+    provider:
+      type: tuul-separator
+      options:
+        port: 8001
+        # How containers address the host. On Linux, override to 172.17.0.1
+        # (the docker0 bridge address); the extra_hosts entry below covers
+        # engines where host.docker.internal is not built in.
+        hostname: host.docker.internal
+        startup-timeout: 120
+
+  app:
+    environment:
+      # Overrides the base file's `api`: don't separate in-process, POST to the
+      # host separator at SEPARATOR_URL instead.
+      SEPARATION_METHOD: compose_provider
+    extra_hosts:
+      # Docker Desktop provides this automatically; naming it explicitly keeps
+      # the file working on engines that don't.
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      # Gets SEPARATOR_URL injected, and orders startup after the provider.
+      - separator

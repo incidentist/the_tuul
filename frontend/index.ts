@@ -2,6 +2,7 @@ import { createApp } from "vue";
 import Buefy from 'buefy';
 import { createPinia } from "pinia";
 import { setupErrorHandling } from "@/lib/util";
+import { collectLogContext } from "@/lib/logContext";
 import App from "@/App.vue";
 import "@/main.scss";
 
@@ -9,7 +10,7 @@ import "@/main.scss";
 import FontAwesomeIcon from './plugins/fontawesome';
 
 // Set error handling
-const logError = setupErrorHandling();
+const logError = setupErrorHandling(collectLogContext);
 
 window.addEventListener('load', function () {
     const pinia = createPinia();

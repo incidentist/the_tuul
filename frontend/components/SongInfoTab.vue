@@ -1,9 +1,13 @@
 <template>
   <b-tab-item :class="['song-info-tab', 'scroll-wrapper']" headerClass="song-info-tab-header">
     <template #header>
-      <b-icon v-if="!isSeparatingTrack" icon="file-audio"></b-icon>
-      <b-tooltip v-else label="Separating track" position="is-bottom"><span class="icon is-small loader"></span>
+      <b-tooltip v-if="isSeparatingTrack" label="Separating track" position="is-bottom"><span
+          class="icon is-small loader"></span>
       </b-tooltip>
+      <b-tooltip v-else-if="separationError" label="Track separation failed" position="is-bottom">
+        <b-icon icon="warning" type="is-danger"></b-icon>
+      </b-tooltip>
+      <b-icon v-else icon="file-audio"></b-icon>
       <span> Backing Track</span>
     </template>
     <div class="container">
@@ -48,6 +52,10 @@
           @click="separateTrack" />
       </b-tooltip>
     </div>
+    <b-message v-model="isSeparationErrorVisible" type="is-danger" has-icon icon="circle-exclamation">
+      There was a problem separating the track: {{ separationError }}. Try again, or upload your own backing track
+      under Advanced.
+    </b-message>
   </b-tab-item>
 </template>
 
@@ -92,6 +100,20 @@ export default defineComponent({
     isSeparatingTrack() {
       return this.mediaStore.isProcessing;
     },
+    separationError() {
+      return this.mediaStore.error;
+    },
+    isSeparationErrorVisible: {
+      get() {
+        return Boolean(this.separationError);
+      },
+      set(value) {
+        // Dismissing the message also clears the warning on the tab
+        if (!value) {
+          this.mediaStore.error = null;
+        }
+      },
+    },
     separatingTrackMessage() {
       if (this.isSeparatingTrack) {
         return "Separating track...head to the Lyrics tab to keep working on the song!";
@@ -100,7 +122,7 @@ export default defineComponent({
     },
     includeBackingVocals: {
       get() {
-        return this.mediaStore.separationModel == BACKING_VOCALS_SEPARATOR_MODEL;
+        return this.mediaStore.separationModel.keepsBackingVocals;
       },
       set(value) {
         this.mediaStore.separationModel = value
@@ -155,9 +177,6 @@ export default defineComponent({
         this.timingsStore.resetTimings(timings);
       };
       reader.readAsText(file);
-    },
-    onSeparationModelChange(model) {
-      this.mediaStore.separationModel = model;
     },
     onBackingTrackFileChange(file: File | null) {
       this.mediaStore.setBackingTrack(file);

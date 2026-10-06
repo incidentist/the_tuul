@@ -7,6 +7,7 @@ import {
   uploadAudioFile,
   loadAndEnterLyrics,
   mockSeparateTrackApi,
+  setIncludeBackingVocals,
   togglePlayback,
   enterTimings,
   adjustTiming,
@@ -28,6 +29,8 @@ test.describe('Multi-screen Timing and Adjustment', () => {
     // 1. Setup: Upload audio and enter a 2-screen lyrics text
     await navigateToTab(page, TabId.SongInfo);
     await uploadAudioFile(page, defaultTestConfig.audioFile, defaultTestConfig.artist, defaultTestConfig.title);
+    // The server-side model keeps separation on the mocked API
+    await setIncludeBackingVocals(page, false);
 
     await navigateToTab(page, TabId.LyricInput);
 

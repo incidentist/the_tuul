@@ -67,7 +67,8 @@ export const useTimingsStore = defineStore('timings', {
         const mediaStore = useMediaStore();
         const settingsStore = useSettingsStore();
 
-        if (mediaStore.songDuration === null || mediaStore.songTitle === null || mediaStore.songArtist === null) {
+        if (mediaStore.songDuration === null) {
+          console.warn("Can't create subtitles: song duration is unknown");
           return "";
         }
 
@@ -83,8 +84,8 @@ export const useTimingsStore = defineStore('timings', {
             lyricsStore.lyricText,
             this.rawTimings,
             mediaStore.songDuration,
-            mediaStore.songTitle,
-            mediaStore.songArtist,
+            mediaStore.songTitle ?? "",
+            mediaStore.songArtist ?? "",
             adjustedOptions
           );
         } catch (e) {

@@ -33,6 +33,7 @@ import { defineComponent } from "vue";
 import bufferToWav from "audiobuffer-to-wav";
 import SubtitleDisplay from "./SubtitleDisplay.vue";
 import SmoothAudioPlayer from "./SmoothAudioPlayer.vue";
+import { prependSilenceToChannels } from "@/lib/audio";
 
 export default defineComponent({
   components: { SubtitleDisplay, SmoothAudioPlayer },
@@ -99,41 +100,25 @@ export default defineComponent({
       const arrayBuffer = await audioData.arrayBuffer();
       const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
 
-      // Create an OfflineAudioContext with the desired duration
-      const offlineAudioContext = new OfflineAudioContext({
-        numberOfChannels: audioBuffer.numberOfChannels,
-        length: audioBuffer.length + secondsOfSilence * audioBuffer.sampleRate,
-        sampleRate: audioBuffer.sampleRate,
-      });
-
-      // Create a source node from the original audio buffer
-      const source = offlineAudioContext.createBufferSource();
-      source.buffer = audioBuffer;
-
-      // Connect the source node to the destination node (output)
-      source.connect(offlineAudioContext.destination);
-
-      // Start rendering the audio
-      source.start();
-
-      // Wait for the audio to finish rendering
-      const songBuffer = await offlineAudioContext.startRendering();
-
-      // Create a new AudioBuffer with the desired length
-      const songWithSilenceBuffer = audioContext.createBuffer(
-        songBuffer.numberOfChannels,
-        songBuffer.length + secondsOfSilence * audioBuffer.sampleRate,
-        songBuffer.sampleRate
+      const channels = Array.from(
+        { length: audioBuffer.numberOfChannels },
+        (_, channel) => audioBuffer.getChannelData(channel)
+      );
+      const paddedChannels = prependSilenceToChannels(
+        channels,
+        audioBuffer.sampleRate,
+        secondsOfSilence
       );
 
-      // Get the channel data from the result buffer
-      for (let channel = 0; channel < songBuffer.numberOfChannels; channel++) {
-        const resultData = songBuffer.getChannelData(channel);
-        const silenceData = songWithSilenceBuffer.getChannelData(channel);
-
-        // Copy the result data to the end of the silence buffer
-        silenceData.set(resultData, secondsOfSilence * audioBuffer.sampleRate);
-      }
+      const songWithSilenceBuffer = audioContext.createBuffer(
+        audioBuffer.numberOfChannels,
+        paddedChannels[0].length,
+        audioBuffer.sampleRate
+      );
+      paddedChannels.forEach((data, channel) =>
+        songWithSilenceBuffer.copyToChannel(data, channel)
+      );
+      audioContext.close();
 
       // Convert the result buffer to a wav
       const wavAudio: ArrayBuffer = bufferToWav(songWithSilenceBuffer);

@@ -1,160 +1,36 @@
-import { separateTrack } from './audio';
-import { SeparationModel } from '@/types';
+import { describe, it, expect } from "vitest";
+import { prependSilenceToChannels } from "./audio";
 
-// Mock fetch globally
-global.fetch = vi.fn();
+describe("prependSilenceToChannels", () => {
+    it("pads each channel with exactly the delay, followed by the song", () => {
+        const sampleRate = 10;
+        const left = Float32Array.from([1, 2, 3]);
+        const right = Float32Array.from([-1, -2, -3]);
 
-describe('Audio Library', () => {
-    beforeEach(() => {
-        vi.clearAllMocks();
-        vi.useFakeTimers();
+        const [paddedLeft, paddedRight] = prependSilenceToChannels([left, right], sampleRate, 0.5);
+
+        expect(Array.from(paddedLeft)).toEqual([0, 0, 0, 0, 0, 1, 2, 3]);
+        expect(Array.from(paddedRight)).toEqual([0, 0, 0, 0, 0, -1, -2, -3]);
     });
 
-    afterEach(() => {
-        vi.useRealTimers();
+    it("rounds a fractional sample offset to an integer", () => {
+        // 5.88 s at 44.1 kHz is 259308 samples; 0.123 s at 1 kHz is 123
+        const song = new Float32Array(3 * 44100).fill(0.5);
+        const [padded] = prependSilenceToChannels([song], 44100, 5.88);
+        expect(padded.length).toBe(song.length + 259308);
+        expect(padded[259307]).toBe(0);
+        expect(padded[259308]).toBe(0.5);
+        expect(padded[padded.length - 1]).toBe(0.5);
+
+        const [short] = prependSilenceToChannels([Float32Array.from([1])], 1000, 0.1234);
+        expect(short.length).toBe(124);
+        expect(short[123]).toBe(1);
     });
 
-    it('handles zip response directly', async () => {
-        const mockFile = new File(['audio data'], 'test.mp3', { type: 'audio/mp3' });
-        const mockZipData = new ArrayBuffer(8);
-        const mockBlob = new Blob([mockZipData], { type: 'application/zip' });
-
-        // Mock the initial response as zip
-        (fetch as any).mockResolvedValueOnce({
-            headers: {
-                get: vi.fn().mockReturnValue('application/zip')
-            },
-            blob: vi.fn().mockResolvedValue(mockBlob)
-        });
-
-        // Mock JSZip behavior
-        const mockZip = {
-            file: vi.fn().mockReturnValue({
-                async: vi.fn().mockResolvedValue(new Blob(['mock audio'], { type: 'audio/wav' }))
-            })
-        };
-
-        // We need to mock jszip.loadAsync
-        const jszip = await import('jszip');
-        vi.spyOn(jszip.default, 'loadAsync').mockResolvedValue(mockZip as any);
-
-        const result = await separateTrack(mockFile, 'UVR_MDXNET_KARA_2' as SeparationModel);
-
-        expect(result.backing).toBeInstanceOf(Blob);
-        expect(result.vocals).toBeInstanceOf(Blob);
-        expect(fetch).toHaveBeenCalledTimes(1);
-    });
-
-    it('handles JSON response with polling until zip is ready', async () => {
-        const mockFile = new File(['audio data'], 'test.mp3', { type: 'audio/mp3' });
-        const mockZipData = new ArrayBuffer(8);
-        const mockZipBlob = new Blob([mockZipData], { type: 'application/zip' });
-
-        // Mock the initial response as JSON
-        (fetch as any).mockResolvedValueOnce({
-            headers: {
-                get: vi.fn().mockReturnValue('application/json')
-            },
-            json: vi.fn().mockResolvedValue({
-                finishedTrackURL: 'http://example.com/poll-url'
-            })
-        });
-
-        // Mock polling responses: first JSON (still processing), then zip (finished)
-        (fetch as any).mockResolvedValueOnce({
-            headers: {
-                get: vi.fn().mockReturnValue('application/json')
-            }
-        });
-
-        (fetch as any).mockResolvedValueOnce({
-            headers: {
-                get: vi.fn().mockReturnValue('application/zip')
-            },
-            blob: vi.fn().mockResolvedValue(mockZipBlob)
-        });
-
-        // Mock JSZip behavior
-        const mockZip = {
-            file: vi.fn().mockReturnValue({
-                async: vi.fn().mockResolvedValue(new Blob(['mock audio'], { type: 'audio/wav' }))
-            })
-        };
-
-        const jszip = await import('jszip');
-        vi.spyOn(jszip.default, 'loadAsync').mockResolvedValue(mockZip as any);
-
-        // Start the operation
-        const resultPromise = separateTrack(mockFile, 'UVR_MDXNET_KARA_2' as SeparationModel);
-
-        // Fast-forward time to trigger the polling timeout
-        await vi.advanceTimersByTimeAsync(30000);
-
-        const result = await resultPromise;
-
-        expect(result.backing).toBeInstanceOf(Blob);
-        expect(result.vocals).toBeInstanceOf(Blob);
-        expect(fetch).toHaveBeenCalledTimes(3); // Initial + 2 polls
-        expect(fetch).toHaveBeenCalledWith('http://example.com/poll-url', {
-            cache: 'no-cache'
-        });
-    });
-
-    it('continues polling until zip response is received', async () => {
-        const mockFile = new File(['audio data'], 'test.mp3', { type: 'audio/mp3' });
-        const mockZipData = new ArrayBuffer(8);
-        const mockZipBlob = new Blob([mockZipData], { type: 'application/zip' });
-
-        // Mock the initial response as JSON
-        (fetch as any).mockResolvedValueOnce({
-            headers: {
-                get: vi.fn().mockReturnValue('application/json')
-            },
-            json: vi.fn().mockResolvedValue({
-                finishedTrackURL: 'http://example.com/poll-url'
-            })
-        });
-
-        // Mock multiple JSON responses before final zip
-        (fetch as any).mockResolvedValueOnce({
-            headers: {
-                get: vi.fn().mockReturnValue('application/json')
-            }
-        });
-
-        (fetch as any).mockResolvedValueOnce({
-            headers: {
-                get: vi.fn().mockReturnValue('application/json')
-            }
-        });
-
-        (fetch as any).mockResolvedValueOnce({
-            headers: {
-                get: vi.fn().mockReturnValue('application/zip')
-            },
-            blob: vi.fn().mockResolvedValue(mockZipBlob)
-        });
-
-        // Mock JSZip behavior
-        const mockZip = {
-            file: vi.fn().mockReturnValue({
-                async: vi.fn().mockResolvedValue(new Blob(['mock audio'], { type: 'audio/wav' }))
-            })
-        };
-
-        const jszip = await import('jszip');
-        vi.spyOn(jszip.default, 'loadAsync').mockResolvedValue(mockZip as any);
-
-        // Start the operation
-        const resultPromise = separateTrack(mockFile, 'UVR_MDXNET_KARA_2' as SeparationModel);
-
-        // Fast-forward time to trigger multiple polling timeouts
-        await vi.advanceTimersByTimeAsync(60000); // 2 * 30 seconds
-
-        const result = await resultPromise;
-
-        expect(result.backing).toBeInstanceOf(Blob);
-        expect(result.vocals).toBeInstanceOf(Blob);
-        expect(fetch).toHaveBeenCalledTimes(4); // Initial + 3 polls
+    it("returns an unpadded copy for zero delay", () => {
+        const song = Float32Array.from([1, 2]);
+        const [padded] = prependSilenceToChannels([song], 44100, 0);
+        expect(Array.from(padded)).toEqual([1, 2]);
+        expect(padded).not.toBe(song);
     });
 });
