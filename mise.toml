@@ -1,6 +1,7 @@
 [tools]
 uv = "latest"
 pnpm = "12"
+node = "26"
 
 [settings]
 python.uv_venv_auto = "create|source"

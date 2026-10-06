@@ -12,7 +12,7 @@ ENV TUUL_API_HOSTNAME=$TUUL_API_HOSTNAME \
 WORKDIR /app
 
 # Tell pnpm to use node 22
-RUN pnpm runtime set -g node 22
+RUN pnpm runtime set -g node 26
 
 # Copy frontend source files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
