@@ -1,5 +1,5 @@
 # Stage 1: Frontend builder
-FROM node:22-slim AS frontend-builder
+FROM ghcr.io/pnpm/pnpm:12 AS frontend-builder
 
 ARG TUUL_API_HOSTNAME="" \
     TUUL_DONATE_URL="https://ko-fi.com/incidentist" \
@@ -11,9 +11,8 @@ ENV TUUL_API_HOSTNAME=$TUUL_API_HOSTNAME \
 
 WORKDIR /app
 
-# pnpm, at the version pinned in package.json's packageManager field. The
-# corepack bundled with Node 22 is too old to verify current pnpm releases.
-RUN npm install -g corepack@latest && corepack enable
+# Tell pnpm to use node 22
+RUN pnpm runtime set -g node 22
 
 # Copy frontend source files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
