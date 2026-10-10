@@ -1,7 +1,7 @@
 import jszip from "jszip";
 import { API_HOSTNAME, USE_REMOTE_SEPARATION } from "@/constants";
-import { SeparationModel, SeparationProgressCallback } from "@/types";
-import { isMobile } from "./device";
+import { SeparationModel, SeparationPhase, SeparationProgressCallback } from "@/types";
+import { isMobile, supportsInBrowserSeparation } from "./device";
 import { LocalSeparationRunner, mainThreadRunner } from "./localSeparation";
 import { createSeparationTimer, logLocalSeparation, Outcome } from "./telemetry";
 
@@ -130,15 +130,35 @@ export enum SeparationMethod {
 }
 
 /**
- * In-browser separation is too heavy for phones, tablets and small (likely
- * old) computers, so those always use the API, as does any deployment that
- * sets USE_REMOTE_SEPARATION.
+ * In-browser separation is too heavy for phones, tablets and low-memory
+ * computers, so those always use the API, as does any deployment that sets
+ * USE_REMOTE_SEPARATION.
  */
 export function chooseSeparationMethod(): SeparationMethod {
-    if (USE_REMOTE_SEPARATION || isMobile()) {
+    if (USE_REMOTE_SEPARATION || isMobile() || !supportsInBrowserSeparation()) {
         return SeparationMethod.Api;
     }
     return SeparationMethod.Local;
+}
+
+/**
+ * Separate in the browser, and if that fails (a model download that drops, an
+ * out-of-memory error), try again on the server.
+ */
+async function separateLocallyWithFallback(
+    songFile: File,
+    model: SeparationModel,
+    onProgress?: SeparationProgressCallback
+): Promise<TrackSeparationResult> {
+    try {
+        return await separateTrackLocally(songFile, model, onProgress);
+    } catch (error) {
+        console.warn("Local separation failed; falling back to the server.", error);
+        // The server reports no progress, so show an indeterminate bar rather
+        // than leaving the local run's last progress on screen.
+        onProgress?.({ phase: SeparationPhase.Separating, fraction: null });
+        return separateTrackRemotely(songFile, model);
+    }
 }
 
 export async function separateTrack(
@@ -151,7 +171,7 @@ export async function separateTrack(
         case SeparationMethod.Api:
             return separateTrackRemotely(songFile, model);
         case SeparationMethod.Local:
-            return separateTrackLocally(songFile, model, onProgress);
+            return separateLocallyWithFallback(songFile, model, onProgress);
         default: {
             const unhandled: never = method;
             throw new Error(`Unknown separation method: ${unhandled}`);
