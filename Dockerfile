@@ -1,5 +1,5 @@
 # Stage 1: Frontend builder
-FROM node:22-slim AS frontend-builder
+FROM ghcr.io/pnpm/pnpm:12 AS frontend-builder
 
 ARG TUUL_API_HOSTNAME="" \
     TUUL_DONATE_URL="https://ko-fi.com/incidentist" \
@@ -11,16 +11,21 @@ ENV TUUL_API_HOSTNAME=$TUUL_API_HOSTNAME \
 
 WORKDIR /app
 
+# Tell pnpm to use node 26
+RUN pnpm runtime set -g node 26
+
 # Copy frontend source files
-COPY package.json package-lock.json ./
-RUN npm clean-install
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# Install pnpm dependencies using a cache mount for the store
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    pnpm install --frozen-lockfile --store-dir /pnpm/store
 
 # Copy the rest of the frontend source
 COPY frontend/ ./frontend/
 COPY vite.config.*.ts tsconfig.json jsconfig.json ./
 
 # Build the frontend
-RUN npm run build
+RUN pnpm build
 
 # Use an official lightweight Python image.
 # https://hub.docker.com/_/python
@@ -31,9 +36,12 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 ENV APP_HOME=/app
 # Setting this ensures print statements and log messages
 # promptly appear in Cloud Logging.
+# The uv cache is a BuildKit cache mount on another filesystem, where uv's
+# default hardlinks can't reach, so copy instead (and skip the warning).
 ENV PYTHONUNBUFFERED=TRUE \
     UV_PROJECT_ENVIRONMENT=/app/.venv \
-    UV_CACHE_DIR=/tmp/uv_cache
+    UV_CACHE_DIR=/root/.cache/uv \
+    UV_LINK_MODE=copy
 WORKDIR $APP_HOME
 
 # Install dependencies.
@@ -48,7 +56,8 @@ COPY ./uv.lock ./pyproject.toml ./
 # GB and a CPU-only host would carry it for nothing.
 ARG TORCH_GROUP=cpu
 
-RUN uv sync --no-dev --no-install-project --locked \
+RUN --mount=type=cache,id=uv-cache,target=/root/.cache/uv \
+    uv sync --no-dev --no-install-project --locked \
     --no-default-groups --group $TORCH_GROUP
 
 #

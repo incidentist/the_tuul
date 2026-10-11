@@ -3,9 +3,9 @@
 Normally it takes a long time to make a decent karaoke video. You need to separate the music from the vocals, and painstakingly adjust the timing of every syllable. What we try to do here is use some shortcuts to make videos that are 80% perfect in 20% of the time.
 
 ## Install
-Requires Docker, [mise](https://mise.jdx.dev/), npm and ffmpeg.
+Requires Docker, [mise](https://mise.jdx.dev/), pnpm and ffmpeg.
 
-mise manages the `uv` install (see `mise.toml`), and `uv` in turn manages the pinned Python version (see `requires-python` in `pyproject.toml`) and project dependencies. mise also wraps the common commands as tasks. Install dependencies with:
+mise manages the `uv` and `pnpm` install (see `mise.toml`), and `uv` in turn manages the pinned Python version (see `requires-python` in `pyproject.toml`) and project dependencies. mise also wraps the common commands as tasks. Install dependencies with:
 ```
 > mise run install
 ```

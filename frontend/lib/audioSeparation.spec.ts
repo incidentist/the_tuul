@@ -22,6 +22,7 @@ vi.mock('@/constants', async (importOriginal) => ({
 // Device detection reads window.screen; stub it so tests pick the device.
 vi.mock('./device', () => ({
     isMobile: vi.fn().mockReturnValue(false),
+    supportsInBrowserSeparation: vi.fn().mockReturnValue(true),
 }));
 
 import {
@@ -30,7 +31,7 @@ import {
     separateTrack,
     separateTrackRemotely,
 } from './audioSeparation';
-import { isMobile } from './device';
+import { isMobile, supportsInBrowserSeparation } from './device';
 import { logInfo } from './util';
 import { PerformanceLogTag } from './telemetry';
 import { mainThreadRunner } from './localSeparation';
@@ -54,6 +55,14 @@ function mockZipResponse() {
     };
     return import('jszip').then((jszip) => {
         vi.spyOn(jszip.default, 'loadAsync').mockResolvedValue(mockZip as any);
+    });
+}
+
+function mockZipFetch() {
+    (fetch as any).mockResolvedValueOnce({
+        ok: true,
+        headers: { get: vi.fn().mockReturnValue('application/zip') },
+        blob: vi.fn().mockResolvedValue(new Blob([new ArrayBuffer(8)], { type: 'application/zip' }))
     });
 }
 
@@ -267,10 +276,16 @@ describe('chooseSeparationMethod', () => {
     beforeEach(() => {
         vi.mocked(constants).USE_REMOTE_SEPARATION = false;
         vi.mocked(isMobile).mockReturnValue(false);
+        vi.mocked(supportsInBrowserSeparation).mockReturnValue(true);
     });
 
     it('separates in the browser on desktop by default', () => {
         expect(chooseSeparationMethod()).toBe(SeparationMethod.Local);
+    });
+
+    it('uses the API on a desktop without enough memory', () => {
+        vi.mocked(supportsInBrowserSeparation).mockReturnValue(false);
+        expect(chooseSeparationMethod()).toBe(SeparationMethod.Api);
     });
 
     it('uses the API on mobile', () => {
@@ -296,6 +311,7 @@ describe('separateTrack', () => {
         setActivePinia(createPinia());
         vi.mocked(constants).USE_REMOTE_SEPARATION = false;
         vi.mocked(isMobile).mockReturnValue(false);
+        vi.mocked(supportsInBrowserSeparation).mockReturnValue(true);
     });
 
     it('runs in the browser and never calls the server on desktop', async () => {
@@ -345,16 +361,51 @@ describe('separateTrack', () => {
         expect(details.machine).toHaveProperty('crossOriginIsolated');
     });
 
-    it('logs a failed local separation and still rejects', async () => {
+    it('logs a failed local separation', async () => {
         const songFile = new File(['song'], 'song.mp3', { type: 'audio/mpeg' });
         vi.mocked(mainThreadRunner.run).mockRejectedValue(new Error('out of memory'));
+        mockZipFetch();
+        await mockZipResponse();
 
-        await expect(separateTrack(songFile, BACKING_VOCALS_SEPARATOR_MODEL)).rejects.toThrow('out of memory');
+        await separateTrack(songFile, BACKING_VOCALS_SEPARATOR_MODEL);
 
         await vi.waitFor(() => expect(logInfo).toHaveBeenCalledTimes(1));
         const [, message, details] = vi.mocked(logInfo).mock.calls[0];
         expect(message).toMatch(/^Local separation failed/);
         expect(details).toMatchObject({ outcome: 'failed', error: 'out of memory', songDurationSeconds: null, secondsPerSongSecond: null });
+    });
+
+    it('falls back to the server when local separation fails', async () => {
+        const songFile = new File(['song'], 'song.mp3', { type: 'audio/mpeg' });
+        vi.mocked(mainThreadRunner.run).mockImplementation(async (_request, onProgress) => {
+            onProgress?.({ phase: SeparationPhase.LoadingModel, fraction: 0.3 });
+            throw new Error('Failed to fetch');
+        });
+        mockZipFetch();
+        await mockZipResponse();
+        const onProgress = vi.fn();
+
+        const result = await separateTrack(songFile, NO_VOCALS_SEPARATOR_MODEL, onProgress);
+
+        expect(result.backing).toBeInstanceOf(Blob);
+        expect(result.vocals).toBeInstanceOf(Blob);
+        const [url, options] = (fetch as any).mock.calls[0];
+        expect(url).toMatch(/\/separate_track$/);
+        expect((options.body as FormData).get('modelName')).toBe(NO_VOCALS_SEPARATOR_MODEL.id);
+        // The server reports no progress, so the bar goes indeterminate
+        expect(onProgress).toHaveBeenLastCalledWith({ phase: SeparationPhase.Separating, fraction: null });
+    });
+
+    it('rejects with the server error when the fallback also fails', async () => {
+        vi.mocked(mainThreadRunner.run).mockRejectedValue(new Error('out of memory'));
+        (fetch as any).mockResolvedValueOnce({
+            ok: false,
+            status: 503,
+            headers: { get: vi.fn().mockReturnValue('application/json') },
+        });
+
+        await expect(separateTrack(new File(['song'], 'song.mp3'), BACKING_VOCALS_SEPARATOR_MODEL))
+            .rejects.toThrow('503');
     });
 
     it('does not log timing for server separation', async () => {

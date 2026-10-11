@@ -1,5 +1,7 @@
 allowBuilds:
-  '@parcel/watcher': set this to true or false
-  protobufjs: set this to true or false
+  # Prebuilt binaries ship as optional deps; the install script only compiles from source.
+  '@parcel/watcher': false
+  # postinstall is just a version-compat check.
+  protobufjs: false
 minimumReleaseAgeExclude:
   - web-audio-separation@0.3.1
