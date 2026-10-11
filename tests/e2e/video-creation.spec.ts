@@ -153,6 +153,14 @@ test.describe("Karaoke Track Creation", () => {
         return Math.max(...samples.slice(middle, middle + decoded.sampleRate).map(Math.abs));
       });
     await expect.poll(previewPeak, { timeout: 30000 }).toBeGreaterThan(0.2);
+    // A new hint note plays the preview from the start, so it can be heard right away.
+    await expect
+      .poll(() =>
+        page
+          .locator(".preview-container audio")
+          .evaluate((audio: HTMLAudioElement) => !audio.paused),
+      )
+      .toBe(true);
 
     await page.click('button:has-text("Create Video")');
     const zipPath = await expectFileDownload(page, 180000);

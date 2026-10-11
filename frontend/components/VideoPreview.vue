@@ -129,6 +129,9 @@ export default defineComponent({
         restoredTracks: new Set<Blob>(),
         // An update that finishes after a later one started is dropped.
         audioRequest: 0,
+        // A new hint tone plays the preview from the start once its track is ready, so it can be
+        // heard right away.
+        restartPending: false,
         visibilityObserver: null as IntersectionObserver | null,
       }),
     };
@@ -172,6 +175,7 @@ export default defineComponent({
       this.scheduleAudioUpdate(this.activeAudio, this.audioDelay);
     },
     hintToneKey() {
+      this.view.restartPending = this.hintTone !== null;
       this.scheduleAudioUpdate(this.activeAudio, this.audioDelay);
     },
   },
@@ -250,16 +254,21 @@ export default defineComponent({
       if (request !== this.view.audioRequest) {
         return;
       }
+      const restart = this.view.restartPending;
+      this.view.restartPending = false;
+      const audio = this.playerRef()?.audioPlayer as HTMLAudioElement | undefined;
       if (url === this.audioDataUrl) {
+        if (restart && audio) {
+          this.playFromStart(audio);
+        }
         return;
       }
       this.dropRestoredTracks(audioData);
 
       // Capture the playhead/play state right before swapping the source,
       // since reloading the <audio> element resets playback to 0 and pauses.
-      const audio = this.playerRef()?.audioPlayer as HTMLAudioElement | undefined;
-      const resumeTime = audio ? audio.currentTime : 0;
-      const wasPlaying = audio ? !audio.paused : false;
+      const resumeTime = audio && !restart ? audio.currentTime : 0;
+      const wasPlaying = audio ? restart || !audio.paused : false;
 
       this.audioDataUrl = url;
 
@@ -276,6 +285,13 @@ export default defineComponent({
         }
       };
       audio.addEventListener("loadedmetadata", onLoaded, { once: true });
+    },
+    playFromStart(audio: HTMLAudioElement) {
+      audio.currentTime = 0;
+      this.subtitleDisplayRef()?.setPlayhead(0);
+      audio.play().catch((error) => {
+        console.error("Could not start playback:", error);
+      });
     },
     /**
      * Revoke the restored backing tracks other than `kept` and the one playing.
