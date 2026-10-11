@@ -40,11 +40,11 @@ run = "uv run python -c \"from api.main import app; print('✅ FastAPI app loads
 
 [tasks.bump-version-minor]
 description = "Bump the minor version (via pnpm version, which also bumps the Python version)"
-run = "pnpm version minor"
+run = "git stash --include-untracked && pnpm version minor && git stash pop"
 
 [tasks.bump-version-patch]
 description = "Bump the patch version (via pnpm version, which also bumps the Python version)"
-run = "pnpm version patch"
+run = "git stash --include-untracked && pnpm version patch && git stash pop"
 
 [tasks.build-docker]
 description = "Build the production Docker image"
