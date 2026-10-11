@@ -43,10 +43,14 @@ test.describe("Settings File Upload", () => {
     await expect(fieldFor(page, "Video Format").locator("select")).toHaveValue("mkv");
 
     await page.getByRole("button", { name: "Fonts and Colors" }).click();
-    await expect(exactFieldFor(page, "Font").locator("select")).toHaveValue("Impact");
-    await expect(fieldFor(page, "Font Size").locator('input[type="number"]')).toHaveValue("30");
-    await expect(page.getByLabel("primary color hex code")).toHaveValue("#ff8800");
-    await expect(page.getByLabel("secondary color hex code")).toHaveValue("#0088ff");
+    await expect(exactFieldFor(page, "Font").first().locator("select")).toHaveValue("Impact");
+    await expect(fieldFor(page, "Font Size").first().locator('input[type="number"]')).toHaveValue(
+      "30",
+    );
+    await expect(page.getByLabel("primary color hex code", { exact: true })).toHaveValue("#ff8800");
+    await expect(page.getByLabel("secondary color hex code", { exact: true })).toHaveValue(
+      "#0088ff",
+    );
   });
 
   test("a malformed settings file is reported and changes nothing", async ({ page }) => {
