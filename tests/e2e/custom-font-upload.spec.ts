@@ -15,8 +15,9 @@ const FONT_UPLOAD = '[name="custom-font-upload"] input[type="file"]';
 // The Adjust tab mounts a subtitle display of its own, so stay inside the Submit tab.
 const SUBTITLE_CANVAS = ".submit-tab canvas.subtitle-canvas";
 
+// The base style's picker comes before any custom style's own.
 function fontSelect(page: Page) {
-  return exactFieldFor(page, "Font").locator("select");
+  return exactFieldFor(page, "Font").first().locator("select");
 }
 
 // A bundled font stands in for the user's own file. Its family name ("Metal Mania")
@@ -138,18 +139,18 @@ test.describe("Custom Font Upload", () => {
     });
     await openFontSettings(page);
 
-    const ben = page.locator(".voice-style").filter({ hasText: "Ben" });
+    const ben = page.locator(".style-override-row").filter({ hasText: "Ben" });
     await ben.locator(".switch").click();
-    await ben.locator('.voice-font-upload input[type="file"]').setInputFiles(bundledFontPath());
+    await ben.locator('.style-font-upload input[type="file"]').setInputFiles(bundledFontPath());
 
-    await expect(ben.locator(".voice-font-help")).toContainText("Rendering Ben in “Metal Mania”");
+    await expect(ben.locator(".style-font-help")).toContainText("Rendering Ben in “Metal Mania”");
     await expect(
-      page.locator(".voice-style").filter({ hasText: "Anna" }).locator(".voice-font-help"),
+      page.locator(".style-override-row").filter({ hasText: "Anna" }).locator(".style-font-help"),
     ).toHaveCount(0);
 
     await page.reload();
     await navigateToTab(page, TabId.Submit);
-    await expect(ben.locator(".voice-font-help")).toContainText("Metal Mania");
+    await expect(ben.locator(".style-font-help")).toContainText("Metal Mania");
 
     await page.getByRole("navigation").getByRole("button", { name: "Start Over" }).click();
     await expect(page.locator(".modal-card-body .source-file-links")).toContainText(
@@ -164,6 +165,29 @@ test.describe("Custom Font Upload", () => {
       buffer: Buffer.from("[Anna] la_la\n[Ben] hm_hm"),
     });
     await navigateToTab(page, TabId.Submit);
-    await expect(page.locator(".voice-font-help")).toHaveCount(0);
+    await expect(page.locator(".style-font-help")).toHaveCount(0);
+  });
+
+  test("the title takes its own uploaded font, kept across a reload and dropped with its style", async ({
+    page,
+  }) => {
+    await openFontSettings(page);
+
+    const title = page.locator(".style-override-row").filter({ hasText: "Title" });
+    await title.getByText("Custom style").click();
+    await title.locator('.style-font-upload input[type="file"]').setInputFiles(bundledFontPath());
+    await expect(title.locator(".style-font-help")).toContainText(
+      "Rendering the title in “Metal Mania”",
+    );
+
+    await page.reload();
+    await openFontSettings(page);
+    await expect(title.locator(".style-font-help")).toContainText("Metal Mania");
+
+    await title.getByText("Custom style").click();
+    await expect(title.locator(".style-font-help")).toHaveCount(0);
+    await title.getByText("Custom style").click();
+    await expect(title.locator(".style-font-upload")).toBeVisible();
+    await expect(title.locator(".style-font-help")).toHaveCount(0);
   });
 });

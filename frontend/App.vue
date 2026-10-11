@@ -158,7 +158,7 @@
         :lyrics="lyricsStore.lyricText"
         :timings="timingsStore.hasAnyTimings ? timingsStore.timingsText : undefined"
         :font="settingsStore.customFont ?? undefined"
-        :fonts="voiceFonts"
+        :fonts="extraFonts"
         :tracks="mediaStore.trackPairs ?? []"
       />
     </confirm-modal>
@@ -289,10 +289,11 @@ export default defineComponent({
   },
 
   computed: {
-    voiceFonts(): File[] {
-      return this.lyricsStore.voices
-        .map((voice) => this.settingsStore.getVoiceFont(voice)?.file)
-        .filter((file): file is File => file !== undefined);
+    extraFonts(): File[] {
+      return [
+        this.settingsStore.titleFont?.file,
+        ...this.lyricsStore.voices.map((voice) => this.settingsStore.getVoiceFont(voice)?.file),
+      ].filter((file): file is File => file !== undefined);
     },
     hasTabSettings(): boolean {
       return SETTINGS_TABS.includes(this.activeTab);

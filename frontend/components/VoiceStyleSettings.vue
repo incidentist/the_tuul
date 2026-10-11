@@ -4,18 +4,31 @@
       Each voice uses the styles above by default. Turn on a custom style to override the font,
       weight, or colors for that voice.
     </p>
-    <voice-style-row v-for="voice in voices" :key="voice" :voice="voice" :fonts="fonts" />
+    <style-override-row
+      v-for="voice in voices"
+      :key="voice"
+      :label="voice"
+      :subject="voice"
+      :override="settingsStore.getVoiceStyle(voice) ?? {}"
+      :base="settingsStore.videoOptions"
+      :fonts="fonts"
+      :custom-font="settingsStore.getVoiceFont(voice)"
+      :set-custom-font="(file: File | null) => settingsStore.setVoiceFont(voice, file)"
+      @set="(field, value) => settingsStore.setVoiceStyleField(voice, field, value)"
+      @clear="settingsStore.clearVoiceStyle(voice)"
+    />
   </div>
 </template>
 
 <script lang="ts">
 import { defineComponent, PropType } from "vue";
 import { storeToRefs } from "pinia";
-import VoiceStyleRow from "@/components/VoiceStyleRow.vue";
+import StyleOverrideRow from "@/components/StyleOverrideRow.vue";
 import { useLyricsStore } from "@/stores/lyrics";
+import { useSettingsStore } from "@/stores/settings";
 
 export default defineComponent({
-  components: { VoiceStyleRow },
+  components: { StyleOverrideRow },
   props: {
     fonts: {
       type: Object as PropType<Record<string, string>>,
@@ -25,7 +38,7 @@ export default defineComponent({
   setup() {
     const lyricsStore = useLyricsStore();
     const { voices } = storeToRefs(lyricsStore);
-    return { voices };
+    return { voices, settingsStore: useSettingsStore() };
   },
 });
 </script>

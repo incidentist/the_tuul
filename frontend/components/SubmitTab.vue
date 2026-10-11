@@ -389,31 +389,6 @@
                 </viewport-tooltip> </template
               ><b-switch v-model="videoOptions.showTitle"></b-switch
             ></b-field>
-            <template v-if="videoOptions.showTitle">
-              <b-field horizontal>
-                <template #label>
-                  Title Style
-                  <viewport-tooltip
-                    wide
-                    label="Draw the title with a font and colors of its own. When this is off, the title is drawn like the lyrics."
-                  >
-                    <b-icon size="is-small" icon="circle-question"></b-icon>
-                  </viewport-tooltip> </template
-                ><b-switch
-                  :model-value="hasTitleStyle"
-                  @update:model-value="setOwnTitleStyle"
-                ></b-switch
-              ></b-field>
-              <style-override-fields
-                v-if="hasTitleStyle"
-                :override="videoOptions.titleStyle"
-                :base="titleBase"
-                :fonts="fonts"
-                name="title"
-                :with-secondary="false"
-                @set="setTitleStyleField"
-              />
-            </template>
           </template>
         </settings-section>
         <settings-section title="Fonts and Colors" id="fonts-and-colors">
@@ -627,6 +602,20 @@
             ></b-numberinput>
           </b-field>
           <voice-style-settings v-if="voices.length > 1" :fonts="fonts" />
+          <style-override-row
+            v-if="videoOptions.addTitleScreen && videoOptions.showTitle"
+            label="Title"
+            subject="the title"
+            tooltip="Draw the title on the title screen with a font and colors of its own. When this is off, the title is drawn like the lyrics."
+            :override="videoOptions.titleStyle"
+            :base="titleBase"
+            :fonts="fonts"
+            :custom-font="settingsStore.titleFont"
+            :set-custom-font="settingsStore.setTitleFont"
+            :with-secondary="false"
+            @set="settingsStore.setTitleStyleField"
+            @clear="settingsStore.clearTitleStyle()"
+          />
         </settings-section>
       </div>
       <div class="column is-8 preview-column">
@@ -757,7 +746,7 @@ import SymbolPicker from "@/components/SymbolPicker.vue";
 import TrackSelect from "@/components/TrackSelect.vue";
 import ViewportTooltip from "@/components/ViewportTooltip.vue";
 import SettingsSection from "@/components/SettingsSection.vue";
-import StyleOverrideFields from "@/components/StyleOverrideFields.vue";
+import StyleOverrideRow from "@/components/StyleOverrideRow.vue";
 import jszip from "jszip";
 import video, { CreateVideoOptions } from "@/lib/video";
 import type { HintTone } from "@/lib/hintTone";
@@ -784,7 +773,7 @@ import {
 import BackgroundReplacementModal from "@/components/BackgroundReplacementModal.vue";
 import { BUNDLED_FONTS as fonts, COUNT_IN_SYMBOLS } from "@/lib/fonts";
 import { projectFilesToKbp } from "@/lib/kbpConvert";
-import { applyVoiceStyle, isEmptyOverride, VoiceStyleOverride } from "@/lib/voiceStyle";
+import { applyVoiceStyle } from "@/lib/voiceStyle";
 import { restoredBacking } from "@/lib/gapMix";
 import { HIGHEST_HINT_FREQUENCY, LOWEST_HINT_FREQUENCY, hintFrequency } from "@/lib/notes";
 
@@ -811,7 +800,7 @@ export default defineComponent({
     TrackSelect,
     ViewportTooltip,
     SettingsSection,
-    StyleOverrideFields,
+    StyleOverrideRow,
   },
   setup() {
     const mediaStore = useMediaStore();
@@ -921,8 +910,11 @@ export default defineComponent({
       if (customFontFamily && customFontUrl) {
         map[customFontFamily] = customFontUrl;
       }
-      for (const voice of this.voices) {
-        const font = this.settingsStore.getVoiceFont(voice);
+      const uploaded = [
+        this.settingsStore.titleFont,
+        ...this.voices.map((voice) => this.settingsStore.getVoiceFont(voice)),
+      ];
+      for (const font of uploaded) {
         if (font) {
           map[font.family] = font.url;
         }
@@ -946,9 +938,6 @@ export default defineComponent({
       return Object.fromEntries(
         Object.entries(this.fontMap).filter(([family]) => families.has(family)),
       );
-    },
-    hasTitleStyle(): boolean {
-      return !isEmptyOverride(this.videoOptions.titleStyle);
     },
     // The title is drawn on the first voice's style.
     titleBase(): KaraokeOptions {
@@ -1054,15 +1043,6 @@ export default defineComponent({
       const cursor = start + symbol.length;
       // The input has lost focus to the picker but still keeps its cursor for the next pick.
       this.$nextTick(() => input.setSelectionRange(cursor, cursor));
-    },
-    /**
-     * Start the title's own style from the lyrics font size, or go back to drawing it like the lyrics.
-     */
-    setOwnTitleStyle(own: boolean) {
-      this.videoOptions.titleStyle = own ? { fontSize: this.titleBase.font.size } : {};
-    },
-    setTitleStyleField<K extends keyof VoiceStyleOverride>(field: K, value: VoiceStyleOverride[K]) {
-      this.videoOptions.titleStyle = { ...this.videoOptions.titleStyle, [field]: value };
     },
     updateScrollHints() {
       const el = this.$refs.settingsColumn as HTMLElement | undefined;

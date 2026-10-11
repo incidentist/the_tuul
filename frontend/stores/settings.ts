@@ -422,6 +422,56 @@ export const useSettingsStore = defineStore("settings", () => {
     voiceFonts.value = fonts;
   }
 
+  // The title's uploaded font, kept out of `videoOptions.titleStyle` like the voices' fonts.
+  const titleFontFile = ref<File | null>(null);
+  const titleFontLoaded = shallowRef<LoadedFont | null>(null);
+
+  persistBlobRef("settings.titleFont", titleFontFile).then(async () => {
+    const file = titleFontFile.value;
+    if (!file || titleFontLoaded.value) {
+      return;
+    }
+    try {
+      titleFontLoaded.value = { ...(await readFont(file)), url: URL.createObjectURL(file) };
+    } catch (e) {
+      console.error("Could not read the saved title font; ignoring it", e);
+      titleFontFile.value = null;
+    }
+  });
+
+  const titleFont = computed((): (LoadedFont & { file: File }) | undefined =>
+    titleFontFile.value && titleFontLoaded.value
+      ? { file: titleFontFile.value, ...titleFontLoaded.value }
+      : undefined,
+  );
+
+  /**
+   * Clears the title's font when given null. Parses the family name before storing anything,
+   * so on UnreadableFontError the font already in use still stands.
+   */
+  async function setTitleFont(file: File | null): Promise<void> {
+    if (!file) {
+      titleFontFile.value = null;
+      titleFontLoaded.value = null;
+      return;
+    }
+    const font = await readFont(file);
+    titleFontFile.value = file;
+    titleFontLoaded.value = { ...font, url: URL.createObjectURL(file) };
+  }
+
+  function setTitleStyleField<K extends keyof VoiceStyleOverride>(
+    field: K,
+    value: VoiceStyleOverride[K],
+  ) {
+    videoOptions.titleStyle = { ...videoOptions.titleStyle, [field]: value };
+  }
+
+  function clearTitleStyle() {
+    videoOptions.titleStyle = {};
+    void setTitleFont(null);
+  }
+
   /**
    * The voice's override as the renderer should use it, with an uploaded font standing in for the picked one.
    */
@@ -473,16 +523,27 @@ export const useSettingsStore = defineStore("settings", () => {
 
   // What everything that renders lyrics should use: `videoOptions` is raw UI state, where
   // the font picker keeps its own value even while an uploaded font overrides it.
-  const renderOptions = computed<VideoSettings>(() =>
-    customFontFamily.value
-      ? { ...videoOptions, font: { ...videoOptions.font, name: customFontFamily.value } }
-      : videoOptions,
-  );
+  const renderOptions = computed<VideoSettings>(() => {
+    const titleFamily = titleFontLoaded.value?.family;
+    if (!customFontFamily.value && !titleFamily) {
+      return videoOptions;
+    }
+    return {
+      ...videoOptions,
+      font: { ...videoOptions.font, name: customFontFamily.value ?? videoOptions.font.name },
+      titleStyle: titleFamily
+        ? { ...videoOptions.titleStyle, fontName: titleFamily }
+        : videoOptions.titleStyle,
+    };
+  });
 
   const glyphCoverage = computed<GlyphCoverage>(() => {
     const coverage: Record<string, ReadonlySet<number>> = {};
     for (const font of Object.values(voiceFonts.value)) {
       coverage[font.family] = font.coverage;
+    }
+    if (titleFontLoaded.value) {
+      coverage[titleFontLoaded.value.family] = titleFontLoaded.value.coverage;
     }
     if (customFontFamily.value) {
       coverage[customFontFamily.value] = customFontCoverage.value;
@@ -557,10 +618,11 @@ export const useSettingsStore = defineStore("settings", () => {
   }
 
   /**
-   * Every uploaded font, the base one and each voice's, as Start over discards them.
+   * Every uploaded font, the base one, the title's and each voice's, as Start over discards them.
    */
   async function clearCustomFonts(): Promise<void> {
     await setCustomFont(null);
+    await setTitleFont(null);
     voiceFontFiles.value = null;
     voiceFonts.value = {};
   }
@@ -687,6 +749,10 @@ export const useSettingsStore = defineStore("settings", () => {
     getVoiceFont,
     setVoiceFont,
     renderVoiceStyle,
+    titleFont,
+    setTitleFont,
+    setTitleStyleField,
+    clearTitleStyle,
     glyphCoverage,
     clearCustomFonts,
     setTimingKey,
