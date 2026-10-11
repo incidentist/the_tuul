@@ -116,4 +116,48 @@ test.describe("Karaoke Track Creation", () => {
     );
     expect(await zip.file("settings.yaml")!.async("string")).toContain("useBackground: true");
   });
+
+  test("Create a karaoke video with a hint note over the title screen", async ({
+    page,
+    context,
+  }) => {
+    await mockSeparateTrackApi(context);
+    await navigateToTab(page, TabId.SongInfo);
+    await uploadAudioFile(
+      page,
+      defaultTestConfig.audioFile,
+      defaultTestConfig.artist,
+      defaultTestConfig.title,
+    );
+    await navigateToTab(page, TabId.LyricInput);
+    await loadAndEnterLyrics(page, defaultTestConfig.lyricsFile);
+    await navigateToTab(page, TabId.SongTiming);
+    await loadAndEnterTimings(page, defaultTestConfig.timingsFile);
+    await expectSuccessMessage(page, ".song-timing-tab");
+    await navigateToTab(page, TabId.Submit);
+
+    await page.getByRole("button", { name: "Title Screen" }).click();
+    const hintNote = page.getByRole("textbox", { name: "Hint note" });
+    await hintNote.fill("A7");
+    await expect(page.getByText("Type a note from A1 to G6")).toBeVisible();
+    await hintNote.fill("A3");
+    await expect(page.getByText("Type a note from A1 to G6")).toHaveCount(0);
+
+    // The title screen is silent in the fixture song, so anything loud there is the tone.
+    const previewPeak = () =>
+      page.locator(".preview-container audio").evaluate(async (audio: HTMLAudioElement) => {
+        const data = await (await fetch(audio.src)).arrayBuffer();
+        const decoded = await new AudioContext().decodeAudioData(data);
+        const samples = decoded.getChannelData(0);
+        const middle = Math.round(1.5 * decoded.sampleRate);
+        return Math.max(...samples.slice(middle, middle + decoded.sampleRate).map(Math.abs));
+      });
+    await expect.poll(previewPeak, { timeout: 30000 }).toBeGreaterThan(0.2);
+
+    await page.click('button:has-text("Create Video")');
+    const zipPath = await expectFileDownload(page, 180000);
+
+    const zip = await JSZip.loadAsync(await fs.readFile(zipPath));
+    expect(await zip.file("settings.yaml")!.async("string")).toContain("hintNote: A3");
+  });
 });

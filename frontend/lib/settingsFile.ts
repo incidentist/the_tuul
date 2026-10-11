@@ -32,6 +32,7 @@ import {
 import { VoiceId } from "@/lib/voices";
 import { SeparationModel, TrackSource } from "@/types";
 import { parseFileSource } from "@/lib/trackSources";
+import { hintFrequency } from "@/lib/notes";
 import { SEPARATION_MODELS } from "@/stores/media";
 import type { VideoSettings } from "@/stores/settings";
 
@@ -47,6 +48,7 @@ export interface ParsedSettingsFile {
   separationModel?: SeparationModel;
   backingTrack?: TrackSource;
   backgroundVideoOffset?: number;
+  hintNote?: string | null;
   videoOptions: Partial<VideoSettings>;
   // Absent when the file says nothing about voice styles, so a caller can tell
   // "no opinion" (leave the current overrides alone) from "explicitly empty".
@@ -65,6 +67,7 @@ export interface SettingsFileSource {
   // The source of the backing track the video renders with, or null while there is none.
   backingTrack: TrackSource | null;
   backgroundVideoOffset: number;
+  hintNote: string | null;
   videoOptions: VideoSettings;
   voiceStyles: Record<VoiceId, VoiceStyleOverride>;
 }
@@ -81,6 +84,7 @@ function settingsDocument({
   separationModel,
   backingTrack,
   backgroundVideoOffset,
+  hintNote,
   videoOptions,
   voiceStyles,
 }: SettingsFileSource): Record<string, unknown> {
@@ -92,6 +96,7 @@ function settingsDocument({
     separationModel,
     ...(backingTrack ? { backingTrack } : {}),
     ...(backgroundVideoOffset ? { backgroundVideoOffset } : {}),
+    ...(hintNote && hintFrequency(hintNote) ? { hintNote: hintNote.trim() } : {}),
     videoOptions: {
       ...rest,
       titleStyle: serializeVoiceStyle(titleStyle),
@@ -179,6 +184,7 @@ export function settingsOutsideSubtitles(
       separationModel: document.separationModel,
       backingTrack: document.backingTrack,
       backgroundVideoOffset: document.backgroundVideoOffset,
+      hintNote: document.hintNote,
       videoOptions: compact({
         ...Object.fromEntries(VIDEO_OPTIONS_OUTSIDE_SUBTITLES.map((key) => [key, options[key]])),
         color: compact({ background: color.background }),
@@ -814,6 +820,7 @@ export function parseSettingsYaml(text: string): ParsedSettingsFile {
       "separationModel",
       "backingTrack",
       "backgroundVideoOffset",
+      "hintNote",
       "videoOptions",
       "voiceStyles",
     ],
@@ -838,6 +845,19 @@ export function parseSettingsYaml(text: string): ParsedSettingsFile {
 
   const offset = readNumber(document.backgroundVideoOffset, "backgroundVideoOffset", warnings);
   if (offset !== undefined) parsed.backgroundVideoOffset = offset;
+
+  if (document.hintNote !== undefined) {
+    // An unquoted frequency loads as a number.
+    const note =
+      typeof document.hintNote === "number" ? String(document.hintNote) : document.hintNote;
+    if (note === null || (typeof note === "string" && hintFrequency(note))) {
+      parsed.hintNote = note;
+    } else {
+      warnings.push(
+        `hintNote: expected a note from A1 to G6 or a frequency in Hz, ignoring ${JSON.stringify(document.hintNote)}`,
+      );
+    }
+  }
 
   const voiceStyles = parseVoiceStyles(document.voiceStyles, warnings);
   if (voiceStyles !== undefined) parsed.voiceStyles = voiceStyles;

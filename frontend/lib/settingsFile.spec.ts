@@ -370,6 +370,7 @@ describe("serializeSettingsYaml", () => {
     separationModel: BACKING_VOCALS_HQ_SEPARATOR_MODEL,
     backingTrack: NO_VOCALS_SEPARATOR_MODEL,
     backgroundVideoOffset: -0.25,
+    hintNote: "F#3",
     videoOptions: {
       vocalSeparationModel: NO_VOCALS_SEPARATOR_MODEL,
       addTitleScreen: false,
@@ -452,6 +453,24 @@ describe("serializeSettingsYaml", () => {
 
     expect(unmoved).not.toHaveProperty("backgroundVideoOffset");
   });
+
+  test("writes the hint note, and leaves it out while there is none", () => {
+    expect(parseSettingsYaml(serializeSettingsYaml(source)).hintNote).toBe("F#3");
+    const silent = yaml.load(serializeSettingsYaml({ ...source, hintNote: null }));
+
+    expect(silent).not.toHaveProperty("hintNote");
+  });
+
+  test("reads an unquoted frequency as the hint note", () => {
+    expect(parseSettingsYaml("hintNote: 432\n").hintNote).toBe("432");
+  });
+
+  test("ignores a hint note it can't play, with a warning", () => {
+    const parsed = parseSettingsYaml("hintNote: A7\n");
+
+    expect(parsed).not.toHaveProperty("hintNote");
+    expect(parsed.warnings.join("\n")).toContain("hintNote");
+  });
 });
 
 describe("serializeSubtitleSettings", () => {
@@ -460,6 +479,7 @@ describe("serializeSubtitleSettings", () => {
     separationModel: BACKING_VOCALS_HQ_SEPARATOR_MODEL,
     backingTrack: NO_VOCALS_SEPARATOR_MODEL,
     backgroundVideoOffset: 0,
+    hintNote: null,
     videoOptions: {
       addTitleScreen: true,
       titleScreenDuration: 4,

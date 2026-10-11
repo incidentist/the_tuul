@@ -462,6 +462,7 @@ export const useSettingsStore = defineStore("settings", () => {
       separationModel: media.separationModel,
       backingTrack: media.separatedTrack?.source ?? null,
       backgroundVideoOffset: media.backgroundVideoOffset,
+      hintNote: media.hintNote,
       videoOptions,
       voiceStyles: voiceStyles.value,
     };

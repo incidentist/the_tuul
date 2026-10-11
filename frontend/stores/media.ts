@@ -32,6 +32,7 @@ const MEDIA_LOCALSTORAGE_KEYS = [
   "media.runningSeparation",
   "media.renderTrackSource",
   "media.backgroundVideoOffset",
+  "media.hintNote",
 ];
 const MEDIA_IDB_KEYS = [
   "media.songFile",
@@ -119,6 +120,8 @@ export const useMediaStore = defineStore("media", () => {
   // Seconds the background video is moved against the backing track, which need not come from
   // the video's own audio. A positive offset delays the video, and a negative one skips its start.
   const backgroundVideoOffset = ref(0);
+  // The note played during the title screen, as typed: a note such as "A3", or a frequency in Hz.
+  const hintNote = ref<string | null>(null);
 
   // The semantic state these map to (timings array, lyric text, separatedTrack.backing) is held elsewhere;
   // these refs exist so the FileUpload widgets can re-display the user's selection after a reload.
@@ -528,6 +531,7 @@ export const useMediaStore = defineStore("media", () => {
   persistJsonRef("media.runningSeparation", runningSeparation);
   persistJsonRef("media.renderTrackSource", renderTrackSource);
   persistJsonRef("media.backgroundVideoOffset", backgroundVideoOffset);
+  persistJsonRef("media.hintNote", hintNote);
 
   // Blobs → IndexedDB (async load)
   Promise.all([
@@ -553,6 +557,7 @@ export const useMediaStore = defineStore("media", () => {
     songFile.value = null;
     background.value = null;
     backgroundVideoOffset.value = 0;
+    hintNote.value = null;
     trackPairs.value = null;
     renderTrackSource.value = null;
     timingsFile.value = null;
@@ -581,6 +586,7 @@ export const useMediaStore = defineStore("media", () => {
     songFile,
     background,
     backgroundVideoOffset,
+    hintNote,
     timingsFile,
     lyricsFile,
     kbpFile,

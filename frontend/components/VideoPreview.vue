@@ -37,6 +37,7 @@ import type { BackgroundFit } from "@/lib/timing";
 import bufferToWav from "audiobuffer-to-wav";
 import { restoredBacking } from "@/lib/gapMix";
 import type { Span } from "@/lib/gapRestore";
+import { addHintTone, HintTone } from "@/lib/hintTone";
 import SubtitleDisplay from "./SubtitleDisplay.vue";
 import SmoothAudioPlayer from "./SmoothAudioPlayer.vue";
 
@@ -79,6 +80,10 @@ export default defineComponent({
       type: Number,
       default: 0.0,
     },
+    hintTone: {
+      type: Object as PropType<HintTone | null>,
+      default: null,
+    },
     fonts: {
       type: Object,
     },
@@ -105,14 +110,14 @@ export default defineComponent({
       // Nothing in here is rendered, so none of it needs to be reactive.
       view: markRaw({
         // Object URLs of already-prepared (silence-prepended) tracks,
-        // keyed by source blob and by how much silence was prepended.
+        // keyed by source blob and by the silence and hint tone they were prepared with.
         // The audio delay can change while the preview is mounted,
         // for example when count-ins are toggled or timings are edited.
         // Caching makes repeat track switches instant, since preparing a full song takes seconds.
         // URLs also live until unmount, so one in use is never revoked:
         // revoking mid-playback aborts the media fetch and wedges the <audio> element,
         // notably in Firefox.
-        preparedTrackUrls: new Map<Blob, Map<number, string>>(),
+        preparedTrackUrls: new Map<Blob, Map<string, string>>(),
         // The preview stays mounted when its tab is hidden, but its inputs keep changing:
         // every timing tap updates the audio delay.
         // Preparing audio is expensive, so while hidden we only remember the latest update
@@ -134,6 +139,9 @@ export default defineComponent({
         return this.backingTrack;
       }
       return this.songFile;
+    },
+    hintToneKey(): string {
+      return JSON.stringify(this.hintTone);
     },
     restoredGapsKey(): string {
       return this.activeAudio === this.songFile
@@ -161,6 +169,9 @@ export default defineComponent({
       this.scheduleAudioUpdate(this.activeAudio, newDelay);
     },
     restoredGapsKey() {
+      this.scheduleAudioUpdate(this.activeAudio, this.audioDelay);
+    },
+    hintToneKey() {
       this.scheduleAudioUpdate(this.activeAudio, this.audioDelay);
     },
   },
@@ -223,16 +234,18 @@ export default defineComponent({
       if (audioData !== source) {
         this.view.restoredTracks.add(audioData);
       }
-      let urlsBySilence = this.view.preparedTrackUrls.get(audioData);
-      if (!urlsBySilence) {
-        urlsBySilence = new Map<number, string>();
-        this.view.preparedTrackUrls.set(audioData, urlsBySilence);
+      let urlsByPreparation = this.view.preparedTrackUrls.get(audioData);
+      if (!urlsByPreparation) {
+        urlsByPreparation = new Map<string, string>();
+        this.view.preparedTrackUrls.set(audioData, urlsByPreparation);
       }
-      let url = urlsBySilence.get(silence);
+      const hintTone = this.hintTone;
+      const preparation = `${silence} ${this.hintToneKey}`;
+      let url = urlsByPreparation.get(preparation);
       if (!url) {
-        const audioWithSilence = await this.prependSilence(audioData, silence);
-        url = URL.createObjectURL(audioWithSilence);
-        urlsBySilence.set(silence, url);
+        const prepared = await this.prepareTrack(audioData, silence, hintTone);
+        url = URL.createObjectURL(prepared);
+        urlsByPreparation.set(preparation, url);
       }
       if (request !== this.view.audioRequest) {
         return;
@@ -278,8 +291,16 @@ export default defineComponent({
         this.view.restoredTracks.delete(track);
       }
     },
-    async prependSilence(audioData: Blob, secondsOfSilence: number): Promise<Blob> {
-      if (secondsOfSilence == 0) {
+    /**
+     * The track as the video plays it, after the silence the title screen adds and under the
+     * hint tone.
+     */
+    async prepareTrack(
+      audioData: Blob,
+      secondsOfSilence: number,
+      hintTone: HintTone | null,
+    ): Promise<Blob> {
+      if (secondsOfSilence == 0 && !hintTone) {
         return audioData;
       }
 
@@ -311,6 +332,9 @@ export default defineComponent({
         const resultData = songBuffer.getChannelData(channel);
         const silenceData = songWithSilenceBuffer.getChannelData(channel);
         silenceData.set(resultData, secondsOfSilence * audioBuffer.sampleRate);
+      }
+      if (hintTone) {
+        addHintTone(songWithSilenceBuffer, hintTone);
       }
 
       const wavAudio: ArrayBuffer = bufferToWav(songWithSilenceBuffer);
@@ -360,8 +384,8 @@ export default defineComponent({
   },
   beforeUnmount() {
     this.view.visibilityObserver?.disconnect();
-    for (const urlsBySilence of this.view.preparedTrackUrls.values()) {
-      for (const url of urlsBySilence.values()) {
+    for (const urlsByPreparation of this.view.preparedTrackUrls.values()) {
+      for (const url of urlsByPreparation.values()) {
         URL.revokeObjectURL(url);
       }
     }

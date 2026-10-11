@@ -6,6 +6,7 @@ import { RenderDiagnostics } from "@/lib/renderDiagnostics";
 import { BackgroundFit, KaraokeOptions, RESOLUTIONS, RenderQuality } from "@/lib/timing";
 import { BackgroundKind, backgroundExtension, backgroundKind } from "@/lib/background";
 import { audioDuration } from "@/lib/trackLength";
+import { HintTone, hintToneWav } from "@/lib/hintTone";
 import jszip from "jszip";
 
 // Functions related to video file creation
@@ -93,6 +94,8 @@ export interface BackgroundInput {
   fileName: string;
 }
 
+const HINT_TONE_FILE = "hint.wav";
+
 export interface FfmpegParamsOptions {
   background: BackgroundInput | null;
   backgroundFit?: BackgroundFit;
@@ -100,6 +103,8 @@ export interface FfmpegParamsOptions {
   frame: RenderFrame;
   quality?: RenderQuality;
   audioDelayMs: number;
+  // Whether HINT_TONE_FILE is mixed into the backing track.
+  hintTone?: boolean;
   // Seconds the background video is moved by. A positive offset delays it, and a negative one
   // skips its start.
   videoOffset?: number;
@@ -200,6 +205,7 @@ export function getFfmpegParams({
   frame: { width, height, frameRate },
   quality = "standard",
   audioDelayMs,
+  hintTone = false,
   videoOffset = 0,
   durationSeconds,
   metadata,
@@ -215,10 +221,13 @@ export function getFfmpegParams({
     heldSeconds,
     videoOffset,
   });
+  const delaySong = `[1:a]adelay=delays=${audioDelayMs}:all=1`;
   const filterGraph = [
     ...(background.chains ?? []),
     `${background.head ?? "[0:v]"}${[...background.filters, "ass=subtitles.ass:fontsdir=/tmp"].join(",")}[vout]`,
-    `[1:a]adelay=delays=${audioDelayMs}:all=1[aout]`,
+    ...(hintTone
+      ? [`${delaySong}[song]`, "[song][2:a]amix=inputs=2:duration=first:normalize=0[aout]"]
+      : [`${delaySong}[aout]`]),
   ].join(";");
 
   return [
@@ -226,6 +235,7 @@ export function getFfmpegParams({
     ...SINGLE_THREAD_DECODE,
     "-i",
     "audio.mp4",
+    ...(hintTone ? ["-i", HINT_TONE_FILE] : []),
     ...FILTER_THREADS,
     "-filter_complex",
     filterGraph,
@@ -457,6 +467,8 @@ export interface CreateVideoOptions {
   background?: Blob | null;
   backgroundVideoOffset?: number;
   audioDelay?: number;
+  // Mixed into the main audio track only.
+  hintTone?: HintTone | null;
   // When the video shows the title and artist. A PNG of the frame there comes back with the video.
   titleFrameTime?: number | null;
   alternateTracks?: AlternateAudioTracks | null;
@@ -479,6 +491,7 @@ async function createVideo({
   background = null,
   backgroundVideoOffset = 0,
   audioDelay = 0,
+  hintTone = null,
   titleFrameTime = null,
   alternateTracks = null,
   onProgress,
@@ -562,6 +575,9 @@ async function createVideo({
 
     // Write audio to ffmpeg filesystem
     await ffmpeg.writeFile(songFileName, await fetchFile(backing));
+    if (hintTone) {
+      await ffmpeg.writeFile(HINT_TONE_FILE, new Uint8Array(hintToneWav(hintTone)));
+    }
 
     // The ass filter indexes fontsdir by the family name inside each file,
     // so the filename only has to be path-safe and unique, which a family name is not necessarily.
@@ -595,6 +611,7 @@ async function createVideo({
       frame: { ...RESOLUTIONS[videoOptions.resolution], frameRate: videoOptions.frameRate },
       quality: videoOptions.quality,
       audioDelayMs,
+      hintTone: hintTone !== null,
       videoOffset: backgroundVideoOffset,
       durationSeconds: videoSeconds,
       metadata,

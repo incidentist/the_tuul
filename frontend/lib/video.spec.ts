@@ -225,6 +225,16 @@ describe("getFfmpegParams", () => {
     expect(args.join(" ")).toContain("-map [vout] -map [aout]");
   });
 
+  it("mixes the hint tone into the delayed backing track", () => {
+    const args = params({ audioDelayMs: 4000, hintTone: true });
+    const chains = graphChains(args);
+
+    expect(args.join(" ")).toContain("-i audio.mp4 -i hint.wav");
+    expect(chains).toContain("[1:a]adelay=delays=4000:all=1[song]");
+    // The backing track sets the length, and normalizing would halve its level.
+    expect(chains).toContain("[song][2:a]amix=inputs=2:duration=first:normalize=0[aout]");
+  });
+
   it.each([
     ["a background video", VIDEO],
     ["a background image", IMAGE],

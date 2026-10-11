@@ -681,6 +681,9 @@ export default defineComponent({
       if (settings.backgroundVideoOffset !== undefined) {
         this.mediaStore.backgroundVideoOffset = settings.backgroundVideoOffset;
       }
+      if (settings.hintNote !== undefined) {
+        this.mediaStore.hintNote = settings.hintNote;
+      }
       if (settings.song.title) {
         this.mediaStore.songTitle = settings.song.title;
       }

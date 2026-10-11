@@ -358,6 +358,26 @@
                 controls-position="compact"
               ></b-numberinput>
             </b-field>
+            <b-field horizontal :type="hintNoteError ? 'is-danger' : ''" :message="hintNoteError">
+              <template #label>
+                Hint Note
+                <viewport-tooltip
+                  wide
+                  label="Play this note over the title screen, so the singer can find the first note when the singing starts before the instruments. Type a note such as A3, C#4 or Bb2, or a frequency in Hz for a song off standard tuning. Leave it empty for no note."
+                >
+                  <b-icon size="is-small" icon="circle-question"></b-icon>
+                </viewport-tooltip>
+              </template>
+              <b-input
+                expanded
+                aria-label="Hint note"
+                :model-value="mediaStore.hintNote ?? ''"
+                @update:model-value="
+                  (v: string | number | undefined) =>
+                    (mediaStore.hintNote = String(v ?? '') || null)
+                "
+              ></b-input>
+            </b-field>
             <b-field horizontal>
               <template #label>
                 Show Title
@@ -629,6 +649,7 @@
           :gap-level-balance="videoOptions.gapLevelBalance"
           :subtitles="allVoicesSubtitles()"
           :audio-delay="audioDelay"
+          :hint-tone="hintTone"
           :fonts="fontMap"
           :background-color="videoOptions.color.background.toString()"
           :background="videoOptions.useBackground ? (background ?? undefined) : undefined"
@@ -739,6 +760,7 @@ import SettingsSection from "@/components/SettingsSection.vue";
 import StyleOverrideFields from "@/components/StyleOverrideFields.vue";
 import jszip from "jszip";
 import video, { CreateVideoOptions } from "@/lib/video";
+import type { HintTone } from "@/lib/hintTone";
 import { CreationPhase, TrackSource } from "@/types";
 import { useMediaStore } from "@/stores/media";
 import { useSettingsStore, VideoSettings } from "@/stores/settings";
@@ -764,6 +786,7 @@ import { BUNDLED_FONTS as fonts, COUNT_IN_SYMBOLS } from "@/lib/fonts";
 import { projectFilesToKbp } from "@/lib/kbpConvert";
 import { applyVoiceStyle, isEmptyOverride, VoiceStyleOverride } from "@/lib/voiceStyle";
 import { restoredBacking } from "@/lib/gapMix";
+import { HIGHEST_HINT_FREQUENCY, LOWEST_HINT_FREQUENCY, hintFrequency } from "@/lib/notes";
 
 // The rest of the bar is the zip, which carries the source song and both separated tracks.
 const RENDER_SHARE = 0.95;
@@ -981,6 +1004,19 @@ export default defineComponent({
     audioDelay(): number {
       return this.timingsStore.audioDelay;
     },
+    hintNoteError(): string {
+      const text = this.mediaStore.hintNote ?? "";
+      return text.trim() && !hintFrequency(text)
+        ? `Type a note from A1 to G6, or a frequency from ${LOWEST_HINT_FREQUENCY} to ${HIGHEST_HINT_FREQUENCY} Hz.`
+        : "";
+    },
+    hintTone(): HintTone | null {
+      const frequency = hintFrequency(this.mediaStore.hintNote ?? "");
+      if (!frequency || !this.videoOptions.addTitleScreen) {
+        return null;
+      }
+      return { frequency, seconds: this.videoOptions.titleScreenDuration };
+    },
     kbpFileName(): string {
       const song = this.mediaStore.songFile?.name;
       return song ? song.replace(/\.[^.]*$/, "") + ".kbp" : "project.kbp";
@@ -1161,6 +1197,7 @@ export default defineComponent({
           backgroundVideoOffset: this.mediaStore.backgroundVideoOffset,
           subtitles: this.allVoicesSubtitles(),
           audioDelay: this.audioDelay,
+          hintTone: this.hintTone,
           titleFrameTime: this.timingsStore.titleFrameTime,
           videoOptions,
           metadata: {
