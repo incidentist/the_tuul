@@ -174,7 +174,6 @@ test.describe("Custom Font Upload", () => {
     await openFontSettings(page);
 
     const title = page.locator(".style-override-row").filter({ hasText: "Title" });
-    await title.getByText("Custom style").click();
     await title.locator('.style-font-upload input[type="file"]').setInputFiles(bundledFontPath());
     await expect(title.locator(".style-font-help")).toContainText(
       "Rendering the title in “Metal Mania”",

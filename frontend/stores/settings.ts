@@ -214,12 +214,14 @@ type StoredSettings = Omit<VideoSettings, "color" | "titleStyle"> & {
   titleStyle?: Record<string, unknown>;
 };
 
+const DEFAULT_SECONDARY_COLOR = Color.parse("#FFFFFF");
+
 // Default settings with simple hex strings
 const DEFAULT_SETTINGS: VideoSettings = {
   addTitleScreen: true,
   titleScreenDuration: TITLE_SCREEN_DURATION,
   showTitle: true,
-  titleStyle: {},
+  titleStyle: { fontSize: 45, outline: DEFAULT_SECONDARY_COLOR, outlineWidth: 1 },
   countInMode: DEFAULT_COUNT_IN_MODE,
   countInText: DEFAULT_COUNT_IN_TEXT,
   dynamicCountIns: DEFAULT_DYNAMIC_COUNT_INS,
@@ -257,7 +259,7 @@ const DEFAULT_SETTINGS: VideoSettings = {
     background: Color.parse("#000000"),
     // Keep in sync with the primary in main.scss.
     primary: Color.parse("#7957D5"),
-    secondary: Color.parse("#FFFFFF"),
+    secondary: DEFAULT_SECONDARY_COLOR,
     outline: Color.parse("#000000"),
     shadow: Color.parse("#000000"),
   },
