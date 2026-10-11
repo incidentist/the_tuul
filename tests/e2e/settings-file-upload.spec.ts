@@ -36,7 +36,7 @@ test.describe("Settings File Upload", () => {
 
     // ...as are the video options, over on the Submit tab
     await navigateToTab(page, TabId.Submit);
-    await expect(radioFor(page, "Count-Ins", "line")).toBeChecked();
+    await expect(radioFor(page, "Count-Ins", "screen")).toBeChecked();
     await expect(fieldFor(page, "Instrumental Breaks").locator('input[type="number"]')).toHaveValue(
       "12.5",
     );
@@ -59,6 +59,6 @@ test.describe("Settings File Upload", () => {
     await expect(page.locator(".toast.is-danger")).toBeVisible();
 
     await navigateToTab(page, TabId.Submit);
-    await expect(radioFor(page, "Count-Ins", "screen")).toBeChecked();
+    await expect(radioFor(page, "Count-Ins", "line")).toBeChecked();
   });
 });

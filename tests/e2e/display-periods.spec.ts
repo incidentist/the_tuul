@@ -253,7 +253,7 @@ test.describe("Timing tab Lines mode", () => {
     page,
   }) => {
     // One and Six share the first row. Six's screen shows from when One's ends until 12 s,
-    // and Four, at One's height, is sung from 7 s.
+    // and Four, at One's height, counts in from 6 s.
     await setupDisplayMode(
       page,
       "One\nTwo\n\nThree\nFour\nFive\nSix",
@@ -269,7 +269,7 @@ test.describe("Timing tab Lines mode", () => {
     await page.mouse.down();
     await page.mouse.move(x + 4 * pixelsPerSecond, y, { steps: 10 });
     await page.mouse.up();
-    await expect.poll(() => firstSegment(page)).toMatchObject({ displayEnd: 7 });
+    await expect.poll(() => firstSegment(page)).toMatchObject({ displayEnd: 6 });
 
     box = (await endEdge.boundingBox())!;
     x = box.x + box.width / 2;

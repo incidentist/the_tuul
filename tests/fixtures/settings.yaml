@@ -6,7 +6,7 @@ song:
 separationModel: UVR-MDX-NET-Inst_HQ_3.onnx
 videoOptions:
   addTitleScreen: true
-  countInMode: line
+  countInMode: screen
   instrumentalThreshold: 12.5
   addStaggeredLines: true
   useBackgroundVideo: false
