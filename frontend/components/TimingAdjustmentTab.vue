@@ -2260,6 +2260,12 @@ buttons float over it, and the settings open in a drawer. */
   min-height: 0;
 }
 
+/* The region rows start below the immersive bar. Keep in sync with its padding and the overview's
+height. */
+.is-immersive :deep(.wavesurfer-container) {
+  --region-top-inset: calc(0.5rem + 40px);
+}
+
 .immersive-bar {
   position: absolute;
   inset: 0 0 auto;

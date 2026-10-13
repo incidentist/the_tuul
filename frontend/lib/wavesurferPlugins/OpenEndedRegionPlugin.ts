@@ -479,15 +479,16 @@ class SingleRegion extends EventEmitter<RegionEvents> implements Region {
   }
 
   /**
-   * Place the region in its channel. The first channel is at the top edge and the last at the
-   * bottom edge, less a margin, so a region is shifted up by the same share of its own height as
-   * its top is of the track height.
+   * Place the region in its channel. The first channel is at the top edge, below the
+   * `--region-top-inset` the page may set, and the last at the bottom edge, less a margin. A region
+   * is shifted up by the same share of its own height as its top is of the height left.
    */
   private placeInChannel() {
     const last = this.numberOfChannels - 1;
     const share = this.channelIdx >= 0 && last > 0 ? Math.min(this.channelIdx, last) / last : 0;
     const margin = CHANNEL_MARGIN_PX * (1 - 2 * share);
-    this.element.style.top = `calc(${share * 100}% + ${margin}px)`;
+    const inset = "var(--region-top-inset, 0px)";
+    this.element.style.top = `calc(${inset} + ${share} * (100% - ${inset}) + ${margin}px)`;
     this.element.style.transform = `translateY(${-share * 100}%)`;
   }
 
