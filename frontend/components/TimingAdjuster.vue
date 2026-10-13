@@ -1,6 +1,18 @@
 <template>
   <div class="timing-adjuster">
-    <playback-transport :player="player" />
+    <playback-transport :player="player">
+      <template v-if="overviewBuffer" #slider>
+        <overview-strip
+          :player="player"
+          :buffer="overviewBuffer"
+          :regions="overviewRegions"
+          :view="view"
+          :centered="tapMode"
+          @scroll-to="scrollTo"
+          @scroll-wheel="onOverviewWheel"
+        />
+      </template>
+    </playback-transport>
     <div class="waveform-stage">
       <!-- Display only. It loads its own copy of the audio, so playing it would double up
          with the player above; the playhead is driven by setTime instead. -->
@@ -32,6 +44,8 @@
         @zoom-change="$emit('zoom-change', $event)"
         @zoom-by="$emit('zoom-by', $event)"
         @scroll-change="$emit('scroll-change', $event)"
+        @view-change="onViewChange"
+        @decode="onDecode"
       />
       <tap-queue v-if="tapMode" :items="queue" @pick="$emit('segment-picked', $event)" />
       <slot />
@@ -40,10 +54,11 @@
 </template>
 
 <script lang="ts">
-import { defineComponent, markRaw, PropType } from "vue";
+import { defineComponent, markRaw, PropType, reactive } from "vue";
 import { RegionParams, Region } from "@/lib/wavesurferPlugins/OpenEndedRegionPlugin";
 import Wavesurfer from "@/components/Wavesurfer.vue";
 import PlaybackTransport from "./PlaybackTransport.vue";
+import OverviewStrip, { OverviewRegion, TimeRange } from "./OverviewStrip.vue";
 import TapQueue, { QueueItem } from "./TapQueue.vue";
 
 import { findLastIndex } from "lodash-es";
@@ -124,6 +139,7 @@ export default defineComponent({
   components: {
     Wavesurfer,
     PlaybackTransport,
+    OverviewStrip,
     TapQueue,
   },
   props: {
@@ -177,12 +193,30 @@ export default defineComponent({
       // The span being played by playRange, which pauses at its end and goes back to the preroll
       // before its start.
       playingRange: null as { start: number; end: number } | null,
+      // The waveform the overview draws, once decoded.
+      overviewBuffer: null as AudioBuffer | null,
+      // Only the overview reads the fields, so a scroll re-renders the overview alone.
+      view: reactive({ start: 0, end: 0 }) as TimeRange,
+      selected: [] as number[],
     };
   },
   computed: {
     // The same empty array every time, as a new one would rebuild the waveform's regions.
     shownRegions(): RegionParams[] {
       return this.displayMode || this.mixMode ? NO_REGIONS : this.regions;
+    },
+    overviewRegions(): OverviewRegion[] {
+      const selected = new Set(this.selected);
+      return this.regions.map((region) => {
+        const index = parseInt(region.id!.split("_")[1]);
+        return {
+          start: region.start,
+          end: region.end,
+          review: region.review,
+          selected: selected.has(index),
+          hole: (this.segments ?? [])[index]?.start === undefined,
+        };
+      });
     },
   },
   mounted() {
@@ -380,10 +414,21 @@ export default defineComponent({
       if (region) this.wavesurferRef()?.selectRegion(id, region.start);
     },
     onSelectionChange(ids: string[]) {
-      this.$emit(
-        "selection-change",
-        ids.map((id) => parseInt(id.split("_")[1])),
-      );
+      this.selected = ids.map((id) => parseInt(id.split("_")[1]));
+      this.$emit("selection-change", this.selected);
+    },
+    onDecode(buffer: AudioBuffer) {
+      this.overviewBuffer = markRaw(buffer);
+    },
+    onViewChange(range: TimeRange) {
+      this.view.start = range.start;
+      this.view.end = range.end;
+    },
+    scrollTo(time: number) {
+      this.wavesurferRef()?.scrollToTime(time);
+    },
+    onOverviewWheel(event: WheelEvent, time: number) {
+      this.wavesurferRef()?.wheelFromOverview(event, time);
     },
     /**
      * The song time being heard, or the one heard at `at`, a `performance.now()` time such as an

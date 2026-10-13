@@ -284,6 +284,7 @@ export default defineComponent({
     // and the plugin defers saving them until it has one, past the reach of clearRegions().
     // Landing straight on this tab (a #adjust deep link or reload) is the case that hits it.
     this.wavesurfer.on("ready", () => {
+      this.$emit("decode", this.wavesurfer?.getDecodedData());
       this.updateRegions(this.regions);
       this.bandsPlugin.setBands(this.bands, this.bandsEnabled);
       this.updateMix();
@@ -399,7 +400,10 @@ export default defineComponent({
     "zoom-change",
     "zoom-by",
     "scroll-change",
+    // The stretch of the track in view, in seconds, whenever it scrolls or zooms.
+    "view-change",
     "scrub",
+    "decode",
   ],
   methods: {
     updateMix() {
@@ -416,9 +420,23 @@ export default defineComponent({
       this.resetSpectrogram();
     },
     onWheel(event: WheelEvent) {
+      this.applyWheel(event, () => this.anchorZoomAt(event.clientX), this.centered);
+    },
+    /**
+     * A wheel turned over the overview acts as one turned over the waveform, zooming around `time`.
+     * The overview has no scroll of its own, so a sideways turn always pans.
+     */
+    wheelFromOverview(event: WheelEvent, time: number) {
+      this.applyWheel(event, () => this.anchorZoomAtTime(time), true);
+    },
+    /**
+     * Zoom for an upright turn, around the point `anchor` sets. Pan for a sideways one where
+     * `pansSideways` or Shift says so, and leave it to the browser's own scroll otherwise.
+     */
+    applyWheel(event: WheelEvent, anchor: () => void, pansSideways: boolean) {
       // Shift turns the wheel sideways. Some browsers report that as deltaX already, others don't.
       const sideways = event.shiftKey ? event.deltaX || event.deltaY : event.deltaX;
-      if (sideways !== 0 && (this.centered || event.shiftKey)) {
+      if (sideways !== 0 && (pansSideways || event.shiftKey)) {
         event.preventDefault();
         const scrollEl = this.scrollElement();
         const pixels =
@@ -431,7 +449,7 @@ export default defineComponent({
       }
       if (event.shiftKey || event.deltaY === 0) return;
       event.preventDefault();
-      this.anchorZoomAt(event.clientX);
+      anchor();
       // Scrolling up zooms in, matching maps and image viewers.
       this.$emit("zoom-change", -Math.sign(event.deltaY));
     },
@@ -509,6 +527,20 @@ export default defineComponent({
       const cursorX = clientX - scrollEl.getBoundingClientRect().left;
       const time = (scrollEl.scrollLeft + cursorX) / this.pixelsPerSecond(scrollEl);
       this._zoomAnchor = { time, cursorX };
+    },
+    /**
+     * Keep `time` where it is on screen through the next zoom. A time out of view is held at the
+     * nearest edge instead, so that the view doesn't jump to it.
+     */
+    anchorZoomAtTime(time: number) {
+      const scrollEl = this.scrollElement();
+      const range = this.visibleTimeRange();
+      if (!scrollEl || !range) return;
+      const anchor = Math.min(range.end, Math.max(range.start, time));
+      this._zoomAnchor = {
+        time: anchor,
+        cursorX: anchor * this.pixelsPerSecond(scrollEl) - scrollEl.scrollLeft,
+      };
     },
     /**
      * Two fingers pinch to zoom. On a centered view, which can't be scrolled by hand, one finger
@@ -934,6 +966,17 @@ export default defineComponent({
       this._savedScrollLeft = scrollEl.scrollLeft;
       const start = this.scrollSeconds(scrollEl);
       if (start !== null) this.$emit("scroll-change", start);
+      const range = this.visibleTimeRange();
+      if (range) this.$emit("view-change", range);
+    },
+    /**
+     * Scroll so that the view starts at `time`. A centered view stays on the playhead.
+     */
+    scrollToTime(time: number) {
+      const scrollEl = this.scrollElement();
+      const duration = this.wavesurfer?.getDuration() ?? 0;
+      if (this.centered || !scrollEl?.scrollWidth || !duration) return;
+      scrollEl.scrollLeft = (time / duration) * scrollEl.scrollWidth;
     },
     /**
      * The left edge of the view in seconds, which survives a zoom change as a pixel offset would not.

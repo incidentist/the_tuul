@@ -10,17 +10,19 @@
       <b-icon :icon="paused ? 'play' : 'pause'" />
     </button>
     <span class="transport-time">{{ loading ? "Loading…" : formatTime(time) }}</span>
-    <input
-      class="transport-slider"
-      type="range"
-      aria-label="Playback position"
-      min="0"
-      :max="duration || 0"
-      step="any"
-      :value="time"
-      :disabled="loading"
-      @input="onSeek"
-    />
+    <slot name="slider">
+      <input
+        class="transport-slider"
+        type="range"
+        aria-label="Playback position"
+        min="0"
+        :max="duration || 0"
+        step="any"
+        :value="time"
+        :disabled="loading"
+        @input="onSeek"
+      />
+    </slot>
     <span class="transport-time">{{ formatTime(duration) }}</span>
   </div>
 </template>
