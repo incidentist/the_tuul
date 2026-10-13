@@ -7,7 +7,7 @@
       <wavesurfer
         ref="wavesurfer"
         :audioData="vocalTrack || audioData"
-        :regions="displayMode || mixMode ? [] : regions"
+        :regions="shownRegions"
         :bands="bands"
         :bandsEnabled="bandsEnabled"
         :mixFrames="mixFrames"
@@ -58,6 +58,8 @@ import type { MixFrame, MixGap } from "@/lib/wavesurferPlugins/MixPlugin";
 // An even number of channels leaves the middle between two of them.
 const TAP_CHANNELS = 4;
 const ADJUST_CHANNELS = 5;
+
+const NO_REGIONS: RegionParams[] = [];
 
 // An open-ended last segment is drawn up to the song's end,
 // so the lost segments after it stack this long after its start instead.
@@ -176,6 +178,12 @@ export default defineComponent({
       // before its start.
       playingRange: null as { start: number; end: number } | null,
     };
+  },
+  computed: {
+    // The same empty array every time, as a new one would rebuild the waveform's regions.
+    shownRegions(): RegionParams[] {
+      return this.displayMode || this.mixMode ? NO_REGIONS : this.regions;
+    },
   },
   mounted() {
     this.regions = this.createRegions(this.segments ?? []);
