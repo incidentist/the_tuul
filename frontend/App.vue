@@ -701,6 +701,11 @@ export default defineComponent({
   overflow: hidden;
 }
 
+.b-tabs.main-tabs .tab-content h2.title:not(.title-row *),
+.b-tabs.main-tabs .tab-content .title-row {
+  margin-bottom: 0.75rem;
+}
+
 /* The navbar shows the tab's name, so its heading is only kept for screen readers. */
 .b-tabs.main-tabs.has-drawer .tab-content h2.title {
   position: absolute;

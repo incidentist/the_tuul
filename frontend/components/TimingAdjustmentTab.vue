@@ -1877,7 +1877,6 @@ It grows to the full height too, so the waveform can take what the rest leaves. 
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
-  margin-bottom: var(--bulma-block-spacing);
 }
 
 /* Bulma only spaces a title that is :not(:last-child),

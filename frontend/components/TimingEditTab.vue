@@ -287,7 +287,6 @@ export default defineComponent({
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
-  margin-bottom: var(--bulma-block-spacing);
 }
 
 /* Bulma only spaces a title that is :not(:last-child), and the voice selector beside it
