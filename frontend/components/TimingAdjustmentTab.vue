@@ -123,7 +123,6 @@
           @click="resetTimings"
         />
         <voice-selector />
-        <b-switch v-model="showSpectrogram">Spectrogram</b-switch>
       </div>
     </div>
     <help-section>
@@ -353,6 +352,26 @@
                   @click="setMode('mix')"
                 >
                   Mix
+                </b-button>
+              </div>
+            </b-field>
+            <b-field label="View mode" horizontal>
+              <div class="buttons has-addons mode-switch">
+                <b-button
+                  :type="showSpectrogram ? '' : 'is-primary'"
+                  :aria-pressed="!showSpectrogram"
+                  title="Draw the loudness of the song"
+                  @click="showSpectrogram = false"
+                >
+                  Waveform
+                </b-button>
+                <b-button
+                  :type="showSpectrogram ? 'is-primary' : ''"
+                  :aria-pressed="showSpectrogram"
+                  title="Draw the pitches in the song"
+                  @click="showSpectrogram = true"
+                >
+                  Spectrogram
                 </b-button>
               </div>
             </b-field>
