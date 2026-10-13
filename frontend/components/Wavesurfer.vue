@@ -3,7 +3,10 @@
     ref="wavesurfer-container"
     :class="['wavesurfer-container', { 'hide-waveform': !showWaveform || spectrogram, centered }]"
     @wheel="onWheel"
+    @touchstart="countFingers"
     @touchmove="blockPagePinch"
+    @touchend="countFingers"
+    @touchcancel="countFingers"
     @pointerdown.capture="onPointerDown"
     @pointermove.capture="onPointerMove"
     @pointerup.capture="onPointerUp"
@@ -34,6 +37,9 @@ const TAP_SLOP_PX = 10;
 
 // What a scroll by one line is worth, for a mouse wheel that reports lines rather than pixels.
 const LINE_HEIGHT_PX = 16;
+
+// How long a swiped view goes on scrolling after the finger lifts.
+const SWIPE_MOMENTUM_MS = 1500;
 
 // How long the zoom and height have to stay put before the spectrogram is rebuilt for them.
 const SPECTROGRAM_SETTLE_MS = 300;
@@ -203,6 +209,8 @@ export default defineComponent({
       _skipNextRegionsUpdate: false,
       // A time to scroll into view once the waveform is laid out, asked for while it was hidden.
       _pendingReveal: null as number | null,
+      _fingers: 0,
+      _fingersLiftedAt: -Infinity,
     };
   },
   mounted() {
@@ -402,6 +410,8 @@ export default defineComponent({
     "scroll-change",
     // The stretch of the track in view, in seconds, whenever it scrolls or zooms.
     "view-change",
+    // The view was scrolled, zoomed or scrubbed by hand, as opposed to following the playhead.
+    "hand-move",
     "scrub",
     "decode",
   ],
@@ -434,6 +444,7 @@ export default defineComponent({
      * `pansSideways` or Shift says so, and leave it to the browser's own scroll otherwise.
      */
     applyWheel(event: WheelEvent, anchor: () => void, pansSideways: boolean) {
+      this.$emit("hand-move");
       // Shift turns the wheel sideways. Some browsers report that as deltaX already, others don't.
       const sideways = event.shiftKey ? event.deltaX || event.deltaY : event.deltaX;
       if (sideways !== 0 && (pansSideways || event.shiftKey)) {
@@ -493,6 +504,7 @@ export default defineComponent({
     },
     onPanMove(event: PointerEvent) {
       if (this._pan?.pointerId !== event.pointerId) return;
+      this.$emit("hand-move");
       // The waveform follows the pointer, so dragging to the right goes back in time.
       this.panBy(this._pan.x - event.clientX);
       this._pan.x = event.clientX;
@@ -515,7 +527,9 @@ export default defineComponent({
         this._scrubFrame = 0;
         const seconds = this._scrubSeconds;
         this._scrubSeconds = 0;
-        if (seconds) this.$emit("scrub", seconds);
+        if (!seconds) return;
+        this.$emit("scrub", seconds);
+        this.$emit("hand-move");
       });
     },
     /**
@@ -573,6 +587,20 @@ export default defineComponent({
       this._touches.delete(event.pointerId);
     },
     /**
+     * The browser's own scrolling takes over a swipe and cancels its pointer events, so the touch
+     * events tell a swipe's scroll from the app's.
+     */
+    countFingers(event: TouchEvent) {
+      this._fingers = event.touches.length;
+      if (!this._fingers) this._fingersLiftedAt = performance.now();
+    },
+    /**
+     * The scrolls that follow are the app's own, even if a swipe has only just ended.
+     */
+    endSwipeMomentum() {
+      this._fingersLiftedAt = -Infinity;
+    },
+    /**
      * Keeps the browser from zooming the page under a pinch, which zooms the waveform instead.
      * Firefox for Android ignores the touch-action that says so.
      */
@@ -615,6 +643,7 @@ export default defineComponent({
         // the old scroll position with the new scale.
         if (!this.centered) this.anchorZoomAt(this._zoomClientX);
         this.$emit("zoom-by", zoomRatio);
+        this.$emit("hand-move");
       });
     },
     drawWaveform(channels: Array<Float32Array | number[]>, ctx: CanvasRenderingContext2D) {
@@ -761,6 +790,7 @@ export default defineComponent({
      */
     setTime(time: number, keepScroll = false) {
       if (!this.wavesurfer) return;
+      this.endSwipeMomentum();
       this._stopKeepingScroll?.();
       this._stopKeepingScroll = null;
       this.wavesurfer.setTime(time);
@@ -968,6 +998,9 @@ export default defineComponent({
       if (start !== null) this.$emit("scroll-change", start);
       const range = this.visibleTimeRange();
       if (range) this.$emit("view-change", range);
+      if (this._fingers || performance.now() - this._fingersLiftedAt < SWIPE_MOMENTUM_MS) {
+        this.$emit("hand-move");
+      }
     },
     /**
      * Scroll so that the view starts at `time`. A centered view stays on the playhead.
@@ -976,6 +1009,7 @@ export default defineComponent({
       const scrollEl = this.scrollElement();
       const duration = this.wavesurfer?.getDuration() ?? 0;
       if (this.centered || !scrollEl?.scrollWidth || !duration) return;
+      this.endSwipeMomentum();
       scrollEl.scrollLeft = (time / duration) * scrollEl.scrollWidth;
     },
     /**

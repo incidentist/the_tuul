@@ -123,3 +123,61 @@ describe("TimingAdjuster region playback", () => {
     expect(playing.seeks).toEqual([]);
   });
 });
+
+describe("TimingAdjuster floating overview", () => {
+  function immersiveAdjuster() {
+    vi.useFakeTimers();
+    const wrapper = shallowMount(TimingAdjuster, {
+      props: { segments: [], immersive: true },
+      global: {
+        stubs: { Wavesurfer: { template: "<div />", methods: { endSwipeMomentum() {} } } },
+      },
+    });
+    return wrapper.vm as unknown as {
+      floatingOverview: { expanded: boolean };
+      expandFloatingOverview(): void;
+      holdFloatingOverview(): void;
+      collapseFloatingOverview(afterUse?: boolean): void;
+    };
+  }
+
+  it("expands while the view moves by hand, and collapses two seconds after it stops", () => {
+    const adjuster = immersiveAdjuster();
+
+    adjuster.expandFloatingOverview();
+    vi.advanceTimersByTime(1500);
+    adjuster.expandFloatingOverview();
+    vi.advanceTimersByTime(1500);
+    expect(adjuster.floatingOverview.expanded).toBe(true);
+
+    vi.advanceTimersByTime(500);
+    expect(adjuster.floatingOverview.expanded).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it("stays expanded while held, and collapses half a second after release", () => {
+    const adjuster = immersiveAdjuster();
+
+    adjuster.expandFloatingOverview();
+    adjuster.holdFloatingOverview();
+    vi.advanceTimersByTime(5000);
+    expect(adjuster.floatingOverview.expanded).toBe(true);
+
+    adjuster.collapseFloatingOverview(true);
+    vi.advanceTimersByTime(500);
+    expect(adjuster.floatingOverview.expanded).toBe(false);
+    vi.useRealTimers();
+  });
+
+  it("never expands outside immersive mode", () => {
+    const wrapper = shallowMount(TimingAdjuster, { props: { segments: [] } });
+    const adjuster = wrapper.vm as unknown as {
+      floatingOverview: { expanded: boolean };
+      expandFloatingOverview(): void;
+    };
+
+    adjuster.expandFloatingOverview();
+
+    expect(adjuster.floatingOverview.expanded).toBe(false);
+  });
+});

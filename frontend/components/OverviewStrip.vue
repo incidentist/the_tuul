@@ -2,6 +2,7 @@
   <div
     ref="strip"
     class="overview-strip"
+    :class="{ 'is-collapsed': collapsed }"
     @pointerdown="onPointerDown"
     @pointermove="onPointerMove"
     @pointerup="onPointerUp"
@@ -11,6 +12,7 @@
   >
     <!-- Keyboards and screen readers seek with this, and the pointer with the strip around it. -->
     <input
+      v-if="slider"
       ref="slider"
       class="transport-slider"
       type="range"
@@ -77,8 +79,12 @@ export default defineComponent({
     view: { type: Object as PropType<TimeRange | null>, default: null },
     // The main waveform follows the playhead, so dragging the view box seeks.
     centered: { type: Boolean, default: false },
+    // Without the slider, the strip is a second view of the transport's own.
+    slider: { type: Boolean, default: true },
+    // A thin line showing only the view, the flags and the playhead. A touch on it asks to expand.
+    collapsed: { type: Boolean, default: false },
   },
-  emits: ["scroll-to", "scroll-wheel"],
+  emits: ["scroll-to", "scroll-wheel", "expand", "grab", "release"],
   data() {
     return {
       duration: 0,
@@ -202,8 +208,13 @@ export default defineComponent({
     onPointerDown(event: PointerEvent) {
       if (event.pointerType === "mouse" && event.button !== 0) return;
       if (!this.duration) return;
+      if (this.collapsed) {
+        this.$emit("expand");
+        return;
+      }
       (this.$refs.strip as HTMLElement).setPointerCapture(event.pointerId);
       this.hideHover();
+      this.$emit("grab");
       const time = this.timeAt(event.clientX);
       const onBox = (event.target as HTMLElement).classList.contains("overview-view");
       if (onBox && !this.centered && this.view) {
@@ -230,6 +241,7 @@ export default defineComponent({
     onPointerUp(event: PointerEvent) {
       if (this._drag?.pointerId !== event.pointerId) return;
       this._drag = null;
+      this.$emit("release");
     },
     showHover(clientX: number) {
       const hover = this.$refs.hover as HTMLElement;
@@ -352,6 +364,29 @@ function formatTime(seconds: number): string {
   margin-left: -1px;
   background: var(--bulma-link-on-scheme, #7957d5);
   pointer-events: none;
+}
+
+/* A line this thin is hard to hit, so it takes touches a little above and below it. */
+.overview-strip.is-collapsed::after {
+  content: "";
+  position: absolute;
+  inset: -12px 0;
+}
+
+.overview-wave,
+.overview-region {
+  transition: opacity 150ms;
+}
+
+.is-collapsed .overview-wave,
+.is-collapsed .overview-region:not(.is-flagged) {
+  opacity: 0;
+}
+
+.is-collapsed .overview-view {
+  border: none;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--bulma-text-strong) 35%, transparent);
 }
 
 .overview-hover {

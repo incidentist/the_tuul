@@ -34,6 +34,7 @@ async function mountStrip(
   props: {
     regions?: OverviewRegion[];
     view?: { start: number; end: number };
+    collapsed?: boolean;
   } = {},
 ) {
   const player = fakePlayer();
@@ -103,6 +104,17 @@ describe("OverviewStrip", () => {
 
     await wrapper.trigger("pointermove", { pointerId: 1, clientX: 100, pointerType: "touch" });
     expect(player.currentTime).toBe(50);
+    expect(wrapper.emitted("grab")).toHaveLength(1);
+  });
+
+  it("asks to expand when touched collapsed, without seeking", async () => {
+    const { wrapper, player } = await mountStrip({ collapsed: true });
+
+    await wrapper.trigger("pointerdown", { pointerId: 1, clientX: 50, pointerType: "touch" });
+
+    expect(wrapper.emitted("expand")).toHaveLength(1);
+    expect(wrapper.emitted("grab")).toBeUndefined();
+    expect(player.currentTime).toBe(0);
   });
 
   it("scrolls the view when its box is dragged, without seeking", async () => {
@@ -115,6 +127,7 @@ describe("OverviewStrip", () => {
 
     expect(player.currentTime).toBe(0);
     expect(wrapper.emitted("scroll-to")).toEqual([[30]]);
+    expect(wrapper.emitted("release")).toHaveLength(1);
   });
 
   it("hands a wheel turn on with the time under the pointer", async () => {

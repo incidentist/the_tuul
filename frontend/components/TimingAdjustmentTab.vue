@@ -29,6 +29,7 @@
           <b-icon :icon="timingStatus === 'done' ? 'check' : 'warning'" />
         </span>
       </div>
+      <div id="immersive-overview" class="immersive-overview" />
       <div class="buttons">
         <b-button
           v-if="canFullScreen"
@@ -559,6 +560,7 @@
       :preservePitch="preservePitch"
       :initialPlayhead="restoredPlayhead"
       :initialScroll="restoredScroll"
+      :immersive="isImmersive"
       @segmentschange="onSegmentsChange"
       @bands-updated="onBandsUpdated"
       @band-reset="onBandReset"
@@ -2281,6 +2283,18 @@ buttons float over it, and the settings open in a drawer. */
 
 .immersive-status {
   display: inline-flex;
+}
+
+.immersive-overview {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  margin: 0 0.5rem;
+}
+
+.immersive-overview > :deep(*) {
+  pointer-events: auto;
 }
 
 .immersive-exit {

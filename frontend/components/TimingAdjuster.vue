@@ -13,6 +13,24 @@
         />
       </template>
     </playback-transport>
+    <Teleport v-if="immersive && overviewBuffer" defer to="#immersive-overview">
+      <overview-strip
+        class="floating-overview"
+        :class="{ 'is-expanded': floatingOverview.expanded }"
+        :collapsed="!floatingOverview.expanded"
+        :player="player"
+        :buffer="overviewBuffer"
+        :regions="overviewRegions"
+        :view="view"
+        :centered="tapMode"
+        :slider="false"
+        @scroll-to="scrollTo"
+        @scroll-wheel="onOverviewWheel"
+        @expand="expandFloatingOverview"
+        @grab="holdFloatingOverview"
+        @release="collapseFloatingOverview(true)"
+      />
+    </Teleport>
     <div class="waveform-stage">
       <!-- Display only. It loads its own copy of the audio, so playing it would double up
          with the player above; the playhead is driven by setTime instead. -->
@@ -45,6 +63,7 @@
         @zoom-by="$emit('zoom-by', $event)"
         @scroll-change="$emit('scroll-change', $event)"
         @view-change="onViewChange"
+        @hand-move="expandFloatingOverview"
         @decode="onDecode"
       />
       <tap-queue v-if="tapMode" :items="queue" @pick="$emit('segment-picked', $event)" />
@@ -73,6 +92,12 @@ import type { MixFrame, MixGap } from "@/lib/wavesurferPlugins/MixPlugin";
 // An even number of channels leaves the middle between two of them.
 const TAP_CHANNELS = 4;
 const ADJUST_CHANNELS = 5;
+
+// How long the floating overview stays expanded after the view was last moved by hand.
+const FLOATING_OVERVIEW_MS = 2000;
+// How long the floating overview stays expanded after a tap or drag on it, to show where the view
+// landed.
+const FLOATING_OVERVIEW_AFTER_USE_MS = 500;
 
 const NO_REGIONS: RegionParams[] = [];
 
@@ -178,6 +203,9 @@ export default defineComponent({
     zoom: { type: Number, default: 100 },
     playbackRate: { type: Number, default: 1 },
     preservePitch: { type: Boolean, default: false },
+    // A phone held sideways, where the overview floats over the waveform as a thin line, and
+    // expands while the view is moved by hand.
+    immersive: { type: Boolean, default: false },
   },
   data() {
     return {
@@ -198,6 +226,7 @@ export default defineComponent({
       // Only the overview reads the fields, so a scroll re-renders the overview alone.
       view: reactive({ start: 0, end: 0 }) as TimeRange,
       selected: [] as number[],
+      floatingOverview: { expanded: false, held: false, timer: 0 },
     };
   },
   computed: {
@@ -430,6 +459,28 @@ export default defineComponent({
     onOverviewWheel(event: WheelEvent, time: number) {
       this.wavesurferRef()?.wheelFromOverview(event, time);
     },
+    expandFloatingOverview() {
+      if (!this.immersive) return;
+      this.floatingOverview.expanded = true;
+      if (!this.floatingOverview.held) this.collapseFloatingOverview();
+    },
+    /**
+     * A finger on the overview keeps it expanded. The waveform may still be coasting from a swipe,
+     * which no longer counts as moving it by hand.
+     */
+    holdFloatingOverview() {
+      this.floatingOverview.held = true;
+      clearTimeout(this.floatingOverview.timer);
+      this.wavesurferRef()?.endSwipeMomentum();
+    },
+    collapseFloatingOverview(afterUse = false) {
+      this.floatingOverview.held = false;
+      clearTimeout(this.floatingOverview.timer);
+      this.floatingOverview.timer = window.setTimeout(
+        () => (this.floatingOverview.expanded = false),
+        afterUse ? FLOATING_OVERVIEW_AFTER_USE_MS : FLOATING_OVERVIEW_MS,
+      );
+    },
     /**
      * The song time being heard, or the one heard at `at`, a `performance.now()` time such as an
      * event's `timeStamp`.
@@ -560,6 +611,7 @@ export default defineComponent({
     },
   },
   beforeUnmount() {
+    clearTimeout(this.floatingOverview.timer);
     this.stopClock();
     this.unregisterPlayer?.();
     this.player.dispose();
@@ -578,6 +630,19 @@ export default defineComponent({
   position: relative;
   flex: 1 1 auto;
   min-height: 300px;
+}
+
+.overview-strip.floating-overview {
+  flex-grow: 0;
+  width: 100%;
+  height: 6px;
+  background: color-mix(in srgb, var(--bulma-scheme-main) 55%, transparent);
+  backdrop-filter: blur(3px);
+  transition: height 150ms;
+}
+
+.overview-strip.floating-overview.is-expanded {
+  height: 40px;
 }
 
 .waveform-stage > .wavesurfer-container {
