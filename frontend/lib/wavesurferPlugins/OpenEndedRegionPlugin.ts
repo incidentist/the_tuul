@@ -913,7 +913,7 @@ class RegionsPlugin extends BasePlugin<RegionsPluginEvents, RegionsPluginOptions
   private regions: Region[] = [];
   private readonly regionsContainer: HTMLElement;
   private readonly markersContainer: HTMLElement;
-  private readonly edgeLine: HTMLElement;
+  private readonly edgeLines: HTMLElement[];
   private resizing?: { region: Region; side: "start" | "end" };
   private firstRegion?: Region;
   // Kept as ids rather than references so a selection survives the
@@ -938,19 +938,21 @@ class RegionsPlugin extends BasePlugin<RegionsPluginEvents, RegionsPluginOptions
         pointerEvents: "none",
       },
     });
-    this.edgeLine = createElement(
-      "div",
-      {
-        part: "region-edge-line",
-        style: {
-          position: "absolute",
-          top: "0",
-          height: "100%",
-          borderLeft: `1px solid ${EDGE_LINE_COLOR}`,
-          display: "none",
+    this.edgeLines = [0, 1].map(() =>
+      createElement(
+        "div",
+        {
+          part: "region-edge-line",
+          style: {
+            position: "absolute",
+            top: "0",
+            height: "100%",
+            borderLeft: `1px solid ${EDGE_LINE_COLOR}`,
+            display: "none",
+          },
         },
-      },
-      this.markersContainer,
+        this.markersContainer,
+      ),
     );
   }
 
@@ -1206,6 +1208,7 @@ class RegionsPlugin extends BasePlugin<RegionsPluginEvents, RegionsPluginOptions
   private onGroupDragStart(region: Region) {
     if (!this.selectable) return;
     this.groupDrag = this.selectedIds.has(region.id) ? this.getSelectedRegions() : [region];
+    this.showEdgeLines();
   }
 
   private onGroupDrag(region: Region, dx: number) {
@@ -1223,12 +1226,14 @@ class RegionsPlugin extends BasePlugin<RegionsPluginEvents, RegionsPluginOptions
     if (!delta) return;
     this.scheduleLabelClip();
     selection.forEach((selectedRegion) => selectedRegion._shiftBy(delta));
+    this.showEdgeLines();
     this.adjustScroll(region);
   }
 
   private onGroupDragEnd() {
     const selection = this.groupDrag;
     this.groupDrag = undefined;
+    this.showEdgeLines();
     if (!selection?.length) return;
     this.emit("regions-updated", selection);
   }
@@ -1299,15 +1304,23 @@ class RegionsPlugin extends BasePlugin<RegionsPluginEvents, RegionsPluginOptions
   }
 
   /**
-   * Draw the line at the edge being dragged, or hide it when no edge is.
+   * Draw a line at the edge being dragged, or at both outer edges of the regions being moved.
    */
-  private showEdgeLine() {
+  private showEdgeLines() {
     const duration = this.wavesurfer?.getDuration() ?? 0;
-    const { region, side } = this.resizing ?? {};
-    const shown = region && side && duration;
-    Object.assign(this.edgeLine.style, {
-      display: shown ? "" : "none",
-      left: shown ? `${(region[side] / duration) * 100}%` : "",
+    const group = this.groupDrag;
+    let times: number[] = [];
+    if (this.resizing) {
+      times = [this.resizing.region[this.resizing.side]];
+    } else if (group?.length) {
+      times = [group[0].start, group[group.length - 1].end];
+    }
+    this.edgeLines.forEach((line, i) => {
+      const shown = duration && i < times.length;
+      Object.assign(line.style, {
+        display: shown ? "" : "none",
+        left: shown ? `${(times[i] / duration) * 100}%` : "",
+      });
     });
   }
 
@@ -1327,18 +1340,18 @@ class RegionsPlugin extends BasePlugin<RegionsPluginEvents, RegionsPluginOptions
           this.adjustScroll(region);
         }
         this.scheduleLabelClip();
-        if (side) this.showEdgeLine();
+        if (side) this.showEdgeLines();
         this.emit("region-update", region, side);
       }),
 
       region.on("resize-start", (side) => {
         this.resizing = { region, side };
-        this.showEdgeLine();
+        this.showEdgeLines();
       }),
 
       region.on("resize-end", () => {
         this.resizing = undefined;
-        this.showEdgeLine();
+        this.showEdgeLines();
       }),
 
       region.on("update-end", () => {
@@ -1370,11 +1383,10 @@ class RegionsPlugin extends BasePlugin<RegionsPluginEvents, RegionsPluginOptions
       // Remove the region from the list when it's removed
       region.once("remove", () => {
         regionSubscriptions.forEach((unsubscribe) => unsubscribe());
-        // A region removed mid-drag never ends its resize.
-        if (this.resizing?.region === region) {
-          this.resizing = undefined;
-          this.showEdgeLine();
-        }
+        // A region removed mid-drag never ends its resize or move.
+        if (this.resizing?.region === region) this.resizing = undefined;
+        if (this.groupDrag?.includes(region)) this.groupDrag = undefined;
+        this.showEdgeLines();
         this.regions = this.regions.filter((reg) => reg !== region);
         this.scheduleLabelClip();
         this.emit("region-removed", region);
