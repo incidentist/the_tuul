@@ -472,16 +472,40 @@ describe("Settings Store", () => {
       expect(store.getVoiceFont("Annie")).toBeUndefined();
     });
 
-    test("clearCustomFonts drops the base font and every voice's", async () => {
+    test("resetFonts drops the base font and every voice's", async () => {
       const store = useSettingsStore();
       await store.setCustomFont(fontFile("Impact.ttf"));
       await store.setVoiceFont("Anna", fontFile("MetalMania.ttf"));
 
-      await store.clearCustomFonts();
+      await store.resetFonts();
 
       expect(store.customFont).toBeNull();
       expect(store.getVoiceFont("Anna")).toBeUndefined();
       expect(store.renderVoiceStyle("Anna")).toBeUndefined();
+    });
+
+    test("resetFonts puts the picked fonts back and keeps the colors", async () => {
+      const store = useSettingsStore();
+      Object.assign(store.videoOptions.font, {
+        name: "Impact",
+        size: 50,
+        bold: false,
+        italic: true,
+      });
+      store.setTitleStyleField("fontName", "Impact");
+      store.setTitleStyleField("fontSize", 60);
+      store.setTitleStyleField("outlineWidth", 3);
+      store.setVoiceStyleField("Anna", "fontName", "Impact");
+      store.setVoiceStyleField("Anna", "outlineWidth", 2);
+      store.setVoiceStyleField("Bob", "italic", true);
+
+      await store.resetFonts();
+
+      expect(store.videoOptions.font).toEqual({ name: "Trebuchet MS", size: 30, bold: true });
+      expect(store.videoOptions.titleStyle.fontName).toBeUndefined();
+      expect(store.videoOptions.titleStyle.fontSize).toBe(45);
+      expect(store.videoOptions.titleStyle.outlineWidth).toBe(3);
+      expect(store.voiceStyles).toEqual({ Anna: { outlineWidth: 2 } });
     });
 
     test("resetSettings drops the uploaded font", async () => {

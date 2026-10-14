@@ -620,9 +620,24 @@ export const useSettingsStore = defineStore("settings", () => {
   }
 
   /**
-   * Every uploaded font, the base one, the title's and each voice's, as Start over discards them.
+   * Puts the base, title and voice fonts back to their defaults, and drops every uploaded font.
    */
-  async function clearCustomFonts(): Promise<void> {
+  async function resetFonts(): Promise<void> {
+    videoOptions.font = { ...DEFAULT_SETTINGS.font };
+    const {
+      fontName: _name,
+      fontSize: _size,
+      bold: _bold,
+      italic: _italic,
+      ...titleRest
+    } = videoOptions.titleStyle;
+    videoOptions.titleStyle = { ...titleRest, fontSize: DEFAULT_SETTINGS.titleStyle.fontSize };
+    const styles: Record<VoiceId, VoiceStyleOverride> = {};
+    for (const [voice, style] of Object.entries(voiceStyles.value)) {
+      const { fontName: _n, fontSize: _s, bold: _b, italic: _i, ...rest } = style;
+      if (Object.keys(rest).length > 0) styles[voice] = rest;
+    }
+    voiceStyles.value = styles;
     await setCustomFont(null);
     await setTitleFont(null);
     voiceFontFiles.value = null;
@@ -734,7 +749,7 @@ export const useSettingsStore = defineStore("settings", () => {
     Object.assign(videoOptions, defaultSettings());
     voiceStyles.value = {};
     resetTimingKeys();
-    void clearCustomFonts();
+    void resetFonts();
   }
 
   return {
@@ -756,7 +771,7 @@ export const useSettingsStore = defineStore("settings", () => {
     setTitleStyleField,
     clearTitleStyle,
     glyphCoverage,
-    clearCustomFonts,
+    resetFonts,
     setTimingKey,
     resetTimingKeys,
     getVoiceStyle,

@@ -148,8 +148,8 @@
       @confirm="startOver"
     >
       <p>
-        This will discard the current song, tracks, lyrics, timings and uploaded fonts. Other
-        settings will be kept. Save anything you want to keep first.
+        This will discard the current song, tracks, lyrics, timings and uploaded fonts, and reset
+        the font settings. Other settings will be kept. Save anything you want to keep first.
       </p>
       <source-file-download-links
         class="mt-4"
@@ -527,7 +527,7 @@ export default defineComponent({
       this.historyStore.clear();
       this.lyricsLookupStore.reset();
       await this.mediaStore.clearSession();
-      await this.settingsStore.clearCustomFonts();
+      await this.settingsStore.resetFonts();
       this.setActiveTab("song");
     },
   },
