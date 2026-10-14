@@ -2,6 +2,7 @@ import { minBy } from "lodash-es";
 import { createScreens, KaraokeOptions, LyricsLine } from "./timing";
 import { TimedSegment } from "./timedSegments";
 import { LinePlacement } from "./linePlacements";
+import { FontLibrary } from "./textWidth";
 
 // One line's display period as the Adjust tab draws it, in song time.
 export interface DisplayBand {
@@ -44,13 +45,16 @@ export function displayBands(
   songDuration: number,
   options: KaraokeOptions,
   placements: ReadonlyMap<number, LinePlacement> = new Map(),
+  fonts: FontLibrary = new FontLibrary(),
 ): DisplayBand[] {
-  const screens = createScreens(segments, songDuration, "", "", {
-    ...options,
-    addTitleScreen: false,
-    countInMode: "none",
-    useStoredDisplayPeriods: true,
-  });
+  const screens = createScreens(
+    segments,
+    songDuration,
+    "",
+    "",
+    { ...options, addTitleScreen: false, countInMode: "none", useStoredDisplayPeriods: true },
+    fonts,
+  );
   const placement = (line: LyricsLine) => placements.get(line.headIndex ?? 0);
   return screens
     .filter((screen) => screen.kind === "lyrics")
@@ -63,10 +67,7 @@ export function displayBands(
         .map((segment) => segment.text)
         .join("")
         .trim(),
-      syllables: line.segments.map((segment) => ({
-        start: segment.timestamp,
-        end: segment.endTimestamp ?? segment.timestamp,
-      })),
+      syllables: syllablesOf(line),
       start:
         placement(line)?.startMoved ?? line.customDisplayStartTime ?? screen.startTimestamp ?? 0,
       end: placement(line)?.endMoved ?? line.customDisplayEndTime ?? screen.endTimestamp,
@@ -143,4 +144,20 @@ export function clampEdgeShift(
 export function clampBandShift(bands: DisplayBand[], delta: number, duration: number): number {
   // Each side allows a range around 0, so clamping to one and then the other lands in both.
   return clampEdgeShift(bands, "end", clampEdgeShift(bands, "start", delta, duration), duration);
+}
+
+/**
+ * The line's syllables, with the halves of one a row starts inside joined back together.
+ */
+function syllablesOf(line: LyricsLine): { start: number; end: number }[] {
+  const syllables: { start: number; end: number }[] = [];
+  for (const segment of line.segments) {
+    const end = segment.endTimestamp ?? segment.timestamp;
+    if (segment.rowStart === "wrapInSyllable") {
+      syllables[syllables.length - 1].end = end;
+    } else {
+      syllables.push({ start: segment.timestamp, end });
+    }
+  }
+  return syllables;
 }

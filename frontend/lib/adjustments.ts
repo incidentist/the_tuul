@@ -12,7 +12,7 @@ import {
   SUBTITLE_CANVAS,
   GLYPH_BLOCK_RATIO,
 } from "../constants";
-import { concat } from "lodash-es";
+import { concat, range } from "lodash-es";
 import { sameHeight } from "./screenSlots";
 
 const FIRST_SCREEN_QUICK_START_THRESHOLD: Timestamp = 1.0;
@@ -219,6 +219,31 @@ export function addGapCountIns(screens: LyricsScreen[], options: KaraokeOptions)
 }
 
 /**
+ * Whether addOverlappingCountIns may give the line, at this index on its lyrics screen, a mark.
+ */
+export function mayGetOverlappingCountIn(
+  line: LyricsLine,
+  index: number,
+  options: KaraokeOptions,
+): boolean {
+  return (
+    options.countInMode !== "none" &&
+    options.dynamicCountIns &&
+    (options.countInMode === "line" || index === 0) &&
+    line.segments.length > 0 &&
+    !line.segments[0].countIn
+  );
+}
+
+/**
+ * The text of the mark addOverlappingCountIns gives a line.
+ */
+export function overlappingCountInText(options: KaraokeOptions): string {
+  const marks = countInMarkTexts(options);
+  return countInMarks(options, marks, 1, 0)[0].text;
+}
+
+/**
  * Give each line that addGapCountIns left without a count-in its last mark anyway,
  * sweeping while the previous line is still being sung, but not before that line's singing starts.
  * A mark is only added when the line is already shown by the time it starts,
@@ -232,7 +257,6 @@ export function addOverlappingCountIns(
   if (options.countInMode === "none" || !options.dynamicCountIns) {
     return screens;
   }
-  const everyLine = options.countInMode === "line";
   const marks = countInMarkTexts(options);
   let prevSingStart: Timestamp = 0.0;
   for (const screen of screens.filter(({ kind }) => kind === "lyrics")) {
@@ -240,7 +264,7 @@ export function addOverlappingCountIns(
       if (line.segments.length === 0) {
         continue;
       }
-      if ((everyLine || index === 0) && !line.segments[0].countIn) {
+      if (mayGetOverlappingCountIn(line, index, options)) {
         const mark = countInMarks(options, marks, 1, line.timestamp);
         const start = mark[0].timestamp;
         if (start >= prevSingStart && start >= countInEarliestStart(line, screen, options)) {
@@ -437,27 +461,33 @@ export function displayQuickLinesEarly(
     if (nextScreen.singStart - screen.singEnd > SCREEN_QUICK_START_THRESHOLD) {
       continue;
     }
-    // The first two slots leave early, or fewer so that a line stays below them.
-    // The next screen's lines in those slots take their place.
-    const leavingSlots = Math.min(2, screen.slotOf(screen.lines.length - 1));
-    const earlyRemovalLines = screen.lines.filter((_, j) => screen.slotOf(j) < leavingSlots);
-    if (earlyRemovalLines.length === 0) {
+    // The lines that start in the first two slots leave early,
+    // or fewer, so that a line stays below them.
+    // The next screen's lines whose rows all lie in the slots they leave take their place.
+    const leaving = range(screen.lines.length - 1).filter(
+      (j) => screen.slotOf(j) < Math.min(2, screen.slotOf(screen.lines.length - 1)),
+    );
+    if (leaving.length === 0) {
       continue;
     }
-    const lineAfterEarlyRemovals = screen.lines[earlyRemovalLines.length];
-    // Remove earlyRemovalLines when the line after them is halfway done singing
+    const leavingSlots = screen.endSlotOf(leaving[leaving.length - 1]);
+    const earlyDisplayLines = nextScreen.lines.filter(
+      (_, j) => nextScreen.endSlotOf(j) <= leavingSlots,
+    );
+    if (earlyDisplayLines.length === 0) {
+      continue;
+    }
+    const lineAfterEarlyRemovals = screen.lines[leaving.length];
+    // Remove the leaving lines when the line after them is halfway done singing
     const singStart = lineAfterEarlyRemovals.singTimestamp;
     const singDuration = lineAfterEarlyRemovals.endTimestamp - singStart;
     const earlyRemovalTime = singStart + singDuration * 0.5;
     const earlyDisplayTime = singStart + singDuration * 0.75;
-    earlyRemovalLines.forEach((line) => {
-      line.customDisplayEndTime = earlyRemovalTime;
+    leaving.forEach((j) => {
+      screen.lines[j].customDisplayEndTime = earlyRemovalTime;
     });
 
     // TODO what if nextScreen.length == 2 and screen.length == 3?
-    const earlyDisplayLines = nextScreen.lines.filter(
-      (_, j) => nextScreen.slotOf(j) < leavingSlots,
-    );
     nextScreen.earlySlots = leavingSlots;
     placeStaggeredScreen(screens, i + 1, displayOptions);
 
@@ -510,32 +540,25 @@ function settleStayingLines(
 ): boolean {
   const { size } = options.font;
   const alignment = options.verticalAlignment;
-  const heights = (s: LyricsScreen, inSlot: (slot: number) => boolean) =>
+  const placed = (s: LyricsScreen, chosen: (i: number) => boolean) =>
     s.lines
-      .map((line, i) => ({ line, slot: s.slotOf(i) }))
-      .filter(({ slot }) => inSlot(slot))
-      .map(({ line, slot }) => {
-        const top = s.getLineY(slot, size, alignment, options);
-        return { line, slot, top, bottom: top + size * GLYPH_BLOCK_RATIO };
-      });
+      .map((line, i) => ({ line, i, ...s.getLineBounds(i, size, alignment, options) }))
+      .filter(({ i }) => chosen(i));
   const settledBefore = screen.settledFromSlot;
   screen.settledFromSlot = next.earlySlots;
-  const staying = heights(screen, (slot) => slot >= next.earlySlots);
-  const early = heights(next, (slot) => slot < next.earlySlots);
+  const staying = placed(screen, (i) => screen.slotOf(i) >= next.earlySlots);
+  const early = placed(next, (i) => next.showsEarly(i));
   if (early.some((line) => staying.some((other) => sameHeight(line, other)))) {
     screen.settledFromSlot = settledBefore;
     return false;
   }
-  const keptByBefore = heights(before, (slot) => slot >= screen.earlySlots);
+  const keptByBefore = placed(before, (i) => !before.leavesEarlyFor(i, screen));
   for (const settled of staying) {
-    if (
-      settled.slot < screen.earlySlots &&
-      keptByBefore.some((other) => sameHeight(settled, other))
-    ) {
+    if (screen.showsEarly(settled.i) && keptByBefore.some((other) => sameHeight(settled, other))) {
       showAtScreenStart(settled.line, screen, options);
-      before.lines
-        .filter((_, i) => before.slotOf(i) === settled.slot)
-        .forEach((line) => (line.customDisplayEndTime = undefined));
+      placed(before, (i) => before.leavesEarlyFor(i, screen))
+        .filter((line) => sameHeight(line, settled))
+        .forEach(({ line }) => (line.customDisplayEndTime = undefined));
     }
   }
   return true;
@@ -561,13 +584,12 @@ export function unstagger(
   screen: LyricsScreen,
   options: KaraokeOptions,
 ): void {
-  const early = (s: LyricsScreen) => s.lines.filter((_, i) => s.slotOf(i) < screen.earlySlots);
-  for (const line of early(previous)) {
-    line.customDisplayEndTime = undefined;
-  }
-  for (const line of early(screen)) {
-    showAtScreenStart(line, screen, options);
-  }
+  previous.lines
+    .filter((_, i) => previous.leavesEarlyFor(i, screen))
+    .forEach((line) => (line.customDisplayEndTime = undefined));
+  screen.lines
+    .filter((_, i) => screen.showsEarly(i))
+    .forEach((line) => showAtScreenStart(line, screen, options));
   previous.settledFromSlot = undefined;
   screen.earlySlots = 0;
   screen.positionAsSlotCount = undefined;

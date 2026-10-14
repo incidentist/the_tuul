@@ -392,6 +392,56 @@ describe("assToProjectFiles on the app's own files", () => {
   });
 });
 
+describe("assToProjectFiles on lines too wide for the screen", () => {
+  const options: KaraokeOptions = {
+    ...DEFAULT_KARAOKE_OPTIONS,
+    font: { ...DEFAULT_KARAOKE_OPTIONS.font, name: "Georgia", size: 30 },
+  };
+  const words = "Pale moon rising slow over the quiet hill, lanterns drifting home".split(" ");
+
+  it("joins the rows the app wrote for a line of several syllables", () => {
+    const segments: TimedSegment[] = words.map((word, i) => ({
+      text: i < words.length - 1 ? word + "_" : word,
+      start: 10 + i,
+      ...(i === words.length - 1 ? { end: 10 + words.length } : {}),
+    }));
+    const text = render([{ voice: "Voice 1", segments }], options);
+    expect(text).toContain("{wrap}");
+
+    const imported = assToProjectFiles(text, { fonts: FONTS });
+    expect(imported.timings).toEqual({ "Voice 1": segments });
+    expect(imported.lyrics).toBe(words.join("_"));
+  });
+
+  it("joins a syllable a row started inside", () => {
+    const segments: TimedSegment[] = [{ text: words.join(" "), start: 10, end: 20 }];
+    const text = render([{ voice: "Voice 1", segments }], options);
+    expect(text).toContain("{wrap in syllable}");
+
+    const imported = assToProjectFiles(text, { fonts: FONTS });
+    expect(imported.timings).toEqual({ "Voice 1": segments });
+    expect(imported.lyrics).toBe(words.join(" "));
+  });
+
+  it("reads a title the app wrapped back whole", () => {
+    const title = "The Long and Winding Title of a Song Nobody Could Fit on One Row";
+    const segments: TimedSegment[] = [
+      { text: "Pale_", start: 10 },
+      { text: "moon", start: 11 },
+    ];
+    const text = createMultiVoiceAssFile(
+      [{ voice: "Voice 1", segments, options }],
+      SONG_DURATION,
+      title,
+      "The Placeholders",
+    );
+    expect(text).toContain("{wrap in syllable}");
+
+    const imported = assToProjectFiles(text, { fonts: FONTS });
+    expect((yaml.load(imported.settings) as any).song.title).toBe(title);
+  });
+});
+
 describe("assToProjectFiles on other files", () => {
   it("imports the source lines of a karaoke template, without display periods", () => {
     const imported = assToProjectFiles(

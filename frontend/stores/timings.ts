@@ -484,6 +484,7 @@ export const useTimingsStore = defineStore("timings", {
           mediaStore.songDuration ?? 0,
           mediaStore.songTitle ?? "",
           mediaStore.songArtist ?? "",
+          useSettingsStore().fonts,
         );
         return songOffset(primary);
       } catch (e) {
@@ -507,6 +508,7 @@ export const useTimingsStore = defineStore("timings", {
           mediaStore.songDuration ?? 0,
           mediaStore.songTitle ?? "",
           mediaStore.songArtist ?? "",
+          useSettingsStore().fonts,
         );
         return titleFrameTime(primary);
       } catch (e) {
@@ -526,6 +528,7 @@ export const useTimingsStore = defineStore("timings", {
           mediaStore.songDuration ?? 0,
           mediaStore.songTitle ?? "",
           mediaStore.songArtist ?? "",
+          useSettingsStore().fonts,
         );
         return placements[this.activeVoice] ?? new Map();
       } catch (e) {

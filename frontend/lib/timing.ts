@@ -41,6 +41,7 @@ import {
   songOffset,
 } from "./screenSlots";
 import { withFallbackFonts } from "./fonts";
+import { wrapScreens } from "./lineRows";
 import { FontLibrary } from "./textWidth";
 import {
   applyVoiceStyle,
@@ -49,7 +50,7 @@ import {
   shadowDrawn,
   VoiceStyleOverride,
 } from "./voiceStyle";
-import { map, method, isNumber } from "lodash-es";
+import { map, method, isNumber, range } from "lodash-es";
 import { default as BuefyColor } from "buefy/src/utils/color";
 // This import must stay type-only,
 // because timedSegments imports parseLyrics from here at runtime.
@@ -194,19 +195,19 @@ export interface Segment {
   spacersAfter?: number;
 }
 
-interface AssEvent {
-  type: string;
-  Layer: number;
-  Start: string;
-  End: string;
-  Style: string;
-  Name: string;
-  MarginL: number;
-  MarginR: number;
-  MarginV: number;
-  Effect: string;
-  Text: string;
-}
+// The fields of a Dialogue event, in the order the [Events] Format line lists them.
+const EVENT_FIELDS = [
+  "Layer",
+  "Start",
+  "End",
+  "Style",
+  "Name",
+  "MarginL",
+  "MarginR",
+  "MarginV",
+  "Effect",
+  "Text",
+] as const;
 
 //
 // ASS Formatting helpers
@@ -528,11 +529,25 @@ export class LyricSegmentIterator {
   }
 }
 
+// Why a segment starts a row of its line: a `|` in the lyrics, or a wrap,
+// which may fall inside a syllable that was split in two to make it.
+export type RowStart = "break" | "wrap" | "wrapInSyllable";
+
+// What an event that continues a line starts with.
+// It draws nothing, and tells an import how to join the event to the one before.
+export const ROW_MARKERS: Record<RowStart, string> = {
+  break: "{break}",
+  wrap: "{wrap}",
+  wrapInSyllable: "{wrap in syllable}",
+};
+
 export class LyricSegment {
   text: string;
   timestamp: number;
   endTimestamp?: number;
   countIn: boolean;
+  // Set on a segment that starts a row other than its line's first.
+  rowStart?: RowStart;
 
   constructor(text: string, timestamp: number, endTimestamp?: number, countIn = false) {
     this.text = text;
@@ -545,10 +560,18 @@ export class LyricSegment {
     return this.text;
   }
 
+  withText(text: string): LyricSegment {
+    const segment = new LyricSegment(text, this.timestamp, this.endTimestamp, this.countIn);
+    segment.rowStart = this.rowStart;
+    return segment;
+  }
+
   adjustTimestamps(adjustment: number): LyricSegment {
     const newTs = this.timestamp + adjustment;
     const newEndTs = this.endTimestamp === undefined ? undefined : this.endTimestamp + adjustment;
-    return new LyricSegment(this.text, newTs, newEndTs, this.countIn);
+    const segment = new LyricSegment(this.text, newTs, newEndTs, this.countIn);
+    segment.rowStart = this.rowStart;
+    return segment;
   }
 
   toAss() {
@@ -628,6 +651,44 @@ export class LyricsScreen {
   }
 
   /**
+   * Whether the line is one of this staggered screen's early lines,
+   * which lie in the slots the previous screen's first lines leave.
+   */
+  showsEarly(lineInScreen: number): boolean {
+    return this.endSlotOf(lineInScreen) <= this.earlySlots;
+  }
+
+  /**
+   * Whether the line leaves early to make room for the next screen's early lines.
+   */
+  leavesEarlyFor(lineInScreen: number, next: LyricsScreen): boolean {
+    return this.slotOf(lineInScreen) < next.earlySlots;
+  }
+
+  /**
+   * The slot after the line's last row.
+   */
+  endSlotOf(lineInScreen: number): number {
+    return this.slotOf(lineInScreen) + this.lines[lineInScreen].rowCount;
+  }
+
+  /**
+   * Where the line is drawn, from the top of its first row to the bottom of the glyphs of its last.
+   */
+  getLineBounds(
+    lineInScreen: number,
+    fontSize: number,
+    alignment: VerticalAlignment = VerticalAlignment.Middle,
+    spacing: LineSpacing = DEFAULT_SPACING,
+  ): { top: number; bottom: number } {
+    const y = (slot: number) => this.getLineY(slot, fontSize, alignment, spacing);
+    return {
+      top: y(this.slotOf(lineInScreen)),
+      bottom: y(this.endSlotOf(lineInScreen) - 1) + fontSize * GLYPH_BLOCK_RATIO,
+    };
+  }
+
+  /**
    * The Y coordinate of the top of the line in the given slot.
    */
   getLineY(
@@ -683,19 +744,18 @@ export class LyricsScreen {
       this.kind === "title" ? VerticalAlignment.Middle : videoOptions.verticalAlignment;
     // A sweep tells singers to sing, so the title is drawn without one.
     const sweep = this.kind !== "title";
+    const rowTops = (i: number) =>
+      range(self.slotOf(i), self.endSlotOf(i)).map((slot) =>
+        self.getLineY(slot, formatParams["Fontsize"] as number, alignment, videoOptions),
+      );
     return (
       this.lines
-        .map((l, i) =>
-          l.toAssEvent(
+        .flatMap((l, i) =>
+          l.toAssEvents(
             self.startTimestamp ?? 0,
             self.endTimestamp,
             styleName,
-            self.getLineY(
-              self.slotOf(i),
-              formatParams["Fontsize"] as number,
-              alignment,
-              videoOptions,
-            ),
+            rowTops(i),
             shadow,
             actor,
             sweep,
@@ -802,6 +862,24 @@ export class LyricsLine {
     return this.segments[this.segments.length - 1].endTimestamp ?? 0;
   }
 
+  /**
+   * The line's segments, row by row.
+   */
+  get rows(): LyricSegment[][] {
+    const rows: LyricSegment[][] = [];
+    for (const segment of this.segments) {
+      if (rows.length === 0 || segment.rowStart) {
+        rows.push([]);
+      }
+      rows[rows.length - 1].push(segment);
+    }
+    return rows;
+  }
+
+  get rowCount(): number {
+    return 1 + this.segments.filter((segment) => segment.rowStart).length;
+  }
+
   addSegmentToFront(newSegment: LyricSegment) {
     this.segments.unshift(newSegment);
   }
@@ -810,7 +888,7 @@ export class LyricsLine {
     this.segments.unshift(...newSegments);
   }
 
-  decorateAssLine(segments: LyricSegment[], displayStartTime: Timestamp): string {
+  decorateAssLine(segments: LyricSegment[], displayStartTime: Timestamp, leadInText = ""): string {
     // Decorate the line with karaoke tags
     // An ASS line starts with {k<digits>} which is centiseconds within the current
     // line to start animating.
@@ -818,12 +896,13 @@ export class LyricsLine {
     // following the tag.
 
     // Delay between line display and start of line animation
-    let singStartDelay = toCentiseconds(this.timestamp) - toCentiseconds(displayStartTime);
+    let singStartDelay = toCentiseconds(segments[0].timestamp) - toCentiseconds(displayStartTime);
     if (singStartDelay < 0) {
       console.error(`Negative line startTime: ${this}: ${singStartDelay}`);
       singStartDelay = 0;
     }
-    let line = `{\\k${singStartDelay}}`;
+    // libass doesn't sweep a syllable that starts with whitespace, so that goes in the lead-in.
+    let line = `{\\k${singStartDelay}}` + leadInText;
     let previousEnd: number | undefined = undefined;
     for (const s of segments) {
       if (previousEnd !== undefined && previousEnd < s.timestamp) {
@@ -837,57 +916,58 @@ export class LyricsLine {
     return this.addAssFades(line);
   }
 
-  toAssEvent(
+  /**
+   * The line's Dialogue events, one per row, each at the top given for its row.
+   */
+  toAssEvents(
     screenStart: Timestamp,
     screenEnd: Timestamp,
     style: string,
-    topMargin: number,
+    rowTops: number[],
     tags: string = "",
     actor: string = "Singer",
     sweep: boolean = true,
-  ): string {
+  ): string[] {
     if (isNaN(this.timestamp) || isNaN(screenStart) || isNaN(screenEnd)) {
       console.error("NaN value for line", this.toString(), screenStart, screenEnd);
       throw Error("NaN value for timestamp");
     }
     const displayStart = this.customDisplayStartTime ?? screenStart;
     const displayEnd = this.customDisplayEndTime ?? screenEnd;
-    const e: AssEvent = {
-      type: "Dialogue",
-      Layer: 0,
-      Start: floatToTimecode(displayStart),
-      End: floatToTimecode(displayEnd),
-      Style: style,
-      Name: actor,
-      MarginL: 0,
-      MarginR: 0,
-      MarginV: topMargin,
-      Effect: "",
-      Text:
+    const rows = this.rows;
+    // The whitespace between two rows starts the second, since a reader may trim the end of the
+    // line that holds the first. libass draws whitespace at neither end of a row.
+    const spaces = rows.map(() => "");
+    for (let row = 1; row < rows.length; row++) {
+      const previous = rows[row - 1];
+      const last = previous[previous.length - 1];
+      const [space] = last.text.match(/\s+$/) ?? [""];
+      if (space) {
+        previous[previous.length - 1] = last.withText(last.text.slice(0, -space.length));
+        spaces[row] = space;
+      }
+    }
+    return rows.map((segments, row) => {
+      const text =
+        (row > 0 ? ROW_MARKERS[segments[0].rowStart!] : "") +
         tags +
         (sweep
-          ? this.decorateAssLine(this.segments, displayStart)
-          : this.addAssFades(this.segments.map((s) => s.text).join(""))),
-    };
-    return (
-      `${e.type}: ` +
-      (
-        [
-          "Layer",
-          "Start",
-          "End",
-          "Style",
-          "Name",
-          "MarginL",
-          "MarginR",
-          "MarginV",
-          "Effect",
-          "Text",
-        ] as (keyof AssEvent)[]
-      )
-        .map((k) => e[k])
-        .join(",")
-    );
+          ? this.decorateAssLine(segments, displayStart, spaces[row])
+          : this.addAssFades(spaces[row] + segments.map((s) => s.text).join("")));
+      const event: Record<(typeof EVENT_FIELDS)[number], string | number> = {
+        Layer: 0,
+        Start: floatToTimecode(displayStart),
+        End: floatToTimecode(displayEnd),
+        Style: style,
+        Name: actor,
+        MarginL: 0,
+        MarginR: 0,
+        MarginV: rowTops[row],
+        Effect: "",
+        Text: text,
+      };
+      return `Dialogue: ${EVENT_FIELDS.map((field) => event[field]).join(",")}`;
+    });
   }
 
   addAssFades(assLine: string): string {
@@ -1124,7 +1204,7 @@ PlayResX: ${videoWidth}
 PlayResY: ${videoHeight}
 ScaledBorderAndShadow: yes
 YCbCr Matrix: None
-WrapStyle: 0
+WrapStyle: 2
 Audio Delay: ${songOffset(tracks[0]).toFixed(3)}
 ${projectSettings ? `${PROJECT_SETTINGS_KEY}: ${projectSettings}\n` : ""}
 [V4+ Styles]
@@ -1132,7 +1212,7 @@ Format: ${formatKeys.join(", ")}
 ${styleLines}
 
 [Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Format: ${EVENT_FIELDS.join(", ")}
 `;
   for (const track of tracks) {
     // The actor field ends at a comma, and an import reads the voice back from it.
@@ -1172,6 +1252,7 @@ function createAutomaticScreens(
   songDuration: number,
   title: string,
   artist: string,
+  fonts: FontLibrary,
 ): LyricsScreen[][] {
   // A voice with no lyrics yet has no screens, and the decorators below index into screens[0].
   const firstStarts = (screensByVoice: LyricsScreen[][]) =>
@@ -1207,6 +1288,7 @@ function createAutomaticScreens(
     } else if (titled) {
       screens = addTitleScreen(screens, title, artist, introLength, duration);
     }
+    wrapScreens(screens, options, applyVoiceStyle(options, options.titleStyle), fonts);
     if (options.addStaggeredLines) {
       screens = displayQuickLinesEarly(screens, options);
     }
@@ -1229,12 +1311,14 @@ export function createScreens(
   title: string,
   artist: string,
   options: KaraokeOptions,
+  fonts: FontLibrary = new FontLibrary(),
 ): LyricsScreen[] {
   let [screens] = createAutomaticScreens(
     [{ voice: "", segments, options }],
     songDuration,
     title,
     artist,
+    fonts,
   );
   if (options.useStoredDisplayPeriods) {
     screens = applyStoredDisplayPeriods(screens);
@@ -1292,6 +1376,7 @@ export function createAssFile(
     songDuration,
     title,
     artist,
+    fonts,
   );
   return createSubtitles(screens, options, optionsToFormatParams(options), fonts);
 }
@@ -1369,6 +1454,7 @@ export function layOutVoices(
   songDuration: number,
   title: string,
   artist: string,
+  fonts: FontLibrary = new FontLibrary(),
 ): VoiceTrackRender[] {
   // The title and instrumental-break screens are global: only the primary voice contributes them.
   // Count-ins stay per voice.
@@ -1380,7 +1466,9 @@ export function layOutVoices(
         : { ...track.options, addTitleScreen: false, instrumentalThreshold: 0 },
   }));
   const screensByVoice =
-    tracks.length > 0 ? createAutomaticScreens(voiceTracks, songDuration, title, artist) : [];
+    tracks.length > 0
+      ? createAutomaticScreens(voiceTracks, songDuration, title, artist, fonts)
+      : [];
   const renders: VoiceTrackRender[] = voiceTracks.map(({ voice, options }, index) => {
     // Non-primary voices have no title/instrumental to fill long gaps,
     // so cap how early their screens display.
@@ -1430,7 +1518,7 @@ export function createMultiVoiceAssFile(
     return "";
   }
   return renderAssDocument(
-    layOutVoices(tracks, songDuration, title, artist),
+    layOutVoices(tracks, songDuration, title, artist, fonts),
     fonts,
     projectSettings,
   );

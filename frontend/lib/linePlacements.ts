@@ -1,5 +1,6 @@
 import { layOutVoices, VoiceTrack } from "./timing";
 import { separableNeighbours, slotLines, songOffset } from "./screenSlots";
+import { FontLibrary } from "./textWidth";
 
 export { sameHeight } from "./screenSlots";
 
@@ -29,8 +30,9 @@ export function placeLines(
   songDuration: number,
   title: string,
   artist: string,
+  fonts: FontLibrary = new FontLibrary(),
 ): Record<string, Map<number, LinePlacement>> {
-  const renders = layOutVoices(tracks, songDuration, title, artist);
+  const renders = layOutVoices(tracks, songDuration, title, artist, fonts);
   const offsets = renders.map(songOffset);
   const lines = slotLines(renders);
   const shown = lines.map(({ line, screen }) => ({

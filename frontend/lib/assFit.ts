@@ -5,6 +5,7 @@
 
 import BuefyColor from "buefy/src/utils/color";
 import { AssDocument, AssEvent, AssStyle, parseAss, parseKaraoke } from "./ass";
+import { joinRows } from "./assRows";
 import {
   createMultiVoiceAssFile,
   DEFAULT_KARAOKE_OPTIONS,
@@ -307,9 +308,16 @@ export function fitOwnRender(
       },
     }));
   const render = (options: KaraokeOptions): AssEvent[] =>
-    parseAss(
-      createMultiVoiceAssFile(tracks(options), songDuration, song?.title ?? "", song?.artist ?? ""),
-    ).events;
+    joinRows(
+      parseAss(
+        createMultiVoiceAssFile(
+          tracks(options),
+          songDuration,
+          song?.title ?? "",
+          song?.artist ?? "",
+        ),
+      ).events,
+    );
   const distance = distanceFrom(fileEvents);
   const score = (options: KaraokeOptions) => distance(render(options)).distance;
 

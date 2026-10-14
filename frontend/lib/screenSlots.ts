@@ -1,4 +1,3 @@
-import { GLYPH_BLOCK_RATIO } from "@/constants";
 import { displayEndOf, displayStartOf } from "./adjustments";
 import {
   VerticalAlignment,
@@ -49,8 +48,8 @@ export function slotLines(
       .flatMap((screen) =>
         screen.lines.map((line, lineInScreen) => {
           const title = screen.kind === "title";
-          const top = screen.getLineY(
-            screen.slotOf(lineInScreen),
+          const { top, bottom } = screen.getLineBounds(
+            lineInScreen,
             size,
             title ? VerticalAlignment.Middle : render.options.verticalAlignment,
             render.options,
@@ -65,7 +64,7 @@ export function slotLines(
             screen,
             voice,
             top,
-            bottom: top + size * GLYPH_BLOCK_RATIO,
+            bottom,
             fixedStart: startStored ? displayStartOf(line, screen) : line.timestamp,
             fixedEnd: endStored ? displayEndOf(line, screen) : line.endTimestamp,
             startStored,

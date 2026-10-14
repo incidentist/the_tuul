@@ -21,6 +21,7 @@ import {
 import { LYRIC_MARKERS, DEFAULT_COUNT_IN_THRESHOLD, DEFAULT_COUNT_IN_DURATION } from "@/constants";
 import { LyricSegment } from "./timing";
 import { songOffset } from "./screenSlots";
+import { parseAss } from "./ass";
 import { FontLibrary } from "./textWidth";
 import { default as BuefyColor } from "buefy/src/utils/color";
 
@@ -88,7 +89,7 @@ PlayResX: 512
 PlayResY: 288
 ScaledBorderAndShadow: yes
 YCbCr Matrix: None
-WrapStyle: 0
+WrapStyle: 2
 Audio Delay: ${audioDelay}
 
 [V4+ Styles]
@@ -716,6 +717,54 @@ describe("CJK lyrics in the ASS file", () => {
     );
     expect(ass).toContain("{\\fnNoto Sans CJK JP}残酷な天使{\\fn}");
     expect(ass).not.toContain("{\\fnNoto Sans CJK JP}坂本 真綾{\\fn}");
+  });
+});
+
+describe("a line too wide for the screen", () => {
+  const options: KaraokeOptions = {
+    ...DEFAULT_OPTIONS,
+    addTitleScreen: false,
+    countInMode: "none",
+    instrumentalThreshold: 0,
+    addStaggeredLines: false,
+    font: { name: "Arial", size: 30 },
+  };
+  const words = "Pale moon rising slow over the quiet hill, lanterns drifting home".split(" ");
+  const lyrics = words.join("_") + "\nBright night";
+  const segments = fromEvents(
+    lyrics,
+    [...words, "night"].map((_, i): LyricEvent => [10 + i, LYRIC_MARKERS.SEGMENT_START]),
+  );
+  const dialogues = (ass: string) => parseAss(ass).events;
+
+  test("is drawn as an event per row, in the slots one below the other", () => {
+    const [first, second, below] = dialogues(createAssFile(segments, 30, "T", "A", options));
+    expect(first.text).toMatch(/\{\\k1000\}\{\\kf100\}Pale /);
+    expect(first.text).toMatch(/quiet \{\\kf100\}hill,$/);
+    // The space between the rows is in the second's lead-in, where a reader can't trim it
+    // and libass still sweeps the first syllable.
+    expect(second.text).toMatch(/^\{wrap\}\{\\fad\([\d,]+\)\}\{\\k1800\} \{\\kf100\}lanterns /);
+    expect([first.start, first.end]).toEqual([second.start, second.end]);
+    // Three slots of 45, centred on the glyphs.
+    expect([first.marginV, second.marginV, below.marginV]).toEqual([82, 127, 172]);
+  });
+
+  test("puts the space in the lead-in of a row that starts inside a syllable", () => {
+    const whole = fromEvents(words.join(" ") + "\n", [
+      [10, LYRIC_MARKERS.SEGMENT_START],
+      [22, LYRIC_MARKERS.SEGMENT_END],
+    ]);
+    const [first, second] = dialogues(createAssFile(whole, 30, "T", "A", options));
+    expect(first.text).toMatch(/\{\\k1000\}\{\\kf\d+\}Pale .* hill,$/);
+    expect(second.text).toMatch(
+      /^\{wrap in syllable\}\{\\fad\([\d,]+\)\}\{\\k\d+\} \{\\kf\d+\}lanterns /,
+    );
+  });
+
+  test("keeps its rows inside the frame under bottom alignment", () => {
+    const bottom = { ...options, verticalAlignment: VerticalAlignment.Bottom };
+    const tops = dialogues(createAssFile(segments, 30, "T", "A", bottom)).map((e) => e.marginV);
+    expect(Math.max(...tops) + 30).toBeLessThan(288);
   });
 });
 

@@ -16,6 +16,16 @@ const options: KaraokeOptions = {
 };
 
 describe("displayBands", () => {
+  it("keeps a syllable a row starts inside whole", () => {
+    const text = "Pale moon rising slow over the quiet hill, lanterns drifting home";
+    const [band] = displayBands([{ text, start: 10, end: 20 }], 30, {
+      ...options,
+      font: { name: "Georgia", size: 30 },
+    });
+    expect(band.text).toBe(text);
+    expect(band.syllables).toEqual([{ start: 10, end: 20 }]);
+  });
+
   it("gives each line its period, its row, its text and the segment that stores it", () => {
     const bands = displayBands(
       [

@@ -23,6 +23,8 @@ import {
   VerticalAlignment,
 } from "./timing";
 import { testLyrics, shortIntroTestEvents } from "./timing.spec";
+import { wrapScreens } from "./lineRows";
+import { HALF_FONTS } from "./testFonts";
 import {
   LYRIC_MARKERS,
   DEFAULT_COUNT_IN_THRESHOLD,
@@ -711,6 +713,54 @@ describe("fast lines display early by slot", () => {
     expect(first.lines.map((line) => line.customDisplayEndTime)).toEqual([undefined, undefined]);
     expect(second.staggered).toBe(false);
   });
+
+  describe("with lines of several rows", () => {
+    // At size 20, every character is 10 wide, so twelve of these words take two rows.
+    const fonts = HALF_FONTS;
+    const options: KaraokeOptions = { ...DEFAULT_OPTIONS, font: { name: "Half", size: 20 } };
+    const words = (count: number) => Array(count).fill("word").join(" ");
+    const staggerRows = (segments: TimedSegment[]) => {
+      const screens = denormalizeTimestamps(
+        [new LyricsScreen(), ...compileLyricTimings(segments)],
+        6,
+      );
+      wrapScreens(screens, options, options, fonts);
+      return displayQuickLinesEarly(screens, options);
+    };
+
+    it("lets a line leave with all its rows, and fills them with the next screen's lines", () => {
+      const [, first, second] = staggerRows([
+        { text: words(12) + "\n", start: 1 },
+        { text: "two\n", start: 2 },
+        { text: "three\n\n", start: 3 },
+        { text: "four\n", start: 3.5 },
+        { text: "five", start: 4 },
+      ]);
+      expect(first.lines.map((line) => line.customDisplayEndTime)).toEqual([
+        2.5,
+        undefined,
+        undefined,
+      ]);
+      expect(second.lines.map((line) => line.customDisplayStartTime)).toEqual([2.75, 2.75]);
+      expect(second.earlySlots).toBe(2);
+    });
+
+    it("leaves a screen alone when the next screen's first line doesn't fit the slots that leave", () => {
+      const [, first, second] = staggerRows([
+        { text: "one\n", start: 1 },
+        { text: "two\n", start: 2 },
+        { text: "three\n\n", start: 3 },
+        { text: words(24) + "\n", start: 3.5 },
+        { text: "five", start: 4 },
+      ]);
+      expect(first.lines.map((line) => line.customDisplayEndTime)).toEqual([
+        undefined,
+        undefined,
+        undefined,
+      ]);
+      expect(second.staggered).toBe(false);
+    });
+  });
 });
 
 describe("deferScreenStarts", () => {
@@ -986,6 +1036,6 @@ describe("LyricsLine.adjustTimestamps", () => {
     const line = new LyricsLine([new LyricSegment("a", 1, 2)]);
     line.customDisplayStartTime = 0;
 
-    expect(line.toAssEvent(5, 10, "Default", 0)).toMatch(/^Dialogue: 0,0:00:00\.00,/);
+    expect(line.toAssEvents(5, 10, "Default", [0])[0]).toMatch(/^Dialogue: 0,0:00:00\.00,/);
   });
 });

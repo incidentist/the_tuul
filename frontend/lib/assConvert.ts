@@ -10,6 +10,7 @@ import yaml from "js-yaml";
 import { SUBTITLE_CANVAS, TITLE_SCREEN_DURATION, appName } from "@/constants";
 import { AssDocument, AssEvent, AssStyle, parseAss, parseKaraoke } from "./ass";
 import { fitOwnRender, FitVoice, shadowOffset } from "./assFit";
+import { joinRows } from "./assRows";
 import { ImportedSyllable, importedTimings, lineMarkup, voiceNames } from "./importedLyrics";
 import { fontLeftOut, MARKUP_REMOVED, Warnings } from "./importWarnings";
 import { readSubtitleHints, settingsOutsideSubtitles, SubtitleHints } from "./settingsFile";
@@ -416,9 +417,11 @@ function styleSettings(
  * line up with the lyrics it produced.
  */
 export function assToProjectFiles(text: string, options: { fonts: string[] }): AssImport {
-  const document = parseAss(text);
+  const parsed = parseAss(text);
   const warnings = new Warnings();
-  const own = isOwnFile(document);
+  const own = isOwnFile(parsed);
+  // The app writes each row of a line too wide for the screen as an event of its own.
+  const document = own ? { ...parsed, events: joinRows(parsed.events) } : parsed;
   const delay = own ? Math.round((Number(document.info["Audio Delay"]) || 0) * 100) : 0;
 
   let events = sourceEvents(document, warnings);

@@ -1204,6 +1204,7 @@ export default defineComponent({
         this.mediaStore.songDuration ?? 0,
         this.settingsStore.renderOptions,
         this.timingsStore.activeLinePlacements,
+        this.settingsStore.fonts,
       );
     },
     adjustmentSubtitles(): string {
