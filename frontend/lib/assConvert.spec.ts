@@ -20,6 +20,7 @@ import {
   KaraokeOptions,
   VerticalAlignment,
 } from "./timing";
+import { FontLibrary } from "./textWidth";
 import { TimedSegment } from "./timedSegments";
 
 const FONTS = ["Arial Narrow", "Georgia"];
@@ -146,7 +147,7 @@ describe("assToProjectFiles on the app's own files", () => {
       SONG_DURATION,
       "Pale Moon",
       "The Placeholders",
-      {},
+      new FontLibrary(),
       settings.trim(),
     );
     const imported = assToProjectFiles(text, { fonts: FONTS });
@@ -279,7 +280,7 @@ describe("assToProjectFiles on the app's own files", () => {
         SONG_DURATION,
         "Pale Moon",
         "The Placeholders",
-        {},
+        new FontLibrary(),
         settings,
       );
 

@@ -1,0 +1,114 @@
+{
+  "size": 20,
+  "bold": true,
+  "widths": {
+    "Andale Mono": {
+      "Lanterns drift home over the quiet hill": 412.0,
+      "Pale moon, rising slow - where to now?": 401.25,
+      "WE KEEP THE EMBERS BURNING ALL NIGHT": 383.25,
+      "jump quickly, fix the waxed oven gizmo": 402.75,
+      "Crème brûlée à l'été, naïve façade": 360.5,
+      "Twelve o'clock, 1984: (lights) & songs!": 411.25
+    },
+    "Arial": {
+      "Lanterns drift home over the quiet hill": 292.5,
+      "Pale moon, rising slow - where to now?": 309.75,
+      "WE KEEP THE EMBERS BURNING ALL NIGHT": 387.75,
+      "jump quickly, fix the waxed oven gizmo": 310.25,
+      "Crème brûlée à l'été, naïve façade": 272.0,
+      "Twelve o'clock, 1984: (lights) & songs!": 302.5
+    },
+    "Arial Narrow": {
+      "Lanterns drift home over the quiet hill": 236.75,
+      "Pale moon, rising slow - where to now?": 250.5,
+      "WE KEEP THE EMBERS BURNING ALL NIGHT": 313.75,
+      "jump quickly, fix the waxed oven gizmo": 251.0,
+      "Crème brûlée à l'été, naïve façade": 220.25,
+      "Twelve o'clock, 1984: (lights) & songs!": 245.0
+    },
+    "Comic Sans MS": {
+      "Lanterns drift home over the quiet hill": 257.5,
+      "Pale moon, rising slow - where to now?": 252.0,
+      "WE KEEP THE EMBERS BURNING ALL NIGHT": 317.25,
+      "jump quickly, fix the waxed oven gizmo": 259.75,
+      "Crème brûlée à l'été, naïve façade": 228.5,
+      "Twelve o'clock, 1984: (lights) & songs!": 251.75
+    },
+    "Courier New": {
+      "Lanterns drift home over the quiet hill": 411.0,
+      "Pale moon, rising slow - where to now?": 399.5,
+      "WE KEEP THE EMBERS BURNING ALL NIGHT": 380.25,
+      "jump quickly, fix the waxed oven gizmo": 400.25,
+      "Crème brûlée à l'été, naïve façade": 358.25,
+      "Twelve o'clock, 1984: (lights) & songs!": 408.0
+    },
+    "Georgia": {
+      "Lanterns drift home over the quiet hill": 296.25,
+      "Pale moon, rising slow - where to now?": 301.75,
+      "WE KEEP THE EMBERS BURNING ALL NIGHT": 385.25,
+      "jump quickly, fix the waxed oven gizmo": 306.25,
+      "Crème brûlée à l'été, naïve façade": 258.25,
+      "Twelve o'clock, 1984: (lights) & songs!": 294.75
+    },
+    "Impact": {
+      "Lanterns drift home over the quiet hill": 250.5,
+      "Pale moon, rising slow - where to now?": 258.0,
+      "WE KEEP THE EMBERS BURNING ALL NIGHT": 262.0,
+      "jump quickly, fix the waxed oven gizmo": 257.75,
+      "Crème brûlée à l'été, naïve façade": 225.75,
+      "Twelve o'clock, 1984: (lights) & songs!": 251.75
+    },
+    "Metal Mania": {
+      "Lanterns drift home over the quiet hill": 246.0,
+      "Pale moon, rising slow - where to now?": 248.75,
+      "WE KEEP THE EMBERS BURNING ALL NIGHT": 272.0,
+      "jump quickly, fix the waxed oven gizmo": 239.25,
+      "Crème brûlée à l'été, naïve façade": 206.75,
+      "Twelve o'clock, 1984: (lights) & songs!": 238.5
+    },
+    "Times New Roman": {
+      "Lanterns drift home over the quiet hill": 275.5,
+      "Pale moon, rising slow - where to now?": 286.25,
+      "WE KEEP THE EMBERS BURNING ALL NIGHT": 381.0,
+      "jump quickly, fix the waxed oven gizmo": 293.75,
+      "Crème brûlée à l'été, naïve façade": 243.25,
+      "Twelve o'clock, 1984: (lights) & songs!": 285.0
+    },
+    "Trebuchet MS": {
+      "Lanterns drift home over the quiet hill": 296.75,
+      "Pale moon, rising slow - where to now?": 300.0,
+      "WE KEEP THE EMBERS BURNING ALL NIGHT": 328.0,
+      "jump quickly, fix the waxed oven gizmo": 308.25,
+      "Crème brûlée à l'été, naïve façade": 267.0,
+      "Twelve o'clock, 1984: (lights) & songs!": 294.5
+    },
+    "Verdana": {
+      "Lanterns drift home over the quiet hill": 312.75,
+      "Pale moon, rising slow - where to now?": 324.0,
+      "WE KEEP THE EMBERS BURNING ALL NIGHT": 367.75,
+      "jump quickly, fix the waxed oven gizmo": 330.0,
+      "Crème brûlée à l'été, naïve façade": 283.0,
+      "Twelve o'clock, 1984: (lights) & songs!": 321.5
+    },
+    "Liberation Sans": {
+      "Lanterns drift home over the quiet hill": 292.25,
+      "Pale moon, rising slow - where to now?": 309.5,
+      "WE KEEP THE EMBERS BURNING ALL NIGHT": 388.0,
+      "jump quickly, fix the waxed oven gizmo": 309.5,
+      "Crème brûlée à l'été, naïve façade": 272.0,
+      "Twelve o'clock, 1984: (lights) & songs!": 302.5
+    },
+    "Noto Sans CJK JP": {
+      "雨が降る夜に灯りをともして": 177.5,
+      "遠い町へ、歌を届けよう": 149.0
+    },
+    "DejaVu Sans": {
+      "Lanterns drift home over the quiet hill": 325.0,
+      "Pale moon, rising slow - where to now?": 333.0,
+      "WE KEEP THE EMBERS BURNING ALL NIGHT": 375.25,
+      "jump quickly, fix the waxed oven gizmo": 341.75,
+      "Crème brûlée à l'été, naïve façade": 295.75,
+      "Twelve o'clock, 1984: (lights) & songs!": 331.25
+    }
+  }
+}

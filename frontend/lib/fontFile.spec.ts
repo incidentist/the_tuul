@@ -4,6 +4,7 @@ import { describe, expect, test } from "vitest";
 import {
   parseCoverage,
   parseFontFamilyName,
+  parseFontMetrics,
   readFontFamilyName,
   UnreadableFontError,
 } from "./fontFile";
@@ -133,6 +134,32 @@ describe("readFontFamilyName", () => {
     const file = new File([bundledFont("Georgia.ttf")], "whatever-the-user-called-it.ttf");
 
     await expect(readFontFamilyName(file)).resolves.toBe("Georgia");
+  });
+});
+
+describe("parseFontMetrics", () => {
+  const code = (c: string) => c.codePointAt(0)!;
+
+  test("reads the height libass sizes a font by, and the advances", () => {
+    const { height, advances } = parseFontMetrics(bundledFont("TimesNewRoman.ttf"));
+    expect(height).toBe(1825 + 443);
+    expect(advances.get(code("f"))).toBe(682);
+  });
+
+  test("reads how far a glyph's ink reaches outside its box from a TrueType outline", () => {
+    const { ink } = parseFontMetrics(bundledFont("TimesNewRoman.ttf"));
+    expect(ink?.after.get(code("f"))).toBe(208);
+    expect(ink?.before.get(code("j"))).toBe(157);
+    expect(ink?.before.has(code("J"))).toBe(false);
+    expect(ink?.after.has(code("J"))).toBe(false);
+  });
+
+  test("reads it from a PostScript outline too", () => {
+    const { ink } = parseFontMetrics(bundledFont("NotoSansCJKjp-Regular.otf"));
+    expect(ink?.after.get(code("f"))).toBe(31);
+    expect(ink?.before.get(code("j"))).toBe(44);
+    expect(ink?.before.has(code("漢"))).toBe(false);
+    expect(ink?.after.has(code("漢"))).toBe(false);
   });
 });
 

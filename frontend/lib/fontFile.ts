@@ -1,3 +1,4 @@
+import { cffInkSpans, InkSpan } from "./cff";
 import { FALLBACK_FONTS } from "./fonts";
 
 // libass matches an ASS style's `Fontname` against the family name stored inside the font, not against the file's name,
@@ -21,6 +22,13 @@ const TTC_TAG = 0x74746366; // 'ttcf', a font collection holding several faces
 const WOFF_TAGS = [0x774f4646, 0x774f4632]; // 'wOFF', 'wOF2'
 const NAME_TAG = 0x6e616d65; // 'name'
 const CMAP_TAG = 0x636d6170; // 'cmap'
+const HHEA_TAG = 0x68686561; // 'hhea'
+const HMTX_TAG = 0x686d7478; // 'hmtx'
+const OS2_TAG = 0x4f532f32; // 'OS/2'
+const HEAD_TAG = 0x68656164; // 'head'
+const LOCA_TAG = 0x6c6f6361; // 'loca'
+const GLYF_TAG = 0x676c7966; // 'glyf'
+const CFF_TAG = 0x43464620; // 'CFF '
 
 const FALLBACK_CHAR = new RegExp(FALLBACK_FONTS.map(({ chars }) => chars).join("|"), "u");
 
@@ -169,16 +177,22 @@ function unicodeSubtable(view: DataView, cmap: number): number | undefined {
 }
 
 /**
- * Calls `found` with every code point a cmap subtable maps to a glyph.
+ * Calls `found` with every code point a cmap subtable maps to a glyph, and the glyph's index.
  */
-function eachMappedCodePoint(view: DataView, subtable: number, found: (codePoint: number) => void) {
+function eachMappedCodePoint(
+  view: DataView,
+  subtable: number,
+  found: (codePoint: number, glyph: number) => void,
+) {
   if (view.getUint16(subtable) === 12) {
     const groups = view.getUint32(subtable + 12);
     for (let i = 0; i < groups; i++) {
       const group = subtable + 16 + i * 12;
+      const start = view.getUint32(group);
       const end = view.getUint32(group + 4);
-      for (let c = view.getUint32(group); c <= end; c++) {
-        found(c);
+      const startGlyph = view.getUint32(group + 8);
+      for (let c = start; c <= end; c++) {
+        found(c, startGlyph + c - start);
       }
     }
     return;
@@ -194,12 +208,14 @@ function eachMappedCodePoint(view: DataView, subtable: number, found: (codePoint
     const delta = view.getUint16(deltas + i);
     const rangeOffset = view.getUint16(rangeOffsets + i);
     for (let c = start; c <= end; c++) {
-      // A range offset is relative to its own position in the file.
-      const glyph = rangeOffset
+      // A range offset is relative to its own position in the file,
+      // and the delta applies to the glyph it points at unless that is the missing glyph.
+      const indexed = rangeOffset
         ? view.getUint16(rangeOffsets + i + rangeOffset + (c - start) * 2)
-        : (c + delta) & 0xffff;
+        : c;
+      const glyph = rangeOffset && indexed === 0 ? 0 : (indexed + delta) & 0xffff;
       if (glyph !== 0) {
-        found(c);
+        found(c, glyph);
       }
     }
   }
@@ -230,15 +246,122 @@ export function parseCoverage(data: ArrayBuffer, chars: RegExp = FALLBACK_CHAR):
   return covered;
 }
 
+/**
+ * The glyph widths of a font, which `parseFontMetrics` reads from its file.
+ */
+export interface FontMetrics {
+  // In font units. libass scales a font so that this equals the font size.
+  height: number;
+  // In font units, by code point.
+  advances: ReadonlyMap<number, number>;
+  // The advance of a code point missing from `advances`.
+  defaultAdvance: number;
+  // How far each glyph's ink reaches before its origin and past its advance, in font units,
+  // for the code points whose ink does. Unset when the file's outlines can't be read.
+  ink?: { before: ReadonlyMap<number, number>; after: ReadonlyMap<number, number> };
+}
+
+/**
+ * Each glyph's ink span, by glyph index, from `glyf` or `CFF `, or null when the file has neither.
+ */
+function inkSpans(view: DataView, offset: number): ((glyph: number) => InkSpan | null) | null {
+  const head = tableOffset(view, offset, HEAD_TAG);
+  const loca = tableOffset(view, offset, LOCA_TAG);
+  const glyf = tableOffset(view, offset, GLYF_TAG);
+  if (head !== undefined && loca !== undefined && glyf !== undefined) {
+    const long = view.getInt16(head + 50) === 1;
+    const at = (glyph: number) =>
+      long ? view.getUint32(loca + glyph * 4) : view.getUint16(loca + glyph * 2) * 2;
+    // Every glyph starts with its bounding box, and a glyph with no outline takes no bytes.
+    return (glyph) => {
+      const start = at(glyph);
+      if (at(glyph + 1) <= start) return null;
+      return { xMin: view.getInt16(glyf + start + 2), xMax: view.getInt16(glyf + start + 6) };
+    };
+  }
+  const cff = tableOffset(view, offset, CFF_TAG);
+  return cff === undefined ? null : cffInkSpans(view, cff);
+}
+
+/**
+ * The advance width of every glyph the font maps a code point to,
+ * and the height libass sizes it by, which is `usWinAscent + usWinDescent`, not the em.
+ * Throws UnreadableFontError if the file has no widths.
+ */
+export function parseFontMetrics(data: ArrayBuffer): FontMetrics {
+  const view = new DataView(data);
+  const offset = sfntOffset(view);
+  const hhea = tableOffset(view, offset, HHEA_TAG);
+  const hmtx = tableOffset(view, offset, HMTX_TAG);
+  const cmap = tableOffset(view, offset, CMAP_TAG);
+  const subtable = cmap === undefined ? undefined : unicodeSubtable(view, cmap);
+  if (hhea === undefined || hmtx === undefined || subtable === undefined) {
+    throw new UnreadableFontError("This font file doesn't say how wide its characters are.");
+  }
+  // Glyphs past the last horizontal metric take its advance, as monospaced fonts do.
+  const metricCount = view.getUint16(hhea + 34);
+  const advanceOf = (glyph: number) => view.getUint16(hmtx + Math.min(glyph, metricCount - 1) * 4);
+  const advances = new Map<number, number>();
+  eachMappedCodePoint(view, subtable, (c, glyph) => advances.set(c, advanceOf(glyph)));
+  let ink: FontMetrics["ink"];
+  try {
+    ink = readInk(view, offset, subtable, advanceOf);
+  } catch {
+    // An outline the reader doesn't know leaves the font's ink unknown, and its rows a wider margin.
+    ink = undefined;
+  }
+
+  const os2 = tableOffset(view, offset, OS2_TAG);
+  const winHeight = os2 === undefined ? 0 : view.getUint16(os2 + 74) + view.getUint16(os2 + 76);
+  const hheaHeight = view.getInt16(hhea + 4) - view.getInt16(hhea + 6);
+  const averageWidth = os2 === undefined ? 0 : view.getInt16(os2 + 2);
+  return {
+    height: winHeight || hheaHeight,
+    advances,
+    defaultAdvance: averageWidth > 0 ? averageWidth : advanceOf(0),
+    ink,
+  };
+}
+
+/**
+ * How far the ink of each mapped glyph reaches outside its advance box, where it does.
+ */
+function readInk(
+  view: DataView,
+  offset: number,
+  subtable: number,
+  advanceOf: (glyph: number) => number,
+): FontMetrics["ink"] {
+  const spans = inkSpans(view, offset);
+  if (!spans) {
+    return undefined;
+  }
+  const before = new Map<number, number>();
+  const after = new Map<number, number>();
+  eachMappedCodePoint(view, subtable, (c, glyph) => {
+    const span = spans(glyph);
+    if (span && span.xMin < 0) before.set(c, -span.xMin);
+    if (span && span.xMax > advanceOf(glyph)) after.set(c, span.xMax - advanceOf(glyph));
+  });
+  return { before, after };
+}
+
 export async function readFontFamilyName(file: File): Promise<string> {
   return parseFontFamilyName(await file.arrayBuffer());
 }
 
 /**
- * The family name a font declares, and which of the characters the fallback fonts stand in for it can draw.
- * Throws UnreadableFontError as parseFontFamilyName does.
+ * The family name a font declares,
+ * which of the characters the fallback fonts stand in for it can draw, and its glyph widths.
+ * Throws UnreadableFontError as parseFontFamilyName and parseFontMetrics do.
  */
-export async function readFont(file: File): Promise<{ family: string; coverage: Set<number> }> {
+export async function readFont(
+  file: File,
+): Promise<{ family: string; coverage: Set<number>; metrics: FontMetrics }> {
   const data = await file.arrayBuffer();
-  return { family: parseFontFamilyName(data), coverage: parseCoverage(data) };
+  return {
+    family: parseFontFamilyName(data),
+    coverage: parseCoverage(data),
+    metrics: parseFontMetrics(data),
+  };
 }

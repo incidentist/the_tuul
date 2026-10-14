@@ -21,6 +21,7 @@ import {
 import { LYRIC_MARKERS, DEFAULT_COUNT_IN_THRESHOLD, DEFAULT_COUNT_IN_DURATION } from "@/constants";
 import { LyricSegment } from "./timing";
 import { songOffset } from "./screenSlots";
+import { FontLibrary } from "./textWidth";
 import { default as BuefyColor } from "buefy/src/utils/color";
 
 // Pinned rather than taken from the default, which is now empty and draws marks instead.
@@ -698,14 +699,21 @@ describe("CJK lyrics in the ASS file", () => {
 
   test("leaves the text alone for an uploaded font that draws all of it", () => {
     const coverage = { "My Uploaded Font": codePoints("残酷な天使坂本真綾") };
-    expect(createAssFile(segments, 10, "Title", "坂本 真綾", uploaded, coverage)).not.toContain(
-      "\\fn",
-    );
+    expect(
+      createAssFile(segments, 10, "Title", "坂本 真綾", uploaded, new FontLibrary(coverage)),
+    ).not.toContain("\\fn");
   });
 
   test("names the CJK font for a run the uploaded font only partly draws", () => {
     const coverage = { "My Uploaded Font": codePoints("残酷天使坂本真綾") };
-    const ass = createAssFile(segments, 10, "Title", "坂本 真綾", uploaded, coverage);
+    const ass = createAssFile(
+      segments,
+      10,
+      "Title",
+      "坂本 真綾",
+      uploaded,
+      new FontLibrary(coverage),
+    );
     expect(ass).toContain("{\\fnNoto Sans CJK JP}残酷な天使{\\fn}");
     expect(ass).not.toContain("{\\fnNoto Sans CJK JP}坂本 真綾{\\fn}");
   });
@@ -732,7 +740,14 @@ describe("symbols in the ASS file", () => {
 
   test("switches every symbol for an uploaded font that draws none", () => {
     const uploaded = { ...options, font: { ...options.font, name: "Asmath Free" } };
-    const ass = createAssFile(segments, 10, "T", "A", uploaded, { "Asmath Free": new Set() });
+    const ass = createAssFile(
+      segments,
+      10,
+      "T",
+      "A",
+      uploaded,
+      new FontLibrary({ "Asmath Free": new Set() }),
+    );
     expect(ass).toContain(
       "{\\kf100}{\\fnDejaVu Sans}♥♥♥{\\fn} {\\kf400}{\\fnDejaVu Sans}➤➤➤{\\fn}",
     );

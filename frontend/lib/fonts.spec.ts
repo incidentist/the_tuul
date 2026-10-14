@@ -1,15 +1,24 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, test } from "vitest";
+import { countBy, maxBy } from "lodash-es";
 import {
   BUNDLED_FONTS,
+  BUNDLED_METRICS,
   BUNDLED_SYMBOLS,
+  CompactMetrics,
   COUNT_IN_SYMBOLS,
+  MEASURED_RANGES,
   SYMBOL_CHAR,
   SYMBOL_FONT,
   withFallbackFonts,
 } from "./fonts";
-import { parseCoverage } from "./fontFile";
+import { FontMetrics, parseCoverage, parseFontMetrics } from "./fontFile";
+
+function bundledFontFile(url: string): ArrayBuffer {
+  const file = readFileSync(path.resolve(__dirname, "../../api/assets/fonts", path.basename(url)));
+  return file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength) as ArrayBuffer;
+}
 
 function toRanges(codePoints: Set<number>): [number, number][] {
   const ranges: [number, number][] = [];
@@ -27,19 +36,60 @@ function toRanges(codePoints: Set<number>): [number, number][] {
 test("bundledSymbols.json lists the symbols in each bundled font file", async () => {
   const symbol = new RegExp(SYMBOL_CHAR, "u");
   const table = Object.fromEntries(
-    Object.entries(BUNDLED_FONTS).map(([family, url]) => {
-      const file = readFileSync(
-        path.resolve(__dirname, "../../api/assets/fonts", path.basename(url)),
-      );
-      const data = file.buffer.slice(
-        file.byteOffset,
-        file.byteOffset + file.byteLength,
-      ) as ArrayBuffer;
-      return [family, toRanges(parseCoverage(data, symbol))];
-    }),
+    Object.entries(BUNDLED_FONTS).map(([family, url]) => [
+      family,
+      toRanges(parseCoverage(bundledFontFile(url), symbol)),
+    ]),
   );
 
   await expect(JSON.stringify(table) + "\n").toMatchFileSnapshot("./bundledSymbols.json");
+});
+
+/**
+ * The widths in the measured ranges, and the most common width outside them as the default.
+ * Combining marks take no width, so zero widths don't count towards the default.
+ */
+function compact({ height, advances, defaultAdvance, ink }: FontMetrics): CompactMetrics {
+  const measured = (c: number) => MEASURED_RANGES.some(([first, last]) => c >= first && c <= last);
+  const others = [...advances]
+    .filter(([c, advance]) => !measured(c) && advance > 0)
+    .map(([, advance]) => advance);
+  const counts = Object.entries(countBy(others));
+  const runs: number[][] = [];
+  for (const [c, advance] of [...advances].filter(([c]) => measured(c)).sort(([a], [b]) => a - b)) {
+    const last = runs[runs.length - 1];
+    if (last && last[0] + last.length - 1 === c) {
+      last.push(advance);
+    } else {
+      runs.push([c, advance]);
+    }
+  }
+  const inked = [...new Set([...(ink?.before.keys() ?? []), ...(ink?.after.keys() ?? [])])]
+    .filter(measured)
+    .sort((a, b) => a - b);
+  return {
+    height,
+    defaultAdvance: counts.length > 0 ? Number(maxBy(counts, ([, n]) => n)![0]) : defaultAdvance,
+    runs,
+    ...(ink && {
+      ink: inked.map((c) => [c, ink.before.get(c) ?? 0, ink.after.get(c) ?? 0]),
+    }),
+  };
+}
+
+test("bundledMetrics.json lists the widths in each bundled font file", async () => {
+  const table = Object.fromEntries(
+    Object.entries(BUNDLED_FONTS).map(([family, url]) => [
+      family,
+      compact(parseFontMetrics(bundledFontFile(url))),
+    ]),
+  );
+  await expect(JSON.stringify(table) + "\n").toMatchFileSnapshot("./bundledMetrics.json");
+});
+
+test("the CJK font's default width is a full width", () => {
+  const { defaultAdvance } = BUNDLED_METRICS["Noto Sans CJK JP"];
+  expect(defaultAdvance).toBe(1000);
 });
 
 test("the symbol font draws every count-in symbol", () => {

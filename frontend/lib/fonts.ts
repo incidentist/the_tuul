@@ -1,4 +1,6 @@
+import bundledMetricsTable from "./bundledMetrics.json";
 import bundledSymbolRanges from "./bundledSymbols.json";
+import type { FontMetrics } from "./fontFile";
 
 // The fonts the app ships, by family name. libass gets only these, with no system fallback.
 export const BUNDLED_FONTS = {
@@ -132,6 +134,81 @@ export const BUNDLED_SYMBOLS: Readonly<Record<string, ReadonlySet<number>>> = Ob
     ),
   ]),
 );
+
+// The code points whose widths bundledMetrics.json lists, for each bundled font that maps them.
+// Any other code point takes the font's most common width, which for the CJK font is a full width.
+export const MEASURED_RANGES: [number, number][] = [
+  [0x0020, 0x024f], // Latin
+  [0x0300, 0x036f], // combining diacritics
+  [0x0370, 0x04ff], // Greek and Cyrillic
+  [0x1e00, 0x1eff], // Latin Extended Additional
+  [0x2000, 0x215f], // punctuation, currency and letterlike symbols
+  [0x2190, 0x21ff], // the rest are the symbol ranges of SYMBOL_CHAR
+  [0x2300, 0x23ff],
+  [0x2500, 0x27bf],
+  [0x27f0, 0x27ff],
+  [0x2b00, 0x2bff],
+];
+
+// A bundled font's widths as bundledMetrics.json holds them,
+// with each run of consecutive code points as its first code point followed by their advances,
+// and each code point whose ink reaches outside its advance box as itself, before and after.
+export interface CompactMetrics {
+  height: number;
+  defaultAdvance: number;
+  runs: number[][];
+  ink?: number[][];
+}
+
+// Generated from the font files by fonts.spec.ts.
+// Run `pnpm exec vitest run -u` after changing a font.
+export const BUNDLED_METRICS: Readonly<Record<string, FontMetrics>> = Object.fromEntries(
+  Object.entries(bundledMetricsTable as Record<string, CompactMetrics>).map(
+    ([family, { height, defaultAdvance, runs, ink }]) => [
+      family,
+      {
+        height,
+        defaultAdvance,
+        advances: new Map(
+          runs.flatMap(([first, ...advances]) =>
+            advances.map((advance, i) => [first + i, advance]),
+          ),
+        ),
+        ink: ink && {
+          before: new Map(ink.filter(([, before]) => before > 0).map(([c, before]) => [c, before])),
+          after: new Map(ink.filter(([, , after]) => after > 0).map(([c, , after]) => [c, after])),
+        },
+      },
+    ],
+  ),
+);
+
+// A glyph's advance and the ink it reaches outside its box with, in font sizes.
+export interface GlyphWidth {
+  advance: number;
+  before: number;
+  after: number;
+}
+
+/**
+ * For each code point a bundled font maps, the widest any bundled font draws it.
+ * libass draws a glyph the style's font lacks in another font the app gives it, which may be any
+ * bundled font, so this bounds how wide it comes out.
+ */
+export const WIDEST_BUNDLED: ReadonlyMap<number, GlyphWidth> = (() => {
+  const widest = new Map<number, GlyphWidth>();
+  for (const { height, advances, ink } of Object.values(BUNDLED_METRICS)) {
+    for (const [c, advance] of advances) {
+      const previous = widest.get(c) ?? { advance: 0, before: 0, after: 0 };
+      widest.set(c, {
+        advance: Math.max(previous.advance, advance / height),
+        before: Math.max(previous.before, (ink?.before.get(c) ?? 0) / height),
+        after: Math.max(previous.after, (ink?.after.get(c) ?? 0) / height),
+      });
+    }
+  }
+  return widest;
+})();
 
 // One capture group per fallback font, matching a run of the characters it stands in for.
 const FALLBACK_RUN = new RegExp(

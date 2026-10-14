@@ -40,7 +40,8 @@ import {
   giveWayToStoredPeriods,
   songOffset,
 } from "./screenSlots";
-import { BUNDLED_SYMBOLS, GlyphCoverage, withFallbackFonts } from "./fonts";
+import { withFallbackFonts } from "./fonts";
+import { FontLibrary } from "./textWidth";
 import {
   applyVoiceStyle,
   defaultEffectColor,
@@ -1093,7 +1094,7 @@ export interface VoiceTrackRender {
 // share the same style field set (Format line), since displayParams always has every key.
 function renderAssDocument(
   tracks: VoiceTrackRender[],
-  glyphCoverage: GlyphCoverage,
+  fonts: FontLibrary,
   projectSettings?: string,
 ): string {
   const formatKeys = Object.keys(tracks[0].displayParams);
@@ -1140,9 +1141,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
       const { displayParams, styleName, options } =
         screen.kind === "title" && titleStyle ? titleStyle : track;
       const fontName = displayParams.Fontname as string;
-      const covered = glyphCoverage[fontName] ?? BUNDLED_SYMBOLS[fontName];
       const events = screen.toAssEvents(displayParams, options, styleName, actor);
-      assText += withFallbackFonts(events, fontName, covered);
+      assText += withFallbackFonts(events, fontName, fonts.covered(fontName));
     }
   }
   return assText;
@@ -1152,12 +1152,12 @@ function createSubtitles(
   screens: LyricsScreen[],
   options: KaraokeOptions,
   formatParams: Object,
-  glyphCoverage: GlyphCoverage,
+  fonts: FontLibrary,
 ): string {
   const displayParams = buildDisplayParams(formatParams, "Default");
   return renderAssDocument(
     [{ voice: "", styleName: "Default", displayParams, screens, options }],
-    glyphCoverage,
+    fonts,
   );
 }
 
@@ -1284,7 +1284,7 @@ export function createAssFile(
   title: string,
   artist: string,
   options: KaraokeOptions,
-  glyphCoverage: GlyphCoverage = {},
+  fonts: FontLibrary = new FontLibrary(),
 ) {
   // Entry point to subtitles. Creates an .ass file from the given info.
   const [{ screens }] = layOutVoices(
@@ -1293,7 +1293,7 @@ export function createAssFile(
     title,
     artist,
   );
-  return createSubtitles(screens, options, optionsToFormatParams(options), glyphCoverage);
+  return createSubtitles(screens, options, optionsToFormatParams(options), fonts);
 }
 
 export interface VoiceTrack {
@@ -1423,7 +1423,7 @@ export function createMultiVoiceAssFile(
   songDuration: number,
   title: string,
   artist: string,
-  glyphCoverage: GlyphCoverage = {},
+  fonts: FontLibrary = new FontLibrary(),
   projectSettings?: string,
 ): string {
   if (tracks.length === 0) {
@@ -1431,7 +1431,7 @@ export function createMultiVoiceAssFile(
   }
   return renderAssDocument(
     layOutVoices(tracks, songDuration, title, artist),
-    glyphCoverage,
+    fonts,
     projectSettings,
   );
 }

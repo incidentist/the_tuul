@@ -38,8 +38,9 @@ import {
   isTapAction,
   sameBinding,
 } from "@/lib/timingKeys";
-import { readFont } from "@/lib/fontFile";
-import { GlyphCoverage } from "@/lib/fonts";
+import { FontMetrics, readFont } from "@/lib/fontFile";
+import { BUNDLED_METRICS, GlyphCoverage } from "@/lib/fonts";
+import { FontLibrary } from "@/lib/textWidth";
 import {
   serializeSettingsYaml,
   serializeSubtitleSettings,
@@ -301,6 +302,7 @@ interface LoadedFont {
   family: string;
   url: string;
   coverage: ReadonlySet<number>;
+  metrics: FontMetrics;
 }
 
 export const useSettingsStore = defineStore("settings", () => {
@@ -325,6 +327,7 @@ export const useSettingsStore = defineStore("settings", () => {
   const customFontUrl = ref<string | null>(null);
   // Which of the characters the fallback fonts stand in for the uploaded font can draw.
   const customFontCoverage = shallowRef<ReadonlySet<number>>(new Set());
+  const customFontMetrics = shallowRef<FontMetrics | null>(null);
 
   // Load saved settings when the store is initialized
   loadSettings();
@@ -398,9 +401,10 @@ export const useSettingsStore = defineStore("settings", () => {
       return;
     }
     try {
-      const { family, coverage } = await readFont(file);
+      const { family, coverage, metrics } = await readFont(file);
       customFontFamily.value = family;
       customFontCoverage.value = coverage;
+      customFontMetrics.value = metrics;
       customFontUrl.value = URL.createObjectURL(file);
     } catch (e) {
       console.error("Could not read the saved custom font; ignoring it", e);
@@ -518,13 +522,15 @@ export const useSettingsStore = defineStore("settings", () => {
       customFont.value = null;
       customFontFamily.value = null;
       customFontCoverage.value = new Set();
+      customFontMetrics.value = null;
       customFontUrl.value = null;
       return;
     }
-    const { family, coverage } = await readFont(file);
+    const { family, coverage, metrics } = await readFont(file);
     customFont.value = file;
     customFontFamily.value = family;
     customFontCoverage.value = coverage;
+    customFontMetrics.value = metrics;
     customFontUrl.value = URL.createObjectURL(file);
   }
 
@@ -579,6 +585,20 @@ export const useSettingsStore = defineStore("settings", () => {
       coverage[customFontFamily.value] = customFontCoverage.value;
     }
     return coverage;
+  });
+
+  // What everything that lays lyrics out measures them with.
+  const fonts = computed(() => {
+    const metrics: Record<string, FontMetrics> = { ...BUNDLED_METRICS };
+    for (const font of [...Object.values(voiceFonts.value), titleFontLoaded.value]) {
+      if (font) {
+        metrics[font.family] = font.metrics;
+      }
+    }
+    if (customFontFamily.value && customFontMetrics.value) {
+      metrics[customFontFamily.value] = customFontMetrics.value;
+    }
+    return new FontLibrary(glyphCoverage.value, metrics);
   });
 
   /**
@@ -806,6 +826,7 @@ export const useSettingsStore = defineStore("settings", () => {
     setTitleStyleField,
     clearTitleStyle,
     glyphCoverage,
+    fonts,
     resetFonts,
     setTimingKey,
     resetTimingKeys,
