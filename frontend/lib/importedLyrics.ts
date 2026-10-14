@@ -10,6 +10,8 @@ export interface ImportedSyllable {
   // The segment text without its separator, as parseLyrics will yield it.
   word: string;
   wordEnd: boolean;
+  // A row break follows the syllable, within its line.
+  breakAfter?: boolean;
   // Seconds.
   start?: number;
   end?: number;
@@ -23,8 +25,10 @@ export interface ImportedSyllable {
  * removed from the markup and the words alike.
  */
 export function lineMarkup(syllables: ImportedSyllable[], warnings: Warnings): string {
+  const separator = (s: ImportedSyllable) =>
+    (s.wordEnd ? "" : "/") + (s.breakAfter ? "|" : s.wordEnd ? "_" : "");
   const markup = syllables
-    .map((s, i) => (i === syllables.length - 1 ? s.word : s.word + (s.wordEnd ? "_" : "/")))
+    .map((s, i) => (i === syllables.length - 1 ? s.word : s.word + separator(s)))
     .join("");
   if (!markup.startsWith("[")) {
     return markup;

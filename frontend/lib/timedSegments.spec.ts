@@ -669,6 +669,15 @@ describe("reconcile", () => {
       expect(raisedFlags(stored, lyrics("one_ka_lu_mo_four"))).toEqual({ lost: 1, moved: 1 });
     });
 
+    it("raises none when a word break becomes a row break", () => {
+      const stored = [timed("one_", 1), timed("two_", 2), timed("three", 3)];
+
+      expect(raisedFlags(stored, lyrics("one|two_three"))).toEqual({ lost: 0, moved: 0 });
+      expect(reconcile(stored, lyrics("one|two_three")).map(({ start }) => start)).toEqual([
+        1, 2, 3,
+      ]);
+    });
+
     it("doesn't count flags that segments inherited", () => {
       const stored = [timed("one_", 1), flag(timed("two_", 2), "moved"), timed("three", 3)];
 

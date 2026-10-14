@@ -833,7 +833,7 @@ describe("Timings Store", () => {
       timings.add(0, LYRIC_MARKERS.SEGMENT_START, 3.0);
 
       const text = timings.timingsText;
-      expect(text).toMatch(/^Toul timings 2\n\nvoice "Anna"\n/);
+      expect(text).toMatch(/^Toul timings 3\n\nvoice "Anna"\n/);
 
       timings.clear();
       timings.setAllSegments(parseTimingsText(text).voices);

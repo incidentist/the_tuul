@@ -17,6 +17,7 @@ import {
   parseLyrics,
   joinLyrics,
   layOutVoices,
+  displayText,
 } from "./timing";
 import { LYRIC_MARKERS, DEFAULT_COUNT_IN_THRESHOLD, DEFAULT_COUNT_IN_DURATION } from "@/constants";
 import { LyricSegment } from "./timing";
@@ -257,6 +258,26 @@ describe("parseLyrics", () => {
       { text: "foo\n" },
       { text: "bar", spacersBefore: 1 },
     ]);
+  });
+
+  test("reads a row break as a word break that also breaks the row, or a split with /|", () => {
+    expect(texts("drift|home_o/|ver")).toEqual(["drift|", "home_", "o/|", "ver"]);
+    expect(texts("drift _|home|o|/ver")).toEqual(["drift|", "home|", "o/|", "ver"]);
+    expect(texts("drift||home")).toEqual(["drift|", "home"]);
+    expect(texts("drift|home_o/|ver", false)).toEqual(["drift ", "home ", "o", "ver"]);
+  });
+
+  test("drops a row break next to a line break, or before a line's first segment", () => {
+    expect(texts("foo|\nbar")).toEqual(["foo\n", "bar"]);
+    expect(texts("foo\n|bar")).toEqual(["foo\n", "bar"]);
+    expect(texts("|foo")).toEqual(["foo"]);
+  });
+
+  test("draws a row break as the separator it carries, and writes it back", () => {
+    expect(displayText("home|")).toBe("home ");
+    expect(displayText("o/|")).toBe("o");
+    const lyrics = "Lan/terns_drift|home_o/|ver\nthe_hill";
+    expect(joinLyrics(parseLyrics(lyrics, true))).toBe(lyrics);
   });
 
   test("applies the same rules without markup", () => {

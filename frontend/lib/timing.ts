@@ -259,13 +259,14 @@ export function floatToTimecode(t: number): string {
 //
 
 // A segment's text, then the run of separators that ends it.
-const SEGMENT_PATTERN = /([^\n/_]*)([\n/_]*)/g;
+const SEGMENT_PATTERN = /([^\n/_|]*)([\n/_|]*)/g;
 
 /**
  * Parse marked up lyrics into segments.
  * Line breaks separate segments, and blank lines separate screens.
  * Underscores separate segments on word boundaries within a line.
  * Sla/shes separate segments within a word.
+ * A `|` breaks the line into rows on screen at a word boundary, and `/|` within a word.
  *
  * A run of separators counts as its strongest one,
  * and a segment of whitespace joins the run around it.
@@ -386,11 +387,13 @@ function strongestSeparator(separators: string, includeMarkup: boolean): string 
   if (separators.includes("\n")) {
     return "\n";
   }
-  if (separators.includes("_")) {
-    return includeMarkup ? "_" : " ";
+  // A row break adds to the separator it sits in, which is a word break when it's alone.
+  const rowBreak = separators.includes("|");
+  if (separators.includes("_") || (rowBreak && !separators.includes("/"))) {
+    return includeMarkup ? (rowBreak ? "|" : "_") : " ";
   }
   if (separators.includes("/")) {
-    return includeMarkup ? "/" : "";
+    return includeMarkup ? (rowBreak ? "/|" : "/") : "";
   }
   return "";
 }
@@ -399,16 +402,27 @@ function strongestSeparator(separators: string, includeMarkup: boolean): string 
  * The drawn form of a segment's stored text.
  * A trailing `_` is the space between two words.
  * A trailing `/` is an invisible split inside one.
+ * A row break draws as the separator it carries, `|` as a space and `/|` as nothing.
  * Newlines stay: the renderer groups lines on them.
  */
 export function displayText(text: string): string {
-  if (text.endsWith("_")) {
+  if (text.endsWith("/|")) {
+    return text.slice(0, -2);
+  }
+  if (text.endsWith("_") || text.endsWith("|")) {
     return text.slice(0, -1) + " ";
   }
   if (text.endsWith("/")) {
     return text.slice(0, -1);
   }
   return text;
+}
+
+/**
+ * Whether a segment's stored text ends with a row break.
+ */
+export function endsRow(text: string): boolean {
+  return text.endsWith("|");
 }
 
 function width(segment: TimedSegment): number {
@@ -1038,18 +1052,27 @@ export function compileLyricTimings(segments: TimedSegment[]): LyricsScreen[] {
     slot = 0;
   };
 
+  // A row break before an untimed segment starts the row at the next segment that draws.
+  let rowBreak = false;
   for (const [index, segment] of segments.entries()) {
     const { text, start, end } = segment;
     if (!head) {
       head = segment;
       headIndex = index;
+      rowBreak = false;
     }
     // An untimed segment draws nothing, but its separator still breaks the line or screen,
     // so the break below runs either way.
     // Empty text means a timing with no lyric (see fromEvents).
     if (start !== undefined && text !== "") {
-      line.segments.push(new LyricSegment(displayText(text), start, end));
+      const drawn = new LyricSegment(displayText(text), start, end);
+      if (rowBreak && line.segments.length > 0) {
+        drawn.rowStart = "break";
+      }
+      line.segments.push(drawn);
+      rowBreak = false;
     }
+    rowBreak ||= endsRow(text);
     if (text.endsWith("\n")) {
       closeLine(text.endsWith("\n\n"));
     }

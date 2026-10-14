@@ -16,9 +16,10 @@ import {
 import { TimedSegment, clampDisplayPeriods, clampMuteBounds } from "./timedSegments";
 import { DEFAULT_VOICE_ID, VoiceId } from "./voices";
 
-export const TIMINGS_TEXT_VERSION = 2;
-// Version 1 has no muted periods, so it reads as version 2 with every mute bound automatic.
-const READ_VERSIONS = [1, TIMINGS_TEXT_VERSION];
+export const TIMINGS_TEXT_VERSION = 3;
+// Version 1 has no muted periods, so it reads with every mute bound automatic.
+// Versions 1 and 2 have no row breaks.
+const READ_VERSIONS = [1, 2, TIMINGS_TEXT_VERSION];
 const SIGNATURE = "Toul timings";
 
 const TIME = String.raw`\d{1,3}:[0-5]\d\.\d{2}`;
@@ -27,12 +28,13 @@ const QUOTED = String.raw`"((?:[^"\\]|\\.)*)"`;
 const SIGNATURE_ROW = new RegExp(`^${SIGNATURE}\\s+(\\d+)$`);
 const VOICE_ROW = new RegExp(`^voice\\s+${QUOTED}$`);
 const PAGE_ROW = /^page$/;
+const BREAK_ROW = /^\|$/;
 const BOUND_ROW = new RegExp(`^${VALUE}(?:\\s+${VALUE})?$`);
 const SYLLABLE_ROW = new RegExp(`^${QUOTED}(?:\\s+${VALUE})?(?:\\s+${VALUE})?$`);
 
 // The separators that can end a stored segment, whitespace included for segments stored before
 // `parseLyrics` read trailing whitespace as a word break.
-const SEPARATOR_RUN = /[\s/_]*$/;
+const SEPARATOR_RUN = /[\s/_|]*$/;
 
 export class TimingsTextError extends Error {
   row: number;
@@ -49,6 +51,8 @@ interface ParsedSyllable {
   start?: number;
   end?: number;
   row: number;
+  // The row of the `|` that breaks the line after the syllable.
+  breakRow?: number;
 }
 
 interface ParsedLine {
@@ -226,12 +230,25 @@ function parseSections(input: string, wholeFile: boolean): Map<VoiceId, ParsedPa
       if (!line) {
         line = { header: row, displayStart: display, muteStart: mute, syllables: [] };
       } else {
+        const breakRow = line.syllables[line.syllables.length - 1]?.breakRow;
+        if (breakRow !== undefined) {
+          throw new TimingsTextError(
+            breakRow,
+            "A break has to come before a syllable of its line.",
+          );
+        }
         line.displayEnd = display;
         line.muteEnd = mute;
         current[current.length - 1].push(line);
         line = undefined;
         afterFooter = true;
       }
+    } else if (BREAK_ROW.test(content)) {
+      const previous = line?.syllables[line.syllables.length - 1];
+      if (!previous) {
+        throw new TimingsTextError(row, "A break has to come after a syllable of its line.");
+      }
+      previous.breakRow = row;
     } else if ((match = content.match(SYLLABLE_ROW))) {
       if (!line) {
         // The previous line's missing footer took this line's header.
@@ -249,8 +266,8 @@ function parseSections(input: string, wholeFile: boolean): Map<VoiceId, ParsedPa
       });
     } else {
       const kinds = wholeFile
-        ? "a voice, a page, a time or a syllable"
-        : "a page, a time or a syllable";
+        ? "a voice, a page, a time, a syllable or a break"
+        : "a page, a time, a syllable or a break";
       throw new TimingsTextError(row, `This row isn't ${kinds}.`);
     }
   }
@@ -295,6 +312,7 @@ function validateTimes(pages: ParsedPage[]): void {
 interface Syllable {
   word: string;
   wordEnd: boolean;
+  breakAfter: boolean;
   start?: number;
   end?: number;
   row: number;
@@ -314,9 +332,9 @@ function toSegments(pages: ParsedPage[], warnings: Warnings): TimedSegment[] {
 
     lines.forEach((line, l) => {
       let texts = line.syllables.map(({ text }) => {
-        if (/[/_]/.test(text)) {
+        if (/[/_|]/.test(text)) {
           warnings.add(MARKUP_REMOVED);
-          return text.replace(/[/_]/g, "");
+          return text.replace(/[/_|]/g, "");
         }
         return text;
       });
@@ -325,7 +343,7 @@ function toSegments(pages: ParsedPage[], warnings: Warnings): TimedSegment[] {
         texts = texts.map((text) => text.replace(/[[\]]/g, ""));
       }
 
-      line.syllables.forEach(({ start, end, row }, s) => {
+      line.syllables.forEach(({ start, end, row, breakRow }, s) => {
         const text = texts[s];
         const previous = syllables[syllables.length - 1];
         // A leading space ends the previous syllable's word, as in KBP.
@@ -335,6 +353,7 @@ function toSegments(pages: ParsedPage[], warnings: Warnings): TimedSegment[] {
         syllables.push({
           word: text.trim(),
           wordEnd: /\s$/.test(text),
+          breakAfter: breakRow !== undefined,
           start,
           end,
           row,
@@ -424,6 +443,9 @@ function separatorOf(syllable: Syllable, isLast: boolean): string {
   if (syllable.lastOfLine) {
     return "\n";
   }
+  if (syllable.breakAfter) {
+    return syllable.wordEnd ? "|" : "/|";
+  }
   return syllable.wordEnd ? "_" : "/";
 }
 
@@ -434,7 +456,7 @@ interface WrittenLine {
   muteEnd?: number;
   spacersBefore?: number;
   spacersAfter?: number;
-  syllables: { text: string; start?: number; end?: number }[];
+  syllables: { text: string; start?: number; end?: number; breakAfter: boolean }[];
 }
 
 /**
@@ -498,7 +520,9 @@ function breakOf(separators: string): Break {
   if (newlines === 1) {
     return "line";
   }
-  return /[\s_]/.test(separators) ? "word" : "split";
+  // A row break alone is a word break too.
+  const wordBreak = /[\s_]/.test(separators) || /^\|+$/.test(separators);
+  return wordBreak ? "word" : "split";
 }
 
 /**
@@ -547,6 +571,7 @@ function toPages(segments: TimedSegment[]): WrittenLine[][] {
       text: kind === "word" ? `${word} ` : word,
       start: segment.start,
       end: segment.end,
+      breakAfter: (kind === "word" || kind === "split") && separators.includes("|"),
     });
     if (kind === "line" || kind === "page") {
       pages[pages.length - 1].push(line);
@@ -582,7 +607,7 @@ function lineRows(line: WrittenLine): string[] {
   });
   return [
     boundRow(line.displayStart, line.muteStart),
-    ...syllableRows,
+    ...syllableRows.flatMap((row, i) => (line.syllables[i].breakAfter ? [row, "|"] : [row])),
     boundRow(line.displayEnd, line.muteEnd),
   ];
 }

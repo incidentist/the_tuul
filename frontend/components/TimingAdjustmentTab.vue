@@ -1047,7 +1047,7 @@ export default defineComponent({
           index,
           text: displayText(segment.text).trim(),
           isHead: offset === 0,
-          joinsNext: segment.text.endsWith("/"),
+          joinsNext: /\/\|?$/.test(segment.text),
           endsLine: segment.text.endsWith("\n"),
           timing: segment.start === undefined ? "none" : closed ? "full" : "start",
           review: segment.review,

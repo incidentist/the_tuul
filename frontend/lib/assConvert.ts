@@ -165,21 +165,27 @@ function importLine(
   const lineStart = event.start - delay;
   const lineEnd = event.end - delay;
   const withoutMarkup = (text: string) => {
-    if (!/[/_]/.test(text)) {
+    if (!/[/_|]/.test(text)) {
       return text;
     }
     warnings.add(MARKUP_REMOVED);
-    return text.replace(/[/_]/g, "");
+    return text.replace(/[/_|]/g, "");
   };
 
   if (!karaoke.timed) {
-    const words = withoutMarkup(karaoke.syllables[0].text).split(/\s+/).filter(Boolean);
+    // A hard line break between two words breaks the line into rows there.
+    const parts = withoutMarkup(karaoke.syllables[0].text).trim().split(/(\s+)/);
+    const words = parts.filter((_, i) => i % 2 === 0 && parts[i] !== "");
     if (words.length === 0) {
       return null;
     }
     warnings.add(UNTIMED_LINES);
     // The words in between are left untimed, and the render spreads them over the line.
-    const syllables: ImportedSyllable[] = words.map((word) => ({ word, wordEnd: true }));
+    const syllables: ImportedSyllable[] = words.map((word, i) => ({
+      word,
+      wordEnd: true,
+      breakAfter: parts[2 * i + 1]?.includes("\n"),
+    }));
     syllables[0].start = lineStart / 100;
     syllables[syllables.length - 1].end = lineEnd / 100;
     return importedLine(event, syllables, lineStart, lineEnd);
@@ -191,15 +197,22 @@ function importLine(
     // The app tags its count-ins with an alpha, and nothing else it writes.
     const countIn = own && syllable.tags.some((tag) => tag.startsWith("\\alpha"));
     const text = countIn ? "" : withoutMarkup(syllable.text);
+    // A hard line break breaks the line into rows. Other files mean a word break by it too,
+    // but the app writes the space between two words itself.
+    const spaced = own ? text.replace(/\n/g, "") : text;
     const previous = syllables[syllables.length - 1];
-    if (previous && /^\s/.test(text)) {
+    if (previous && /^\s/.test(spaced)) {
       previous.wordEnd = true;
     }
-    const word = text.trim();
+    if (previous && /^\s*\n/.test(text)) {
+      previous.breakAfter = true;
+    }
+    // A break inside a syllable can't be kept, since a row starts at a syllable.
+    const word = text.trim().replace(/\s*\n\s*/g, " ");
     if (word === "") {
       continue;
     }
-    syllables.push({ word, wordEnd: /\s$/.test(text) });
+    syllables.push({ word, wordEnd: /\s$/.test(spaced), breakAfter: /\n\s*$/.test(text) });
     const start = lineStart + syllable.start;
     times.push({ start, end: start + syllable.duration });
   }

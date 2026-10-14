@@ -1,7 +1,7 @@
 // functions to help with lyric markup tools
 
 function isBoundaryChar(char: string): boolean {
-  return [" ", "\n", "_"].includes(char);
+  return [" ", "\n", "_", "|"].includes(char);
 }
 
 export function getCurrentWord(body: string, cursorPosition: number): string {
@@ -74,7 +74,7 @@ export function slashifyAllOccurences(
       return text + currentWord;
     }
     let slashed = addSlashes(currentWord, slashedVersion);
-    if (next == "_" || next == "\n") {
+    if (next == "_" || next == "|" || next == "\n") {
       // The occurrence keeps its own slash here, so a slash typed before a line break survives.
       slashed = slashed.replace(/\/$/, "") + (currentWord.endsWith("/") ? "/" : "");
     }

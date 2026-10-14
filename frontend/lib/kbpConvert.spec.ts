@@ -439,6 +439,32 @@ describe("projectFilesToKbp", () => {
     expect(document.unsyncedLyrics).toEqual(["Pale moon", "ri/sing"]);
   });
 
+  test("writes a row break as the separator it carries", () => {
+    const unsynced = projectFilesToKbp({
+      lyrics: "Pale_moon|ri/|sing",
+      timings: {},
+      settings: settingsFile(),
+      audioName: null,
+    });
+    expect(parseKbp(unsynced.kbp).unsyncedLyrics).toEqual(["Pale moon ri/sing"]);
+
+    const synced = projectFilesToKbp({
+      lyrics: "Pale_moon|ri/|sing",
+      timings: {
+        "Voice 1": [
+          { text: "Pale_", start: 1 },
+          { text: "moon|", start: 2 },
+          { text: "ri/|", start: 3 },
+          { text: "sing", start: 4, end: 5 },
+        ],
+      },
+      settings: settingsFile(),
+      audioName: null,
+    });
+    const [line] = parseKbp(synced.kbp).pages[0].lines;
+    expect(line.syllables.map(({ text }) => text)).toEqual(["Pale ", "moon ", "ri", "sing"]);
+  });
+
   test("outlines the text in the outline color, not the background", () => {
     const result = projectFilesToKbp({
       lyrics: "[Anna] la",

@@ -17,7 +17,8 @@
         between two time rows, and each row in between is a syllable: its text in quotes, when it
         starts, then when it ends. A syllable with no end lasts until the next one starts. A space
         at the end of a syllable ends its word, and <code>page</code> starts a new page. A time row
-        followed directly by another one is a blank line that keeps its place on the page.
+        followed directly by another one is a blank line that keeps its place on the page, and a
+        <code>|</code> row between two syllables continues their line on the row below.
       </p>
       <p>
         The time rows around a line hold when it appears and disappears, and <code>-</code> leaves
@@ -241,7 +242,7 @@ export default defineComponent({
         // Putting an edit back through the `[tag]` lines of a multi-voice blob is not implemented.
         if (lyricsChanged && this.lyricsStore.voices.length > 1) {
           this.error =
-            "This tab can only change timings while the song has more than one voice. Edit the words and blank lines in the Lyrics tab.";
+            "This tab can only change timings while the song has more than one voice. Edit the words, blank lines and row breaks in the Lyrics tab.";
           return;
         }
 

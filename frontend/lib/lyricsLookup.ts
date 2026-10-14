@@ -69,7 +69,7 @@ export function convertFetchedLyrics(text: string): string {
     .replace(/\r\n?/g, "\n")
     .split("\n")
     .filter((line) => !SECTION_LABEL.test(line))
-    .map((line) => line.replace(/[/_]/g, " ").trimEnd());
+    .map((line) => line.replace(/[/_|]/g, " ").trimEnd());
   const kept: string[] = [];
   for (const line of lines) {
     if (line.trim() === "" && (kept.length === 0 || kept[kept.length - 1] === "")) {

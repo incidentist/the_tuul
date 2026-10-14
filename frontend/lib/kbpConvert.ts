@@ -13,6 +13,7 @@ import {
   parseKbp,
   serializeKbp,
 } from "./kbp";
+import { displayText } from "./timing";
 import { TimedSegment } from "./timedSegments";
 import { DEFAULT_VOICE_ID, parseAnnotatedLyrics, TAG_PATTERN, VoiceId } from "./voices";
 import { ParsedSettingsFile, parseSettingsYaml } from "./settingsFile";
@@ -107,9 +108,9 @@ function importSyllables(line: KbpLine, style: KbpStyle, warnings: Warnings): Im
 
   line.syllables.forEach((syllable: KbpSyllable) => {
     let text = syllable.text;
-    if (/[/_]/.test(text)) {
+    if (/[/_|]/.test(text)) {
       warnings.add(MARKUP_REMOVED);
-      text = text.replace(/[/_]/g, "");
+      text = text.replace(/[/_|]/g, "");
     }
     if (style.uppercase) {
       text = text.toUpperCase();
@@ -143,7 +144,7 @@ function importSyllables(line: KbpLine, style: KbpStyle, warnings: Warnings): Im
  * A line whose syllables hold no text is a blank spacer line.
  */
 function isSpacer(line: KbpLine): boolean {
-  return line.syllables.every((syllable) => syllable.text.replace(/[/_]/g, "").trim() === "");
+  return line.syllables.every((syllable) => syllable.text.replace(/[/_|]/g, "").trim() === "");
 }
 
 /**
@@ -517,7 +518,8 @@ function voicePages(
 
   for (const segment of segments) {
     head ??= segment;
-    const text = segment.text.replace(/\n+$/, "").replace(/_$/, " ").replace(/\/$/, "");
+    // KBS lays its lines out on its own screen, so a row break draws as the separator it carries.
+    const text = displayText(segment.text.replace(/\n+$/, ""));
     if (segment.start !== undefined && text.trim() !== "") {
       const syllable: KbpSyllable = {
         text,
@@ -695,7 +697,11 @@ export function projectFilesToKbp(source: KbpExportSource): KbpExport {
     pages: synced ? layOutLines(pages) : [],
     unsyncedLyrics: synced
       ? null
-      : source.lyrics.split("\n").map((line) => line.replace(TAG_PATTERN, "").replace(/_/g, " ")),
+      : source.lyrics
+          .split("\n")
+          .map((line) =>
+            line.replace(TAG_PATTERN, "").replace(/\/\|/g, "/").replace(/[_|]+/g, " "),
+          ),
     images: [],
     mods: null,
   };

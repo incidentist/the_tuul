@@ -179,7 +179,9 @@ describe("TimingEditTab", () => {
     wrapper.vm.draft = wrapper.vm.draft.replace('"world"', '"there"');
     wrapper.vm.apply();
 
-    expect(wrapper.vm.error).toContain("Edit the words and blank lines in the Lyrics tab.");
+    expect(wrapper.vm.error).toContain(
+      "Edit the words, blank lines and row breaks in the Lyrics tab.",
+    );
     expect(useLyricsStore().lyricText).toContain("hel/lo_world");
   });
 

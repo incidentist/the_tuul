@@ -40,7 +40,8 @@ export interface AssSyllable {
   // Centiseconds from the event's start.
   start: number;
   duration: number;
-  // The drawn text. Override tags and drawings are removed, and hard line breaks become spaces.
+  // The drawn text. Override tags and drawings are removed, hard spaces become spaces,
+  // and hard line breaks become newlines.
   text: string;
   // The syllable's override tags other than its karaoke tag, each with its backslash.
   tags: string[];
@@ -202,7 +203,7 @@ export function parseKaraoke(text: string): AssKaraoke {
   for (const [, block, chunk] of text.matchAll(/\{([^}]*)\}?|([^{]+)/g)) {
     if (chunk !== undefined) {
       if (!drawing) {
-        current.text += chunk.replace(/\\[Nnh]/g, " ");
+        current.text += chunk.replace(/\\[Nn]/g, "\n").replace(/\\h/g, " ");
       }
       continue;
     }

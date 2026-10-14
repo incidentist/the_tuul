@@ -26,6 +26,11 @@
             syllable. Example:
           </p>
           <pre>{{ singleVoiceExample }}</pre>
+          <p>
+            A line too wide for the screen continues on the row below. To choose where a line
+            continues yourself, use <kbd>|</kbd> in place of <kbd>_</kbd>, or <kbd>/|</kbd> within a
+            word. It doesn't start a new line for the timing.
+          </p>
         </div>
         <div class="column">
           <p>

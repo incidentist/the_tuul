@@ -106,13 +106,13 @@ describe("parseKaraoke", () => {
     ]);
   });
 
-  it("drops drawings and turns hard breaks into spaces", () => {
+  it("drops drawings, turns hard spaces into spaces and keeps hard line breaks", () => {
     const { syllables } = parseKaraoke(
       "{\\k10\\alpha&H80&}{\\p1}m 0 0 l 5 0{\\p0}{\\k20}one\\Ntwo\\hthree",
     );
     expect(syllables).toEqual([
       { start: 0, duration: 10, text: "", tags: ["\\alpha&H80&"] },
-      { start: 10, duration: 20, text: "one two three", tags: [] },
+      { start: 10, duration: 20, text: "one\ntwo three", tags: [] },
     ]);
   });
 

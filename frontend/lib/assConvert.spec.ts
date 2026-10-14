@@ -21,6 +21,7 @@ import {
   VerticalAlignment,
 } from "./timing";
 import { FontLibrary } from "./textWidth";
+import { parseLyrics } from "./timing";
 import { TimedSegment } from "./timedSegments";
 
 const FONTS = ["Arial Narrow", "Georgia"];
@@ -423,6 +424,22 @@ describe("assToProjectFiles on lines too wide for the screen", () => {
     expect(imported.lyrics).toBe(words.join(" "));
   });
 
+  it("keeps the row breaks of the lyrics, and not the app's own wraps", () => {
+    const lyrics = "Pale_moon|rising_slow_over_the_quiet_hill,_lanterns_drifting_home_to/|night";
+    const segments: TimedSegment[] = parseLyrics(lyrics, true).map((segment, i) => ({
+      ...segment,
+      start: 10 + i,
+    }));
+    segments[segments.length - 1].end = 10 + segments.length;
+    const text = render([{ voice: "Voice 1", segments }], options);
+    expect(text).toContain("{break}");
+    expect(text).toContain("{wrap}");
+
+    const imported = assToProjectFiles(text, { fonts: FONTS });
+    expect(imported.lyrics).toBe(lyrics);
+    expect(imported.timings).toEqual({ "Voice 1": segments });
+  });
+
   it("reads a title the app wrapped back whole", () => {
     const title = "The Long and Winding Title of a Song Nobody Could Fit on One Row";
     const segments: TimedSegment[] = [
@@ -538,6 +555,17 @@ describe("assToProjectFiles on other files", () => {
       { fonts: FONTS },
     );
     expect(Object.keys(imported.timings)).toEqual(["Anna", "Ben"]);
+  });
+
+  it("reads a hard line break as a word break that also breaks the row", () => {
+    const imported = assToProjectFiles(
+      ass([
+        "Dialogue: 0,0:00:01.00,0:00:05.00,Default,,0,0,0,,{\\k100}Pale {\\k100}moon\\N{\\k100}ri{\\k100}\\Nsing",
+        "Dialogue: 0,0:00:06.00,0:00:09.00,Default,,0,0,0,,Over the\\Nquiet hill",
+      ]),
+      { fonts: FONTS },
+    );
+    expect(imported.lyrics).toBe("Pale_moon|ri|sing\nOver_the|quiet_hill");
   });
 
   it("times an untagged line from its start to its end", () => {

@@ -9,6 +9,14 @@ describe("lineMarkup", () => {
     ]);
   });
 
+  it("finds row breaks", () => {
+    expect(lineMarkup("Vel|o/|ma").ranges).toEqual([
+      { from: 3, to: 4, kind: "separator" },
+      { from: 5, to: 6, kind: "separator" },
+      { from: 6, to: 7, kind: "separator" },
+    ]);
+  });
+
   it("finds a leading voice tag, and no separators inside it", () => {
     expect(lineMarkup("  [Ann_Bo+Cy/D] sos_sa").ranges).toEqual([
       { from: 2, to: 15, kind: "voice-tag" },

@@ -21,7 +21,7 @@ import {
 } from "./timingsText";
 
 const file = (...rows: string[]) => rows.join("\n") + "\n";
-const signed = (...rows: string[]) => file("Toul timings 2", ...rows);
+const signed = (...rows: string[]) => file("Toul timings 3", ...rows);
 const voice = (text: string, name = "Voice 1") => parseTimingsText(text).voices[name];
 const texts = (segments: TimedSegment[]) => segments.map(({ text }) => text);
 
@@ -169,20 +169,20 @@ describe("parseTimingsText", () => {
 
     test("requires the signature", () => {
       expect(() => parseTimingsText(file("", "-", '"a"', "-"))).toThrow(
-        'Row 2: A timings file starts with "Toul timings 2".',
+        'Row 2: A timings file starts with "Toul timings 3".',
       );
       expect(() => parseTimingsText("")).toThrow("Row 1:");
     });
 
     test("refuses an unknown version", () => {
-      expect(() => parseTimingsText(file("Toul timings 3"))).toThrow(
-        "Row 1: Version 3 of the timings format isn't supported.",
+      expect(() => parseTimingsText(file("Toul timings 4"))).toThrow(
+        "Row 1: Version 4 of the timings format isn't supported.",
       );
     });
 
     test("refuses a row it doesn't know", () => {
       expect(() => parseTimingsText(signed("-", "a", "-"))).toThrow(
-        "Row 3: This row isn't a voice, a page, a time or a syllable.",
+        "Row 3: This row isn't a voice, a page, a time, a syllable or a break.",
       );
       expect(rowOf(signed("-", '"a" 1.00', "-"))).toBe(3);
       expect(rowOf(signed("-", '"a" 00:60.00', "-"))).toBe(3);
@@ -347,6 +347,36 @@ describe("parseTimingsText", () => {
     });
   });
 
+  describe("row breaks", () => {
+    test("follow the syllable before them, at a word break or within a word", () => {
+      expect(
+        texts(voice(signed("-", '"home "  00:01.00', "|", '"o"  00:02.00', "|", '"ver"', "-"))),
+      ).toEqual(["home|", "o/|", "ver"]);
+    });
+
+    test("count once when repeated", () => {
+      expect(texts(voice(signed("-", '"a "', "|", "|", '"b"', "-")))).toEqual(["a|", "b"]);
+    });
+
+    test("are refused before a line's first syllable or after its last, naming the row", () => {
+      expect(() => parseTimingsText(signed("-", "|", '"a"', "-"))).toThrow(
+        "Row 3: A break has to come after a syllable of its line.",
+      );
+      expect(() => parseTimingsText(signed("-", '"a"', "|", "-"))).toThrow(
+        "Row 4: A break has to come before a syllable of its line.",
+      );
+      expect(() => parseTimingsText(signed("|"))).toThrow(
+        "Row 2: A break has to come after a syllable of its line.",
+      );
+    });
+
+    test("are removed from a syllable's text", () => {
+      const { voices, warnings } = parseTimingsText(signed("-", '"a|b"', "-"));
+      expect(texts(voices["Voice 1"])).toEqual(["ab"]);
+      expect(warnings).toEqual([MARKUP_REMOVED]);
+    });
+  });
+
   describe("display periods", () => {
     test("are widened to contain the line's timings, with one warning", () => {
       const { voices, warnings } = parseTimingsText(
@@ -474,7 +504,7 @@ describe("writeTimingsText", () => {
     ];
     expect(writeTimingsText({ "Voice 1": segments }, ["Voice 1"])).toBe(
       file(
-        "Toul timings 2",
+        "Toul timings 3",
         "",
         'voice "Voice 1"',
         "",
@@ -503,7 +533,7 @@ describe("writeTimingsText", () => {
     const text = writeTimingsText({ 'A "b"': [{ text: 'x"\\', end: 1 }] }, ['A "b"']);
     expect(text).toBe(
       file(
-        "Toul timings 2",
+        "Toul timings 3",
         "",
         'voice "A \\"b\\""',
         "",
@@ -626,6 +656,14 @@ describe("round trip", () => {
     expect(warnings).toEqual([]);
   });
 
+  test("keeps row breaks", () => {
+    const segments = lyricSegments("Lan/terns_drift|home_o/|ver_the\nhill");
+    segments.forEach((segment, i) => (segment.start = i));
+    const written = writeTimingsText({ "Voice 1": segments }, ["Voice 1"]);
+    expect(written).toContain('"drift "  00:02.00\n|\n"home "');
+    expect(parseTimingsText(written).voices["Voice 1"]).toEqual(segments);
+  });
+
   test("rounds times to the centisecond", () => {
     const { voices } = parseTimingsText(
       writeTimingsText({ "Voice 1": [{ text: "a", start: 1.23456, end: 2.005 }] }, ["Voice 1"]),
@@ -680,7 +718,7 @@ describe("the section of one voice", () => {
       "Row 4: This row belongs to the whole timings file",
     );
     expect(() => parseVoiceTimingsText(file("-", "a", "-"))).toThrow(
-      "Row 2: This row isn't a page, a time or a syllable.",
+      "Row 2: This row isn't a page, a time, a syllable or a break.",
     );
   });
 

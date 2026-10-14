@@ -170,7 +170,7 @@ export function toEvents(segments: TimedSegment[]): LyricEvent[] {
  * `three` becomes `three_`. The same word in the same place must not read as a different one.
  */
 export function segmentWord(text: string): string {
-  return text.replace(/(\n\n|[\n/_])$/, "");
+  return text.replace(/(\n\n|\/\||[\n/_|])$/, "");
 }
 
 // A reconciled segment, with the flag the diff raised on it over the one it inherited.
