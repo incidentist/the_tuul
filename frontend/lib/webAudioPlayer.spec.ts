@@ -78,7 +78,7 @@ let players: WebAudioPlayer[] = [];
 /**
  * A player on fake contexts and a fake Signalsmith node, with its track loaded.
  */
-async function loadedPlayer() {
+async function loadedPlayer(options: { pauseWhenHidden?: boolean } = {}) {
   const contexts: FakeContext[] = [];
   const stretches: ReturnType<typeof fakeStretch>[] = [];
   const player = new WebAudioPlayer({
@@ -93,6 +93,7 @@ async function loadedPlayer() {
       return stretch as unknown as StretchNode;
     },
     decode: async () => track,
+    ...options,
   });
   players.push(player);
   await player.load(new Blob());
@@ -310,6 +311,21 @@ describe("WebAudioPlayer", () => {
 
     expect(contexts).toHaveLength(2);
     expect(contexts[1].sources[0].start).toHaveBeenCalledWith(10.03, 5, 15);
+  });
+
+  it("plays on through a hidden page when told to, and closes the context if paused", async () => {
+    const { player, contexts } = await loadedPlayer({ pauseWhenHidden: false });
+    await player.play();
+
+    hidePage();
+
+    expect(player.paused).toBe(false);
+    expect(contexts[0].close).not.toHaveBeenCalled();
+
+    player.pause();
+    hidePage();
+
+    expect(contexts[0].close).toHaveBeenCalled();
   });
 
   it("plays on when the window loses focus", async () => {

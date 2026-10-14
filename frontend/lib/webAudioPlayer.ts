@@ -49,6 +49,8 @@ export interface WebAudioPlayerOptions {
   createContext?: () => AudioContext;
   createStretch?: (context: AudioContext, channels: number) => Promise<StretchNode>;
   decode?: (blob: Blob, sampleRate: number) => Promise<AudioBuffer>;
+  // Whether a hidden page pauses playback. A paused player closes its AudioContext all the same.
+  pauseWhenHidden?: boolean;
 }
 
 /**
@@ -114,10 +116,10 @@ async function createStretchNode(context: AudioContext, channels: number): Promi
  * the `pause` of a range or track that has played to its end, and `loadstart` and `loadeddata`
  * around decoding a track.
  *
- * It pauses when the page is hidden, and closes its AudioContext, so the next play uses a new
- * one. Firefox keeps a context's output latency from when it started, so a change of output made
- * meanwhile would otherwise put the position off for good. Losing the focus alone doesn't pause
- * it, since GNOME takes the focus away for as long as a volume key is held.
+ * It pauses when the page is hidden, unless told to play on, and closes its AudioContext, so the
+ * next play uses a new one. Firefox keeps a context's output latency from when it started, so a
+ * change of output made meanwhile would otherwise put the position off for good. Losing the focus
+ * alone doesn't pause it, since GNOME takes the focus away for as long as a volume key is held.
  */
 export class WebAudioPlayer extends EventTarget {
   private blob: Blob | null = null;
@@ -143,6 +145,7 @@ export class WebAudioPlayer extends EventTarget {
   private readonly createContext: () => AudioContext;
   private readonly createStretch: (context: AudioContext, channels: number) => Promise<StretchNode>;
   private readonly decode: (blob: Blob, sampleRate: number) => Promise<AudioBuffer>;
+  private readonly pauseWhenHidden: boolean;
 
   constructor(options: WebAudioPlayerOptions = {}) {
     super();
@@ -150,6 +153,7 @@ export class WebAudioPlayer extends EventTarget {
       options.createContext ?? (() => new AudioContext({ latencyHint: "interactive" }));
     this.createStretch = options.createStretch ?? createStretchNode;
     this.decode = options.decode ?? decodeTrack;
+    this.pauseWhenHidden = options.pauseWhenHidden ?? true;
     document.addEventListener("visibilitychange", this.onVisibilityChange);
   }
 
@@ -159,6 +163,11 @@ export class WebAudioPlayer extends EventTarget {
 
   get paused(): boolean {
     return !this.wanted;
+  }
+
+  // The track being played, once decoded.
+  get decoded(): AudioBuffer | null {
+    return this.buffer;
   }
 
   get loading(): boolean {
@@ -312,6 +321,7 @@ export class WebAudioPlayer extends EventTarget {
 
   private onVisibilityChange = () => {
     if (document.visibilityState !== "hidden") return;
+    if (!this.pauseWhenHidden && this.wanted) return;
     this.pause();
     this.closeContext();
   };
