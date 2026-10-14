@@ -1,12 +1,13 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { expect, test } from "vitest";
+import { describe, expect, test } from "vitest";
 import {
   BUNDLED_FONTS,
   BUNDLED_SYMBOLS,
   COUNT_IN_SYMBOLS,
   SYMBOL_CHAR,
   SYMBOL_FONT,
+  withFallbackFonts,
 } from "./fonts";
 import { parseCoverage } from "./fontFile";
 
@@ -47,4 +48,42 @@ test("the symbol font draws every count-in symbol", () => {
     (c) => !symbol.test(c) || !BUNDLED_SYMBOLS[SYMBOL_FONT].has(c.codePointAt(0)!),
   );
   expect(missing).toEqual([]);
+});
+
+describe("withFallbackFonts", () => {
+  test("switches a CJK run to the CJK font and back", () => {
+    expect(withFallbackFonts("{\\kf100}Sakamoto 坂本 真綾!", "Arial")).toBe(
+      "{\\kf100}Sakamoto {\\fnNoto Sans CJK JP}坂本 真綾{\\fn}!",
+    );
+  });
+
+  test("covers kana, the long vowel mark, CJK punctuation and Hangul", () => {
+    expect(withFallbackFonts("「カラオケー」한국", "Arial")).toBe(
+      "{\\fnNoto Sans CJK JP}「カラオケー」한국{\\fn}",
+    );
+  });
+
+  test("switches a run of symbols to the symbol font", () => {
+    expect(withFallbackFonts("{\\kf50}➤➤➤➤{\\kf20}May", "Arial")).toBe(
+      "{\\kf50}{\\fnDejaVu Sans}➤➤➤➤{\\fn}{\\kf20}May",
+    );
+  });
+
+  test("keeps the symbols the style's font draws itself", () => {
+    const heart = new Set(["♥".codePointAt(0)!]);
+    expect(withFallbackFonts("♥♥♥ ➤", "Arial", heart)).toBe("♥♥♥ {\\fnDejaVu Sans}➤{\\fn}");
+  });
+
+  test("leaves the text alone in the fallback font it would switch to", () => {
+    expect(withFallbackFonts("➤➤ 坂本", "DejaVu Sans")).toBe("➤➤ {\\fnNoto Sans CJK JP}坂本{\\fn}");
+  });
+
+  test("switches a whole run when none of its words can be drawn", () => {
+    expect(withFallbackFonts("➤➤ ➣➣", "Arial")).toBe("{\\fnDejaVu Sans}➤➤ ➣➣{\\fn}");
+  });
+
+  test("leaves Latin text and override blocks alone", () => {
+    const line = "{\\fad(100,100)}{\\kf50}Crème brûlée · naïve";
+    expect(withFallbackFonts(line, "Arial")).toBe(line);
+  });
 });

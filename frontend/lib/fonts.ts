@@ -132,3 +132,46 @@ export const BUNDLED_SYMBOLS: Readonly<Record<string, ReadonlySet<number>>> = Ob
     ),
   ]),
 );
+
+// One capture group per fallback font, matching a run of the characters it stands in for.
+const FALLBACK_RUN = new RegExp(
+  FALLBACK_FONTS.map(({ chars }) => `(${chars}+(?: +${chars}+)*)`).join("|"),
+  "gu",
+);
+
+// Which of the characters the fallback fonts stand in for each uploaded font can draw, by family name.
+// A bundled font draws what BUNDLED_SYMBOLS lists. Any other font counts as drawing none.
+export type GlyphCoverage = Readonly<Record<string, ReadonlySet<number>>>;
+
+/**
+ * Switch every run of CJK text or symbols outside override blocks to the fallback font for it,
+ * unless the style's font can draw the whole run.
+ * FFmpeg.wasm's libass has no fontconfig, so it can't fall back to another font on its own.
+ */
+export function withFallbackFonts(
+  events: string,
+  fontName: string,
+  covered: ReadonlySet<number> = new Set(),
+): string {
+  const drawable = (word: string) => [...word].every((c) => covered.has(c.codePointAt(0)!));
+  return events.replace(/(\{[^}]*\})|[^{]+/g, (chunk, block) =>
+    block
+      ? chunk
+      : chunk.replace(FALLBACK_RUN, (run, ...groups) => {
+          const { family } = FALLBACK_FONTS[groups.findIndex((group) => group !== undefined)];
+          const tag = (text: string) => `{\\fn${family}}${text}{\\fn}`;
+          // Odd indexes hold the spaces between words.
+          const parts = run.split(/( +)/);
+          const words = parts.filter((_, i) => i % 2 === 0);
+          if (family === fontName || words.every(drawable)) {
+            return run;
+          }
+          if (!words.some(drawable)) {
+            return tag(run);
+          }
+          return parts
+            .map((part, i) => (i % 2 === 0 && !drawable(part) ? tag(part) : part))
+            .join("");
+        }),
+  );
+}

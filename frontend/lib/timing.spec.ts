@@ -16,7 +16,6 @@ import {
   resolveStarts,
   parseLyrics,
   joinLyrics,
-  withFallbackFonts,
   layOutVoices,
 } from "./timing";
 import { LYRIC_MARKERS, DEFAULT_COUNT_IN_THRESHOLD, DEFAULT_COUNT_IN_DURATION } from "@/constants";
@@ -666,44 +665,6 @@ test("compileLyricTimings renders a partially timed project", () => {
   // The timed head renders. The untimed tail contributes its breaks but no drawn text.
   expect(screens.length).toBe(1);
   expect(screens[0].lines[0].segments.map((s) => s.text)).toEqual(["Be bop ", "a lu bop\n"]);
-});
-
-describe("withFallbackFonts", () => {
-  test("switches a CJK run to the CJK font and back", () => {
-    expect(withFallbackFonts("{\\kf100}Sakamoto 坂本 真綾!", "Arial")).toBe(
-      "{\\kf100}Sakamoto {\\fnNoto Sans CJK JP}坂本 真綾{\\fn}!",
-    );
-  });
-
-  test("covers kana, the long vowel mark, CJK punctuation and Hangul", () => {
-    expect(withFallbackFonts("「カラオケー」한국", "Arial")).toBe(
-      "{\\fnNoto Sans CJK JP}「カラオケー」한국{\\fn}",
-    );
-  });
-
-  test("switches a run of symbols to the symbol font", () => {
-    expect(withFallbackFonts("{\\kf50}➤➤➤➤{\\kf20}May", "Arial")).toBe(
-      "{\\kf50}{\\fnDejaVu Sans}➤➤➤➤{\\fn}{\\kf20}May",
-    );
-  });
-
-  test("keeps the symbols the style's font draws itself", () => {
-    const heart = new Set(["♥".codePointAt(0)!]);
-    expect(withFallbackFonts("♥♥♥ ➤", "Arial", heart)).toBe("♥♥♥ {\\fnDejaVu Sans}➤{\\fn}");
-  });
-
-  test("leaves the text alone in the fallback font it would switch to", () => {
-    expect(withFallbackFonts("➤➤ 坂本", "DejaVu Sans")).toBe("➤➤ {\\fnNoto Sans CJK JP}坂本{\\fn}");
-  });
-
-  test("switches a whole run when none of its words can be drawn", () => {
-    expect(withFallbackFonts("➤➤ ➣➣", "Arial")).toBe("{\\fnDejaVu Sans}➤➤ ➣➣{\\fn}");
-  });
-
-  test("leaves Latin text and override blocks alone", () => {
-    const line = "{\\fad(100,100)}{\\kf50}Crème brûlée · naïve";
-    expect(withFallbackFonts(line, "Arial")).toBe(line);
-  });
 });
 
 describe("CJK lyrics in the ASS file", () => {

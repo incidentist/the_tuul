@@ -2,7 +2,6 @@ import { defineStore } from "pinia";
 import { reactive, watch, ref, computed, shallowRef } from "vue";
 import {
   BackgroundFit,
-  GlyphCoverage,
   CountInMode,
   DEFAULT_FRAME_RATE,
   DEFAULT_RENDER_QUALITY,
@@ -40,6 +39,7 @@ import {
   sameBinding,
 } from "@/lib/timingKeys";
 import { readFont } from "@/lib/fontFile";
+import { GlyphCoverage } from "@/lib/fonts";
 import {
   serializeSettingsYaml,
   serializeSubtitleSettings,
