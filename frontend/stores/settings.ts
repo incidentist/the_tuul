@@ -17,7 +17,15 @@ import { useMediaStore } from "./media";
 import { NO_VOCALS_SEPARATOR_MODEL, BACKING_VOCALS_SEPARATOR_MODEL } from "@/lib/separationModels";
 import Color from "buefy/src/utils/color";
 import { SeparationModel } from "@/types";
-import { VoiceStyleOverride, serializeVoiceStyle, deserializeVoiceStyle } from "@/lib/voiceStyle";
+import {
+  VoiceStyleOverride,
+  serializeVoiceStyle,
+  deserializeVoiceStyle,
+  applyVoiceStyle,
+  defaultEffectColor,
+  outlineDrawn,
+  shadowDrawn,
+} from "@/lib/voiceStyle";
 import { VoiceId } from "@/lib/voices";
 import { persistBlobRef } from "@/lib/persistence";
 import {
@@ -203,14 +211,16 @@ export type VideoSettings = {
     background: Color;
     primary: Color;
     secondary: Color;
-    outline: Color;
-    shadow: Color;
+    // Null while the outline has no width.
+    outline: Color | null;
+    // Null while both shadow offsets are zero.
+    shadow: Color | null;
   };
 };
 
 // Define StoredSettings by overriding the color fields in VideoSettings
 type StoredSettings = Omit<VideoSettings, "color" | "titleStyle"> & {
-  color: Record<keyof VideoSettings["color"], string>;
+  color: Record<keyof VideoSettings["color"], string | null>;
   titleStyle?: Record<string, unknown>;
 };
 
@@ -261,7 +271,7 @@ const DEFAULT_SETTINGS: VideoSettings = {
     primary: Color.parse("#7957D5"),
     secondary: DEFAULT_SECONDARY_COLOR,
     outline: Color.parse("#000000"),
-    shadow: Color.parse("#000000"),
+    shadow: null,
   },
 };
 
@@ -331,6 +341,24 @@ export const useSettingsStore = defineStore("settings", () => {
       }
     },
     { immediate: true },
+  );
+
+  // An outline or shadow that isn't drawn keeps no color, in the base style or an override.
+  watch(
+    [videoOptions, voiceStyles],
+    () => {
+      const color = videoOptions.color;
+      if (outlineDrawn(videoOptions)) color.outline ??= defaultEffectColor();
+      else color.outline = null;
+      if (shadowDrawn(videoOptions)) color.shadow ??= defaultEffectColor();
+      else color.shadow = null;
+      for (const override of [videoOptions.titleStyle, ...Object.values(voiceStyles.value)]) {
+        const resolved = applyVoiceStyle(videoOptions, override);
+        if (!outlineDrawn(resolved)) delete override.outline;
+        if (!shadowDrawn(resolved)) delete override.shadow;
+      }
+    },
+    { deep: true, immediate: true },
   );
 
   // Automatically save settings when they change
@@ -676,7 +704,8 @@ export const useSettingsStore = defineStore("settings", () => {
       // Settings saved before the outline had its own color drew it in the background color.
       const storedColors = {
         ...options.color,
-        outline: options.color.outline ?? options.color.background,
+        outline:
+          options.color.outline === undefined ? options.color.background : options.color.outline,
       };
       const newVideoOptions = {
         ...options,
@@ -684,7 +713,10 @@ export const useSettingsStore = defineStore("settings", () => {
         color: {
           ...defaultSettings().color,
           ...Object.fromEntries(
-            Object.entries(storedColors).map(([field, hex]) => [field, Color.parse(hex)]),
+            Object.entries(storedColors).map(([field, hex]) => [
+              field,
+              hex === null ? null : Color.parse(hex),
+            ]),
           ),
         },
       } as VideoSettings;
@@ -724,7 +756,10 @@ export const useSettingsStore = defineStore("settings", () => {
         ...videoOptions,
         titleStyle: serializeVoiceStyle(videoOptions.titleStyle),
         color: Object.fromEntries(
-          Object.entries(videoOptions.color).map(([field, color]) => [field, color.toString()]),
+          Object.entries(videoOptions.color).map(([field, color]) => [
+            field,
+            color?.toString() ?? null,
+          ]),
         ),
       } as StoredSettings;
 

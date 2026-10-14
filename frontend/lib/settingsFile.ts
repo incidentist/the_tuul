@@ -101,7 +101,9 @@ function settingsDocument({
       ...rest,
       titleStyle: serializeVoiceStyle(titleStyle),
       color: Object.fromEntries(
-        Object.entries(color).map(([field, value]) => [field, value.toString()]),
+        Object.entries(color).flatMap(([field, value]) =>
+          value ? [[field, value.toString()]] : [],
+        ),
       ),
     },
   };

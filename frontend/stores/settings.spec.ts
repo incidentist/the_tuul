@@ -207,8 +207,33 @@ describe("Settings Store", () => {
 
     const settingsStore = useSettingsStore();
 
-    expect(settingsStore.videoOptions.color.outline.toString()).toBe("#123456");
-    expect(settingsStore.videoOptions.color.shadow.toString()).toBe("#000000");
+    expect(settingsStore.videoOptions.color.outline?.toString()).toBe("#123456");
+  });
+
+  test("keeps no color for an outline or shadow that isn't drawn", async () => {
+    window.localStorage.clear();
+    const settingsStore = useSettingsStore();
+    const options = settingsStore.videoOptions;
+    expect(options.color.shadow).toBeNull();
+
+    options.shadowX = 2;
+    await nextTick();
+    expect(options.color.shadow?.toString()).toBe("#000000");
+
+    options.color.outline = Color.parse("#ff0000");
+    options.titleStyle = { outline: Color.parse("#00ff00"), shadow: Color.parse("#0000ff") };
+    settingsStore.setVoiceStyles({ Anna: { outlineWidth: 2, outline: Color.parse("#ffff00") } });
+    options.outlineWidth = 0;
+    options.shadowX = 0;
+    await nextTick();
+    expect(options.color.outline).toBeNull();
+    expect(options.color.shadow).toBeNull();
+    expect(options.titleStyle).toEqual({});
+    expect(settingsStore.voiceStyles.Anna.outline?.toString()).toBe("#ffff00");
+
+    options.outlineWidth = 1;
+    await nextTick();
+    expect(options.color.outline?.toString()).toBe("#000000");
   });
 
   test("resets the mix settings, and leaves the Restore Gaps switch and the rest alone", () => {

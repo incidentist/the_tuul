@@ -48,6 +48,27 @@ export function deserializeVoiceStyle(stored: Record<string, unknown>): VoiceSty
   return style as VoiceStyleOverride;
 }
 
+/**
+ * Whether the options draw an outline.
+ */
+export function outlineDrawn({ outlineWidth }: KaraokeOptions): boolean {
+  return outlineWidth > 0;
+}
+
+/**
+ * Whether the options draw a shadow.
+ */
+export function shadowDrawn({ shadowX, shadowY }: KaraokeOptions): boolean {
+  return Boolean(shadowX || shadowY);
+}
+
+/**
+ * The color an outline or shadow takes when it is turned on and no color was picked.
+ */
+export function defaultEffectColor(): BuefyColor {
+  return BuefyColor.parse("black");
+}
+
 export function isEmptyOverride(override?: VoiceStyleOverride): boolean {
   return !override || Object.values(override).every((v) => v === undefined);
 }
@@ -62,7 +83,7 @@ export function applyVoiceStyle(
     return base;
   }
   const o = override as VoiceStyleOverride;
-  return {
+  const resolved: KaraokeOptions = {
     ...base,
     outlineWidth: o.outlineWidth ?? base.outlineWidth,
     shadowX: o.shadowX ?? base.shadowX,
@@ -78,8 +99,11 @@ export function applyVoiceStyle(
       ...base.color,
       primary: o.primary ?? base.color.primary,
       secondary: o.secondary ?? base.color.secondary,
-      outline: o.outline ?? base.color.outline,
-      shadow: o.shadow ?? base.color.shadow,
+      outline: o.outline ?? base.color.outline ?? defaultEffectColor(),
+      shadow: o.shadow ?? base.color.shadow ?? defaultEffectColor(),
     },
   };
+  if (!outlineDrawn(resolved)) resolved.color.outline = null;
+  if (!shadowDrawn(resolved)) resolved.color.shadow = null;
+  return resolved;
 }

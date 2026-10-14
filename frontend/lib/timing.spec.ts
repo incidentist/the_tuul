@@ -93,7 +93,7 @@ Audio Delay: ${audioDelay}
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Arial Narrow,20,&H00FF00FF,&H00FFFF00,&H0000FFFF,&H00000000,-1,0,0,0,100,100,0,0,1,1,0,8,0,0,0,0
+Style: Default,Arial Narrow,20,&H00FF00FF,&H00FFFF00,&H0000FFFF,&HFF000000,-1,0,0,0,100,100,0,0,1,1,0,8,0,0,0,0
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -856,7 +856,7 @@ describe("createMultiVoiceAssFile", () => {
         .slice(9)
         .join(",");
 
-    expect(outlineAndShadow("V0")).toEqual(["&H0000FFFF", "&H00000000", "1", "0"]);
+    expect(outlineAndShadow("V0")).toEqual(["&H0000FFFF", "&HFF000000", "1", "0"]);
     expect(outlineAndShadow("V1")).toEqual(["&H00FF0000", "&H00808080", "2.5", "0"]);
     expect(text("V0")).not.toContain("shad");
     expect(text("V1")).toMatch(/^\{\\xshad-2\\yshad3\}/);

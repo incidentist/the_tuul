@@ -26,9 +26,6 @@
     <b-field v-if="withSecondary" horizontal label="Secondary Color">
       <color-field v-model="secondary" :label="`${name} secondary color`" />
     </b-field>
-    <b-field horizontal label="Outline Color">
-      <color-field v-model="outline" :label="`${name} outline color`" />
-    </b-field>
     <b-field horizontal label="Outline Width">
       <b-numberinput
         expanded
@@ -42,8 +39,8 @@
         controls-position="compact"
       />
     </b-field>
-    <b-field horizontal label="Shadow Color">
-      <color-field v-model="shadow" :label="`${name} shadow color`" />
+    <b-field v-if="outlineWidth > 0" horizontal label="Outline Color">
+      <color-field v-model="outline" :label="`${name} outline color`" />
     </b-field>
     <b-field horizontal label="Shadow Offset X">
       <b-numberinput
@@ -65,6 +62,9 @@
         controls-position="compact"
       />
     </b-field>
+    <b-field v-if="shadowX !== 0 || shadowY !== 0" horizontal label="Shadow Color">
+      <color-field v-model="shadow" :label="`${name} shadow color`" />
+    </b-field>
   </div>
 </template>
 
@@ -74,7 +74,7 @@ import { BField, BSelect, BNumberinput, BSwitch } from "buefy";
 import { default as BuefyColor } from "buefy/src/utils/color";
 import ColorField from "@/components/ColorField.vue";
 import { KaraokeOptions } from "@/lib/timing";
-import { VoiceStyleOverride } from "@/lib/voiceStyle";
+import { defaultEffectColor, VoiceStyleOverride } from "@/lib/voiceStyle";
 
 /**
  * The fields of a style override, each showing the base style's value until it is set.
@@ -143,7 +143,7 @@ export default defineComponent({
     },
     outline: {
       get(): BuefyColor {
-        return this.override.outline ?? this.base.color.outline;
+        return this.override.outline ?? this.base.color.outline ?? defaultEffectColor();
       },
       set(value: BuefyColor) {
         this.$emit("set", "outline", value);
@@ -159,7 +159,7 @@ export default defineComponent({
     },
     shadow: {
       get(): BuefyColor {
-        return this.override.shadow ?? this.base.color.shadow;
+        return this.override.shadow ?? this.base.color.shadow ?? defaultEffectColor();
       },
       set(value: BuefyColor) {
         this.$emit("set", "shadow", value);

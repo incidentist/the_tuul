@@ -461,9 +461,6 @@
           <b-field horizontal label="Secondary Color"
             ><color-field v-model="videoOptions.color.secondary" label="secondary color"
           /></b-field>
-          <b-field horizontal label="Outline Color"
-            ><color-field v-model="videoOptions.color.outline" label="outline color"
-          /></b-field>
           <b-field horizontal label="Outline Width"
             ><b-numberinput
               expanded
@@ -478,8 +475,8 @@
               controls-position="compact"
             ></b-numberinput
           ></b-field>
-          <b-field horizontal label="Shadow Color"
-            ><color-field v-model="videoOptions.color.shadow" label="shadow color"
+          <b-field v-if="videoOptions.color.outline" horizontal label="Outline Color"
+            ><color-field v-model="videoOptions.color.outline" label="outline color"
           /></b-field>
           <b-field horizontal>
             <template #label>
@@ -525,6 +522,9 @@
               controls-position="compact"
             ></b-numberinput>
           </b-field>
+          <b-field v-if="videoOptions.color.shadow" horizontal label="Shadow Color"
+            ><color-field v-model="videoOptions.color.shadow" label="shadow color"
+          /></b-field>
           <b-field horizontal label="Lyric Vertical Alignment"
             ><b-radio-button
               v-model="videoOptions.verticalAlignment"

@@ -1214,7 +1214,7 @@ export default defineComponent({
         outlineWidth: DEFAULT_OUTLINE_WIDTH,
         shadowX: 0,
         shadowY: 0,
-        color: { ...this.previewColors, outline: this.previewColors.background },
+        color: { ...this.previewColors, outline: this.previewColors.background, shadow: null },
       });
     },
   },

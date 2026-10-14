@@ -103,7 +103,7 @@ describe("kbpToProjectFiles", () => {
     expect(settings.videoOptions.color?.background.toString()).toBe("#005555");
     expect(settings.videoOptions.color?.primary.toString()).toBe("#ee7700");
     expect(settings.videoOptions.color?.secondary.toString()).toBe("#ffffff");
-    expect(settings.videoOptions.color?.outline.toString()).toBe("#000000");
+    expect(settings.videoOptions.color?.outline?.toString()).toBe("#000000");
     // Present though empty, so loading it drops the overrides already there.
     expect(settings.voiceStyles).toEqual({});
   });

@@ -94,8 +94,8 @@ describe("parseSettingsYaml", () => {
     expect(parsed.videoOptions.color?.background.toString()).toBe("#111111");
     expect(parsed.videoOptions.color?.primary.toString()).toBe("#222222");
     expect(parsed.videoOptions.color?.secondary.toString()).toBe("#333333");
-    expect(parsed.videoOptions.color?.outline.toString()).toBe("#444444");
-    expect(parsed.videoOptions.color?.shadow.toString()).toBe("#555555");
+    expect(parsed.videoOptions.color?.outline?.toString()).toBe("#444444");
+    expect(parsed.videoOptions.color?.shadow?.toString()).toBe("#555555");
 
     const anna = parsed.voiceStyles?.Anna;
     expect(anna?.fontName).toBe("Georgia");
@@ -420,7 +420,7 @@ describe("serializeSettingsYaml", () => {
       italic: true,
     });
     expect(parsed.videoOptions.color?.primary.toString()).toBe("#222222");
-    expect(parsed.videoOptions.color?.shadow.toString()).toBe("#555555");
+    expect(parsed.videoOptions.color?.shadow?.toString()).toBe("#555555");
     expect(parsed.videoOptions.outlineWidth).toBe(2);
     expect(parsed.videoOptions.shadowY).toBe(-1);
     expect(parsed.videoOptions.resolution).toBe("720p");

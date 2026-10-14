@@ -41,7 +41,13 @@ import {
   songOffset,
 } from "./screenSlots";
 import { BUNDLED_SYMBOLS, FALLBACK_FONTS } from "./fonts";
-import { applyVoiceStyle, VoiceStyleOverride } from "./voiceStyle";
+import {
+  applyVoiceStyle,
+  defaultEffectColor,
+  outlineDrawn,
+  shadowDrawn,
+  VoiceStyleOverride,
+} from "./voiceStyle";
 import { map, method, isNumber } from "lodash-es";
 import { default as BuefyColor } from "buefy/src/utils/color";
 // This import must stay type-only,
@@ -127,8 +133,10 @@ export interface KaraokeOptions {
     background: BuefyColor;
     primary: BuefyColor;
     secondary: BuefyColor;
-    outline: BuefyColor;
-    shadow: BuefyColor;
+    // Null while the outline has no width.
+    outline: BuefyColor | null;
+    // Null while both shadow offsets are zero.
+    shadow: BuefyColor | null;
   };
 }
 
@@ -172,7 +180,7 @@ export const DEFAULT_KARAOKE_OPTIONS: KaraokeOptions = {
     primary: BuefyColor.parse("#FF00FF"),
     secondary: BuefyColor.parse("#00FFFF"),
     outline: BuefyColor.parse("black"),
-    shadow: BuefyColor.parse("black"),
+    shadow: null,
   },
 };
 
@@ -734,8 +742,9 @@ export class LyricsScreen {
  * The shadow offset as override tags.
  * A style's Shadow field only takes one distance, which casts down and to the right.
  */
-function shadowTags({ shadowX, shadowY }: KaraokeOptions): string {
-  return shadowX || shadowY ? `{\\xshad${shadowX}\\yshad${shadowY}}` : "";
+function shadowTags(options: KaraokeOptions): string {
+  const { shadowX, shadowY } = options;
+  return shadowDrawn(options) ? `{\\xshad${shadowX}\\yshad${shadowY}}` : "";
 }
 
 export class LyricsLine {
@@ -1282,16 +1291,20 @@ export function createScreens(
 function optionsToFormatParams(options: KaraokeOptions): Record<string, unknown> {
   const primaryColor = options.color.primary;
   const secondaryColor = options.color.secondary;
-  const outlineColor = options.color.outline;
-  const shadowColor = options.color.shadow;
+  // An outline or shadow that isn't drawn is written fully transparent.
+  const effectColor = (drawn: boolean, color: BuefyColor | null): Color => {
+    if (!drawn) return [0, 0, 0, 255];
+    const { red, green, blue } = color ?? defaultEffectColor();
+    return [red, green, blue, 0];
+  };
 
   const formatParams: Record<string, unknown> = {
     Fontname: options.font.name,
     Fontsize: options.font.size,
     PrimaryColour: [primaryColor.red, primaryColor.green, primaryColor.blue, 0],
     SecondaryColour: [secondaryColor.red, secondaryColor.green, secondaryColor.blue, 0],
-    OutlineColour: [outlineColor.red, outlineColor.green, outlineColor.blue, 0],
-    BackColour: [shadowColor.red, shadowColor.green, shadowColor.blue, 0],
+    OutlineColour: effectColor(outlineDrawn(options), options.color.outline),
+    BackColour: effectColor(shadowDrawn(options), options.color.shadow),
     BorderStyle: 1,
     Outline: options.outlineWidth,
     // shadowTags sets the offset on each line.
