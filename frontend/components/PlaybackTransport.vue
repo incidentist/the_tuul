@@ -4,7 +4,7 @@
       type="button"
       class="button is-small transport-play"
       :aria-label="paused ? 'Play' : 'Pause'"
-      :disabled="loading"
+      :disabled="!duration"
       @click="playPause"
     >
       <b-icon :icon="paused ? 'play' : 'pause'" />
@@ -19,7 +19,7 @@
         :max="duration || 0"
         step="any"
         :value="time"
-        :disabled="loading"
+        :disabled="!duration"
         @input="onSeek"
       />
     </slot>

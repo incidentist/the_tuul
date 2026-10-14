@@ -1,170 +1,79 @@
 <template>
   <div class="song-player">
-    <button
-      type="button"
-      class="button is-small"
-      name="song-player-play-pause"
-      :aria-label="isPlaying ? 'Pause' : 'Play'"
-      :disabled="!src"
-      @click="playPause"
-    >
-      <b-icon :icon="isPlaying ? 'pause' : 'play'" />
-    </button>
-    <span class="seek-time">{{ formatTime(currentTime) }}</span>
-    <input
-      class="seek-slider"
-      type="range"
-      min="0"
-      :max="duration || 0"
-      step="0.01"
-      :value="currentTime"
-      :disabled="!duration"
-      @input="onSeek"
-      title="Drag to jump to a position in the track"
-    />
-    <span class="seek-time">{{ formatTime(duration) }}</span>
-    <audio
-      ref="audio"
-      :src="src"
-      @play="onAudioEvent"
-      @pause="onAudioEvent"
-      @ended="onAudioEvent"
-      @timeupdate="onTimeUpdate"
-      @loadedmetadata="onLoadedMetadata"
-    ></audio>
+    <playback-transport :player="player">
+      <template v-if="overviewBuffer" #slider>
+        <overview-strip :player="player" :buffer="overviewBuffer" @grab="claimMediaKeys(player)" />
+      </template>
+    </playback-transport>
   </div>
 </template>
 
 <script lang="ts">
-import { defineComponent, PropType } from "vue";
+import { defineComponent, markRaw, PropType } from "vue";
+import PlaybackTransport from "@/components/PlaybackTransport.vue";
+import OverviewStrip from "@/components/OverviewStrip.vue";
 import { claimMediaKeys, registerPlayer } from "@/lib/exclusivePlayback";
+import { anchorMediaKeys } from "@/lib/mediaKeyAnchor";
+import { WebAudioPlayer } from "@/lib/webAudioPlayer";
 
 export default defineComponent({
+  components: { PlaybackTransport, OverviewStrip },
   props: {
-    file: {
-      type: Object as PropType<Blob | null>,
-      default: null,
-    },
+    file: { type: Object as PropType<Blob | null>, default: null },
+    playbackRate: { type: Number, default: 1 },
+    preservePitch: { type: Boolean, default: true },
   },
   data() {
     return {
-      src: undefined as string | undefined,
-      unregisterPlayer: null as (() => void) | null,
-      isPlaying: false,
-      currentTime: 0,
-      duration: 0,
-      resumeAt: null as { time: number; playing: boolean } | null,
+      // The song plays on while the page is hidden, as lyrics are often copied from another tab.
+      player: markRaw(new WebAudioPlayer({ pauseWhenHidden: false })),
+      overviewBuffer: null as AudioBuffer | null,
+      cleanups: [] as Array<() => void>,
     };
   },
-  mounted() {
-    const audio = this.audioElement();
-    if (audio) {
-      this.unregisterPlayer = registerPlayer(audio, {
-        isShown: () => (this.$el as HTMLElement).getClientRects().length > 0,
-      });
-    }
-  },
   watch: {
-    file: {
-      immediate: true,
-      handler(file: Blob | null, previous: Blob | null | undefined) {
-        // Another track of the same song picks up where the last one was.
-        const resume =
-          file && previous ? { time: this.currentTime, playing: this.isPlaying } : null;
-        this.setSource(file);
-        this.resumeAt = resume;
-      },
+    file(file: Blob | null) {
+      if (file) this.load(file);
     },
+    playbackRate() {
+      this.applyPlaybackSettings();
+    },
+    preservePitch() {
+      this.applyPlaybackSettings();
+    },
+  },
+  mounted() {
+    const { player } = this;
+    player.addEventListener("loadeddata", this.onLoaded);
+    this.cleanups = [
+      registerPlayer(player, {
+        isShown: () => (this.$el as HTMLElement).getClientRects().length > 0,
+      }),
+      anchorMediaKeys(player),
+    ];
+    this.applyPlaybackSettings();
+    if (this.file) this.load(this.file);
   },
   beforeUnmount() {
-    this.unregisterPlayer?.();
-    this.setSource(null);
+    this.player.removeEventListener("loadeddata", this.onLoaded);
+    this.cleanups.forEach((cleanup) => cleanup());
+    this.player.dispose();
   },
   methods: {
-    audioElement(): HTMLAudioElement | undefined {
-      return this.$refs.audio as HTMLAudioElement | undefined;
+    claimMediaKeys,
+    load(file: Blob) {
+      this.player.load(file).catch((error) => {
+        console.error("Could not decode the track:", error);
+      });
     },
-    setSource(file: Blob | null) {
-      if (this.src) {
-        URL.revokeObjectURL(this.src);
-      }
-      this.src = file ? URL.createObjectURL(file) : undefined;
-      this.isPlaying = false;
-      this.currentTime = 0;
-      this.duration = 0;
+    onLoaded() {
+      const decoded = this.player.decoded;
+      this.overviewBuffer = decoded && markRaw(decoded);
     },
-    playPause() {
-      const audio = this.audioElement();
-      if (!audio) return;
-      if (audio.paused || audio.ended) {
-        audio.play();
-      } else {
-        audio.pause();
-      }
-    },
-    onAudioEvent() {
-      const audio = this.audioElement();
-      if (!audio) return;
-      this.isPlaying = !(audio.paused || audio.ended);
-    },
-    onTimeUpdate() {
-      this.currentTime = this.audioElement()?.currentTime ?? 0;
-    },
-    onLoadedMetadata() {
-      const audio = this.audioElement();
-      this.duration = audio?.duration ?? 0;
-      const resume = this.resumeAt;
-      this.resumeAt = null;
-      if (!audio || !resume) return;
-      audio.currentTime = resume.time;
-      this.currentTime = resume.time;
-      if (resume.playing) {
-        audio.play();
-      }
-    },
-    onSeek(e: Event) {
-      const audio = this.audioElement();
-      if (!audio) return;
-      audio.currentTime = parseFloat((e.target as HTMLInputElement).value);
-      claimMediaKeys(audio);
-    },
-    formatTime(seconds: number): string {
-      if (!seconds || !isFinite(seconds)) {
-        return "0:00";
-      }
-      const totalSec = Math.floor(seconds);
-      const mm = Math.floor(totalSec / 60);
-      const ss = totalSec % 60;
-      return `${mm}:${ss.toString().padStart(2, "0")}`;
+    applyPlaybackSettings() {
+      this.player.preservesPitch = this.preservePitch;
+      this.player.playbackRate = this.playbackRate;
     },
   },
 });
 </script>
-
-<style scoped>
-.song-player {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.seek-slider {
-  flex-grow: 1;
-  cursor: pointer;
-  accent-color: #7957d5;
-}
-
-.seek-slider:disabled {
-  cursor: default;
-}
-
-.seek-time {
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-  font-size: 0.9rem;
-  color: var(--bulma-text, #4a4a4a);
-  min-width: 3ch;
-  text-align: center;
-}
-</style>

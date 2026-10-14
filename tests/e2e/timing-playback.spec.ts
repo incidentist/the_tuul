@@ -133,8 +133,10 @@ test.describe("Media keys", () => {
     );
   }
 
-  function lyricsPlayerPaused(page: Page) {
-    return page.locator(".song-player audio").evaluate((audio: HTMLAudioElement) => audio.paused);
+  async function lyricsPlayerPaused(page: Page) {
+    // The button is hidden along with its tab, which a role query leaves out.
+    const button = page.locator(".song-player .transport-play");
+    return (await button.getAttribute("aria-label")) === "Play";
   }
 
   test("reach the Lyrics tab's player only while its tab is shown", async ({ page }) => {

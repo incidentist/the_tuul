@@ -49,17 +49,38 @@
         >See it on {{ provider.name }}</a
       >
     </p>
-    <div class="level is-mobile" :class="{ 'is-compact': isCompact }">
+    <div class="level is-mobile lyric-tools" :class="{ 'is-compact': isCompact }">
       <Teleport defer to="#drawer-settings-lyrics" :disabled="!isCompact">
-        <div
+        <label
           v-if="vocalSources.length > 0"
-          class="level-item"
+          class="level-item playback-field"
           :class="{ 'is-in-drawer': isCompact }"
         >
-          <label class="playback-track-field">
-            <span class="label">Playback track</span>
-            <track-select kind="vocals" v-model="playerTrackChoice" />
-          </label>
+          <span class="label">Playback track</span>
+          <track-select kind="vocals" v-model="playerTrackChoice" />
+        </label>
+        <div class="level-item playback-field" :class="{ 'is-in-drawer': isCompact }">
+          <span id="lyrics-playback-rate-label" class="label">Playback rate</span>
+          <b-numberinput
+            aria-labelledby="lyrics-playback-rate-label"
+            :model-value="playbackRate"
+            @update:model-value="(v) => (playbackRate = Number(v ?? playbackRate))"
+            :min="0.25"
+            :max="2"
+            :step="0.25"
+            controls-position="compact"
+          />
+        </div>
+        <div class="level-item playback-field" :class="{ 'is-in-drawer': isCompact }">
+          <span id="lyrics-preserve-pitch-label" class="label">
+            Preserve pitch
+            <viewport-tooltip
+              label="Hold the original key at other speeds. Turned off, a slower speed lowers the pitch too."
+            >
+              <b-icon size="is-small" icon="circle-question"></b-icon>
+            </viewport-tooltip>
+          </span>
+          <b-switch v-model="preservePitch" ariaLabelledby="lyrics-preserve-pitch-label" />
         </div>
       </Teleport>
       <div class="level-item">
@@ -79,7 +100,9 @@
       </div>
       <Teleport defer to="#drawer-settings-lyrics" :disabled="!isCompact">
         <div class="level-item" :class="{ 'is-in-drawer': isCompact }">
-          <b-checkbox type="is-primary" v-model="magicSlashes">Magic Slashes</b-checkbox>
+          <b-checkbox class="magic-slashes" type="is-primary" v-model="magicSlashes"
+            >Magic Slashes</b-checkbox
+          >
           <viewport-tooltip
             label="Adding a slash to a word will add the same slash to all instances of that word"
           >
@@ -89,7 +112,12 @@
       </Teleport>
     </div>
     <!-- A new song starts the player over, while another track of the same song keeps its place. -->
-    <song-player :key="songKey" :file="playerFile" />
+    <song-player
+      :key="songKey"
+      :file="playerFile"
+      :playback-rate="playbackRate"
+      :preserve-pitch="preservePitch"
+    />
     <lyric-editor
       ref="lyricEditor"
       :modelValue="lyricText"
@@ -160,6 +188,8 @@ export default defineComponent({
       magicSlashes: true,
       // "full" or a track source.
       playerTrackChoice: "full",
+      playbackRate: 1,
+      preservePitch: true,
       isSearchOpen: false,
       songKey: 0,
       singleVoiceExample: "Hell/o_from_the_oth/er_side\nI_must_have_called_a_thou/sand_times",
@@ -215,28 +245,36 @@ export default defineComponent({
   height: 100%;
 }
 
-.playback-track-field {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
+.playback-field {
+  gap: 0.4rem;
 }
 
-.playback-track-field .label {
+.playback-field .label {
   margin: 0;
   white-space: nowrap;
 }
 
-/* Bulma keeps a mobile level on one row, which two buttons overflow on the narrowest phones. */
-.level.is-compact {
-  flex-wrap: wrap;
+.magic-slashes :deep(.control-label) {
+  color: var(--bulma-text-strong);
+  font-weight: var(--bulma-weight-semibold);
 }
 
-.level.is-compact > .level-item {
+/* Bulma keeps a mobile level on one row, which the fields overflow on a narrow window. */
+.lyric-tools {
+  flex-wrap: wrap;
+  row-gap: 0.75rem;
+}
+
+.lyric-tools:not(.is-compact) > .level-item:not(.is-narrow) {
+  flex-grow: 0;
+}
+
+.lyric-tools.is-compact > .level-item {
   flex: 1 1 auto;
 }
 
-.level.is-compact :deep(.b-tooltip),
-.level.is-compact .button {
+.lyric-tools.is-compact :deep(.b-tooltip),
+.lyric-tools.is-compact .button {
   width: 100%;
 }
 
@@ -245,7 +283,7 @@ export default defineComponent({
   justify-content: flex-start;
 }
 
-.is-in-drawer .playback-track-field {
+.playback-field.is-in-drawer {
   flex-direction: column;
   align-items: stretch;
   gap: 0.25rem;
