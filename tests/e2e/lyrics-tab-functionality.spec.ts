@@ -9,6 +9,7 @@ import {
   toggleMagicSlashes,
   expectLyricsText,
   lyricsEditor,
+  magicSlashesCheckbox,
 } from "./utils";
 
 // The fixture's last line holds this word twice, for magic slashes to copy a slash across.
@@ -49,7 +50,7 @@ test.describe("Lyrics Tab Functionality", () => {
     await expectLyricsText(page, underscored);
 
     // Magic Slashes is on by default.
-    await expect(page.locator('.lyric-input-tab input[type="checkbox"]')).toBeChecked();
+    await expect(magicSlashesCheckbox(page)).toBeChecked();
 
     // A slash typed into the last occurrence of the word lands in the other one too.
     await moveIntoLastOccurrence(page, underscored, REPEATED_WORD, 2);
@@ -68,7 +69,7 @@ test.describe("Lyrics Tab Functionality", () => {
     await expectLyricsText(page, "Hello_hello_hello");
 
     await toggleMagicSlashes(page, false);
-    await expect(page.locator('.lyric-input-tab input[type="checkbox"]')).not.toBeChecked();
+    await expect(magicSlashesCheckbox(page)).not.toBeChecked();
 
     await lyricsEditor(page).focus();
     await page.keyboard.press("Home");

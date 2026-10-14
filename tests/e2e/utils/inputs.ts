@@ -176,12 +176,12 @@ export async function toggleMagicSlashes(page: Page, enable: boolean): Promise<v
     await navigateToTab(page, TabId.LyricInput);
   }
 
-  const checkbox = page.locator('.lyric-input-tab input[type="checkbox"]');
-  const isChecked = await checkbox.isChecked();
+  // Buefy hides the input under its label.
+  await magicSlashesCheckbox(page).setChecked(enable, { force: true });
+}
 
-  if ((enable && !isChecked) || (!enable && isChecked)) {
-    await page.click(".lyric-input-tab .level-item .checkbox");
-  }
+export function magicSlashesCheckbox(page: Page) {
+  return page.getByRole("checkbox", { name: "Magic Slashes", exact: true });
 }
 
 /**
