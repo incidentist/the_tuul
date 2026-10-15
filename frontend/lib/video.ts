@@ -2,7 +2,6 @@ import type { LogEvent } from "@ffmpeg/ffmpeg";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
 
-import { RenderDiagnostics } from "@/lib/renderDiagnostics";
 import { BackgroundFit, KaraokeOptions, RESOLUTIONS, RenderQuality } from "@/lib/timing";
 import { BackgroundKind, backgroundExtension, backgroundKind } from "@/lib/background";
 import { audioDuration } from "@/lib/trackLength";
@@ -346,11 +345,9 @@ async function runFfmpeg(
   args: string[],
   step: RenderStep,
   progress: RenderProgress | null,
-  diagnostics: RenderDiagnostics,
   signal?: AbortSignal,
 ): Promise<void> {
   signal?.throwIfAborted();
-  diagnostics.mark(step.phrase);
   progress?.begin(step);
   const code = await ffmpeg.exec(args);
   if (code !== 0) {
@@ -517,15 +514,12 @@ async function createVideo({
     wasm: `${baseURL}/ffmpeg-core.wasm`,
     worker: `${baseURL}/ffmpeg-core.worker.js`,
   };
-  const diagnostics = new RenderDiagnostics([...Object.values(coreFiles), classWorkerURL]);
-  diagnostics.start();
 
   // The core does not come back to JS mid-run,
   // so killing its worker is the only way to stop an encode that is already going.
   const terminate = () => ffmpeg.terminate();
   signal?.addEventListener("abort", terminate, { once: true });
   try {
-    diagnostics.mark("downloading the FFmpeg core");
     // Download most ffmpeg files to local blobs
     const [coreURL, wasmURL, workerURL] = await Promise.all([
       toBlobURL(coreFiles.core, "text/javascript").catch((error) => {
@@ -542,12 +536,9 @@ async function createVideo({
       }),
     ]);
     signal?.throwIfAborted();
-    diagnostics.mark("loading FFmpeg");
     await ffmpeg.load({ coreURL, wasmURL, workerURL, classWorkerURL });
 
     ffmpeg.on("log", ({ message }) => console.log("ffmpeg output", message));
-    ffmpeg.on("log", diagnostics.handleLog);
-    diagnostics.mark("writing the input files");
 
     // Planned before anything runs, so the bar can weigh the whole job rather than restart
     // at each run.
@@ -616,7 +607,7 @@ async function createVideo({
       durationSeconds: videoSeconds,
       metadata,
     });
-    await runFfmpeg(ffmpeg, ffmpegParams, renderStep, progress, diagnostics, signal);
+    await runFfmpeg(ffmpeg, ffmpegParams, renderStep, progress, signal);
 
     let titleFrame: Uint8Array | null = null;
     if (titleFrameTime !== null) {
@@ -627,7 +618,6 @@ async function createVideo({
           getTitleFrameParams(titleFrameTime),
           titleFrameStep,
           progress,
-          diagnostics,
           signal,
         );
         titleFrame = (await ffmpeg.readFile(TITLE_FRAME_FILE)) as Uint8Array;
@@ -651,7 +641,6 @@ async function createVideo({
         getAlternateTrackParams(inputFile, audioDelayMs, fileName),
         trackSteps[index],
         progress,
-        diagnostics,
         signal,
       );
       encoded.push({ fileName, title });
@@ -661,7 +650,6 @@ async function createVideo({
       getMkvMuxParams(encoded, metadata, mainTrack),
       muxStep,
       progress,
-      diagnostics,
       signal,
     );
 
@@ -671,7 +659,6 @@ async function createVideo({
     signal?.throwIfAborted();
     throw error;
   } finally {
-    diagnostics.stop();
     signal?.removeEventListener("abort", terminate);
     // Each run loads a core of its own, so without this every one leaks a worker holding 30-odd MB of wasm.
     ffmpeg.terminate();

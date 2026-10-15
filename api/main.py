@@ -218,7 +218,7 @@ templates = Jinja2Templates(directory=settings.TEMPLATES_DIR)
 
 # Pydantic models
 class LogErrorRequest(BaseModel):
-    # Clients send context beyond these fields, such as the browser and render diagnostics.
+    # Clients send context beyond these fields, such as the browser.
     model_config = ConfigDict(extra="allow")
 
     level: Literal["info", "warning", "error"] = "error"
@@ -1009,7 +1009,7 @@ async def find_lyrics(request: Request, body: LyricsRequest):
 
 @app.post("/log_error")
 async def log_error(error_data: LogErrorRequest):
-    """Log client errors and diagnostics."""
+    """Log client errors and warnings."""
     log = getattr(logger, error_data.level)
     log(
         f"Client {error_data.level}: {error_data.message or '<no message>'}",
