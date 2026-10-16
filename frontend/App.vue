@@ -148,10 +148,12 @@
       @confirm="startOver"
     >
       <p>
-        This will discard the current song, tracks, lyrics and timings, and reset the fonts and
-        colors. Uploaded font files and other settings will be kept. Save anything you want to keep
-        first.
+        This will discard the current song, tracks, lyrics and timings. Uploaded font files and
+        settings will be kept. Save anything you want to keep first.
       </p>
+      <b-checkbox v-model="resetsStylingOnStartOver" class="mt-4">
+        Also reset the fonts and colors
+      </b-checkbox>
       <source-file-download-links
         class="mt-4"
         label="Current files: "
@@ -282,6 +284,8 @@ export default defineComponent({
       appName: appName(),
       isSubmitting: false,
       isConfirmingStartOver: false,
+      // Whether Start Over also puts the Fonts and Colors card, title and voice styles back.
+      resetsStylingOnStartOver: false,
       isShowingKeyBindings: false,
       isDrawerOpen: false,
     };
@@ -520,7 +524,9 @@ export default defineComponent({
       this.historyStore.clear();
       this.lyricsLookupStore.reset();
       await this.mediaStore.clearSession();
-      this.settingsStore.resetStyling();
+      if (this.resetsStylingOnStartOver) {
+        this.settingsStore.resetStyling();
+      }
       this.setActiveTab("song");
     },
   },
