@@ -3,16 +3,21 @@ import path from "node:path";
 import { describe, expect, test } from "vitest";
 import {
   parseCoverage,
+  parseFontFaceName,
   parseFontFamilyName,
   parseFontMetrics,
+  parseFontStyle,
+  readFont,
   readFontFamilyName,
   UnreadableFontError,
 } from "./fontFile";
 
 const FONT_DIR = path.resolve(__dirname, "../../api/assets/fonts");
+// Faces of one family, which the bundled fonts don't have.
+const FIXTURE_FONT_DIR = path.resolve(__dirname, "../../tests/fixtures/fonts");
 
-function bundledFont(name: string): ArrayBuffer {
-  const buffer = readFileSync(path.join(FONT_DIR, name));
+function bundledFont(name: string, dir = FONT_DIR): ArrayBuffer {
+  const buffer = readFileSync(path.join(dir, name));
   return buffer.buffer.slice(
     buffer.byteOffset,
     buffer.byteOffset + buffer.byteLength,
@@ -126,6 +131,54 @@ describe("parseFontFamilyName", () => {
     view.setUint32(12, 0x676c7966); // 'glyf'
 
     expect(() => parseFontFamilyName(data)).toThrow(/name table/);
+  });
+});
+
+describe("parseFontFaceName", () => {
+  test.each([
+    ["NotoSans-Regular.ttf", "Noto Sans Regular"],
+    ["NotoSans-Bold.ttf", "Noto Sans Bold"],
+    ["NotoSans-Italic.ttf", "Noto Sans Italic"],
+  ])("reads the full name out of %s", (file, expected) => {
+    expect(parseFontFaceName(bundledFont(file, FIXTURE_FONT_DIR))).toBe(expected);
+  });
+
+  test("falls back to the family name when the font has no full name", () => {
+    const data = fontWithNames([
+      { platformId: 3, nameId: 6, text: "SomeFont-Bold" }, // PostScript name
+      { platformId: 3, nameId: 1, text: "Some Font" },
+    ]);
+
+    expect(parseFontFaceName(data)).toBe("Some Font");
+  });
+});
+
+describe("parseFontStyle", () => {
+  test.each([
+    ["NotoSans-Regular.ttf", { weight: 400, italic: false }],
+    ["NotoSans-Bold.ttf", { weight: 700, italic: false }],
+    ["NotoSans-Italic.ttf", { weight: 400, italic: true }],
+  ])("reads the weight and slant of %s", (file, expected) => {
+    expect(parseFontStyle(bundledFont(file, FIXTURE_FONT_DIR))).toEqual(expected);
+  });
+
+  test("takes a font without an OS/2 table as upright and of weight 400", () => {
+    const data = fontWithNames([{ platformId: 3, nameId: 1, text: "Some Font" }]);
+
+    expect(parseFontStyle(data)).toEqual({ weight: 400, italic: false });
+  });
+});
+
+describe("readFont", () => {
+  test("names the face apart from its family", async () => {
+    const file = new File([bundledFont("NotoSans-Bold.ttf", FIXTURE_FONT_DIR)], "anything.ttf");
+
+    await expect(readFont(file)).resolves.toMatchObject({
+      name: "Noto Sans Bold",
+      family: "Noto Sans",
+      weight: 700,
+      italic: false,
+    });
   });
 });
 

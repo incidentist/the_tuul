@@ -7,6 +7,9 @@ import { FALLBACK_FONTS } from "./fonts";
 // Family name IDs from the OpenType `name` table, preferred first: 16 is the typographic family, 1 the legacy one,
 // which on multi-style fonts carries a split-out name like "Metal Mania Semibold".
 const FAMILY_NAME_IDS = [16, 1];
+// The full name, such as "Noto Sans Bold Italic", by which libass picks one face of a family.
+// libass matches the PostScript name (ID 6) only on fonts with CFF outlines, so it can't stand in.
+const FULL_NAME_ID = 4;
 
 const PLATFORM_UNICODE = 0;
 const PLATFORM_MACINTOSH = 1;
@@ -101,9 +104,12 @@ function decodeName(view: DataView, offset: number, length: number, platformId: 
   return out;
 }
 
-// The family name a font declares for itself, e.g. "Metal Mania".
-// Throws UnreadableFontError if the file isn't a font or doesn't name itself.
-export function parseFontFamilyName(data: ArrayBuffer): string {
+/**
+ * The best-ranked name the font gives under one of `nameIds`, preferred first, or undefined when it
+ * gives none of them.
+ * Throws UnreadableFontError if the file isn't a font.
+ */
+function parseName(data: ArrayBuffer, nameIds: number[]): string | undefined {
   if (data.byteLength < 12) {
     throw new UnreadableFontError("This file is empty or truncated.");
   }
@@ -124,11 +130,11 @@ export function parseFontFamilyName(data: ArrayBuffer): string {
       break;
     }
     const platformRank = PLATFORM_PREFERENCE.indexOf(view.getUint16(record));
-    const familyRank = FAMILY_NAME_IDS.indexOf(view.getUint16(record + 6));
-    if (platformRank === -1 || familyRank === -1) {
+    const nameRank = nameIds.indexOf(view.getUint16(record + 6));
+    if (platformRank === -1 || nameRank === -1) {
       continue;
     }
-    const rank = familyRank * PLATFORM_PREFERENCE.length + platformRank;
+    const rank = nameRank * PLATFORM_PREFERENCE.length + platformRank;
     if (best && best.rank <= rank) {
       continue;
     }
@@ -142,10 +148,43 @@ export function parseFontFamilyName(data: ArrayBuffer): string {
       best = { name, rank };
     }
   }
-  if (!best) {
+  return best?.name;
+}
+
+// The family name a font declares for itself, e.g. "Metal Mania".
+// Throws UnreadableFontError if the file isn't a font or doesn't name itself.
+export function parseFontFamilyName(data: ArrayBuffer): string {
+  const name = parseName(data, FAMILY_NAME_IDS);
+  if (!name) {
     throw new UnreadableFontError("This font file doesn't say what font family it belongs to.");
   }
-  return best.name;
+  return name;
+}
+
+/**
+ * The name that picks this one face in libass: its full name, or its family name when it has none.
+ * Throws UnreadableFontError as parseFontFamilyName does.
+ */
+export function parseFontFaceName(data: ArrayBuffer): string {
+  return parseName(data, [FULL_NAME_ID]) ?? parseFontFamilyName(data);
+}
+
+/**
+ * The face's weight, from 1 to 1000, and whether it is italic.
+ * A font without the tables that say counts as an upright face of weight 400.
+ */
+export function parseFontStyle(data: ArrayBuffer): { weight: number; italic: boolean } {
+  const view = new DataView(data);
+  const offset = sfntOffset(view);
+  const os2 = tableOffset(view, offset, OS2_TAG);
+  const head = tableOffset(view, offset, HEAD_TAG);
+  const hasOs2 = os2 !== undefined && os2 + 64 <= data.byteLength;
+  const weight = hasOs2 ? view.getUint16(os2 + 4) : 0;
+  // fsSelection bit 0 and macStyle bit 1 both mean italic.
+  const os2Italic = hasOs2 && (view.getUint16(os2 + 62) & 1) !== 0;
+  const headItalic =
+    head !== undefined && head + 46 <= data.byteLength && (view.getUint16(head + 44) & 2) !== 0;
+  return { weight: weight || 400, italic: os2Italic || headItalic };
 }
 
 /**
@@ -350,17 +389,27 @@ export async function readFontFamilyName(file: File): Promise<string> {
   return parseFontFamilyName(await file.arrayBuffer());
 }
 
+export interface FontFaceInfo {
+  // What a style names to draw in this face.
+  name: string;
+  family: string;
+  weight: number;
+  italic: boolean;
+  // Which of the characters the fallback fonts stand in for this face can draw.
+  coverage: Set<number>;
+  metrics: FontMetrics;
+}
+
 /**
- * The family name a font declares,
- * which of the characters the fallback fonts stand in for it can draw, and its glyph widths.
+ * What a font file says about the face it holds.
  * Throws UnreadableFontError as parseFontFamilyName and parseFontMetrics do.
  */
-export async function readFont(
-  file: File,
-): Promise<{ family: string; coverage: Set<number>; metrics: FontMetrics }> {
+export async function readFont(file: File): Promise<FontFaceInfo> {
   const data = await file.arrayBuffer();
   return {
+    name: parseFontFaceName(data),
     family: parseFontFamilyName(data),
+    ...parseFontStyle(data),
     coverage: parseCoverage(data),
     metrics: parseFontMetrics(data),
   };
