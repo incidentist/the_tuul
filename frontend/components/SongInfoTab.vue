@@ -15,8 +15,8 @@
       <span> Files</span>
     </template>
     <h2 class="title">Files</h2>
-    <div class="columns is-desktop is-variable is-5">
-      <div class="column">
+    <div class="files-panels">
+      <div class="files-panel files-panel-song">
         <div class="box">
           <file-upload
             name="song-file-upload"
@@ -156,7 +156,7 @@
         </div>
       </div>
 
-      <div class="column">
+      <div class="files-panel files-panel-existing">
         <div class="box existing-files">
           <h3 class="title is-5">Restore existing files</h3>
           <folder-upload
@@ -224,6 +224,8 @@
             @update:model-value="(file: File | null) => onUploadedTrackChange('vocals', file)"
           />
         </div>
+      </div>
+      <div class="files-panel files-panel-other">
         <div class="box font-files">
           <h3 class="title is-5">Fonts</h3>
           <font-files-field />
@@ -1305,6 +1307,50 @@ export default defineComponent({
 .box {
   border: 1px solid var(--bulma-border);
   box-shadow: none;
+}
+
+.files-panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.5rem 2.5rem;
+  align-items: start;
+}
+
+/* Two columns, from Bulma's desktop breakpoint, put the song on the left and stack the other
+  panels on the right. */
+@media screen and (min-width: 1024px) {
+  .files-panels {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    /* The song spans both rows, and the last row takes whatever height it leaves,
+      so the second right-hand panel sits right under the first. */
+    grid-template-rows: auto 1fr;
+  }
+
+  .files-panel-song {
+    grid-row: 1 / span 2;
+  }
+
+  .files-panel-other {
+    grid-column: 2;
+  }
+}
+
+/* The narrowest width where the three minimums fit beside the tab bar. The song panel's minimum
+  keeps each model's description on one line with its name, and the next one keeps the project
+  folder's name from being cut off. */
+@media screen and (min-width: 1472px) {
+  .files-panels {
+    grid-template-columns: minmax(33rem, 1fr) minmax(23rem, 1fr) minmax(20rem, 1fr);
+    grid-template-rows: auto;
+  }
+
+  .files-panel-song {
+    grid-row: auto;
+  }
+
+  .files-panel-other {
+    grid-column: auto;
+  }
 }
 
 .metadata-input :deep(.input) {
