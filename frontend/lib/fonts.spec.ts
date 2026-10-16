@@ -8,6 +8,7 @@ import {
   BUNDLED_SYMBOLS,
   CompactMetrics,
   COUNT_IN_SYMBOLS,
+  fontFamiliesIn,
   MEASURED_RANGES,
   SYMBOL_CHAR,
   SYMBOL_FONT,
@@ -98,6 +99,28 @@ test("the symbol font draws every count-in symbol", () => {
     (c) => !symbol.test(c) || !BUNDLED_SYMBOLS[SYMBOL_FONT].has(c.codePointAt(0)!),
   );
   expect(missing).toEqual([]);
+});
+
+describe("fontFamiliesIn", () => {
+  test("lists each style's font and every \\fn family once", () => {
+    const ass = [
+      "[V4+ Styles]",
+      "Format: Name, Fontname, Fontsize, PrimaryColour",
+      "Style: Default,Arial,20,&H00FFFFFF",
+      "Style: Title,Metal Mania,30,&H00FFFFFF",
+      "",
+      "[Events]",
+      "Dialogue: 0,0:00:01.00,0:00:02.00,Default,,0,0,0,,{\\fnNoto Sans CJK JP}坂本{\\fn} and {\\b1\\fnDejaVu Sans}➤{\\fn}",
+      "Dialogue: 0,0:00:03.00,0:00:04.00,Default,,0,0,0,,{\\fnNoto Sans CJK JP}真綾{\\fn}",
+    ].join("\n");
+    expect(fontFamiliesIn(ass)).toEqual(
+      new Set(["Arial", "Metal Mania", "Noto Sans CJK JP", "DejaVu Sans"]),
+    );
+  });
+
+  test("ignores the format line and a bare \\fn, which returns to the style's font", () => {
+    expect(fontFamiliesIn("Format: Name, Fontname\nDialogue: ,,{\\fn}x")).toEqual(new Set());
+  });
 });
 
 describe("withFallbackFonts", () => {

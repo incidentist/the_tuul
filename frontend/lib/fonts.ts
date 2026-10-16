@@ -210,6 +210,20 @@ export const WIDEST_BUNDLED: ReadonlyMap<number, GlyphWidth> = (() => {
   return widest;
 })();
 
+/**
+ * The font families an ASS script names, in its styles' Fontname and in `\fn` tags.
+ */
+export function fontFamiliesIn(ass: string): Set<string> {
+  const families = new Set<string>();
+  for (const [, family] of ass.matchAll(/^Style:[^,]*,([^,]+),/gm)) {
+    families.add(family.trim());
+  }
+  for (const [, family] of ass.matchAll(/\\fn([^\\}]+)/g)) {
+    families.add(family.trim());
+  }
+  return families;
+}
+
 // One capture group per fallback font, matching a run of the characters it stands in for.
 const FALLBACK_RUN = new RegExp(
   FALLBACK_FONTS.map(({ chars }) => `(${chars}+(?: +${chars}+)*)`).join("|"),
