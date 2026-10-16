@@ -9,6 +9,7 @@ import {
   setupBasicInputs,
   uploadTimingsFile,
   exactFieldFor,
+  mockSeparateTrackApi,
 } from "./utils";
 
 const FONT_UPLOAD = '[name="custom-font-upload"] input[type="file"]';
@@ -26,15 +27,25 @@ function bundledFontPath(): string {
   return path.join(getFixturesDir(), "../../api/assets/fonts/MetalMania.ttf");
 }
 
-function canvasPixels(page: Page): Promise<string> {
-  return page.locator(SUBTITLE_CANVAS).evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL());
+// The canvas belongs to the renderer's worker, so only a screenshot can read it.
+async function canvasPixels(page: Page): Promise<string> {
+  return (await page.locator(SUBTITLE_CANVAS).screenshot()).toString("base64");
 }
 
-function isCanvasBlank(page: Page): Promise<boolean> {
-  return page.locator(SUBTITLE_CANVAS).evaluate((canvas: HTMLCanvasElement) => {
-    const { data } = canvas.getContext("2d")!.getImageData(0, 0, canvas.width, canvas.height);
-    return !data.some((channel) => channel !== 0);
-  });
+async function isCanvasBlank(page: Page): Promise<boolean> {
+  const png = await canvasPixels(page);
+  return page.evaluate(async (png) => {
+    const image = await createImageBitmap(
+      await (await fetch(`data:image/png;base64,${png}`)).blob(),
+    );
+    const canvas = new OffscreenCanvas(image.width, image.height);
+    const context = canvas.getContext("2d")!;
+    context.drawImage(image, 0, 0);
+    // The canvas sits at a fractional position, so the screenshot's edge can show the page.
+    const { data } = context.getImageData(2, 2, image.width - 4, image.height - 4);
+    // With nothing drawn, every pixel has the preview's background color.
+    return data.every((channel, i) => channel === data[i % 4]);
+  }, png);
 }
 
 // A test may open the panel more than once, and a second click would close it.
@@ -109,8 +120,34 @@ test.describe("Custom Font Upload", () => {
     await page.locator(FONT_UPLOAD).setInputFiles(bundledFontPath());
 
     await expect(page.locator(".custom-font-help")).toContainText("Metal Mania");
-    // The renderer is replaced, so give it until it has drawn something different.
+    // The font loads before the preview redraws, so give it until it has drawn something different.
     await expect.poll(() => canvasPixels(page), { timeout: 15000 }).not.toBe(beforeUpload);
+    await expect.poll(() => isCanvasBlank(page)).toBe(false);
+  });
+
+  test("the preview shows the frame at a seek made while an uploaded font loads", async ({
+    page,
+  }) => {
+    // A finished separation swaps the preview's audio source, which resets the time to 0
+    // and then restores it, so the seek can arrive among several time changes.
+    await mockSeparateTrackApi(page.context());
+    await setupBasicInputs(
+      page,
+      defaultTestConfig.audioFile,
+      defaultTestConfig.lyricsFile,
+      defaultTestConfig.artist,
+      defaultTestConfig.title,
+    );
+    await uploadTimingsFile(page, defaultTestConfig.timingsFile);
+    await openFontSettings(page);
+
+    await page.locator(FONT_UPLOAD).setInputFiles(bundledFontPath());
+    await page.locator(".submit-tab .preview-container audio").evaluate((el: HTMLAudioElement) => {
+      el.muted = true;
+      el.currentTime = 2.5;
+    });
+
+    // The title fades in from nothing at 0 seconds, so a blank frame is one from before the seek.
     await expect.poll(() => isCanvasBlank(page)).toBe(false);
   });
 
