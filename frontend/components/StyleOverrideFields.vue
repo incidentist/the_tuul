@@ -1,11 +1,14 @@
 <template>
   <div class="style-override-fields">
-    <b-field horizontal label="Font">
-      <b-select expanded v-model="fontName">
-        <option v-for="(path, name) in fonts" :key="path" :value="name">{{ name }}</option>
-      </b-select>
-    </b-field>
-    <slot name="font" />
+    <font-field
+      v-model="fontName"
+      @face-switches="
+        (switches) => {
+          bold = switches.bold;
+          italic = switches.italic;
+        }
+      "
+    />
     <b-field horizontal label="Font Size">
       <b-numberinput
         expanded
@@ -70,9 +73,10 @@
 
 <script lang="ts">
 import { defineComponent, PropType } from "vue";
-import { BField, BSelect, BNumberinput, BSwitch } from "buefy";
+import { BField, BNumberinput, BSwitch } from "buefy";
 import { default as BuefyColor } from "buefy/src/utils/color";
 import ColorField from "@/components/ColorField.vue";
+import FontField from "@/components/FontField.vue";
 import { KaraokeOptions } from "@/lib/timing";
 import { defaultEffectColor, VoiceStyleOverride } from "@/lib/voiceStyle";
 
@@ -80,11 +84,10 @@ import { defaultEffectColor, VoiceStyleOverride } from "@/lib/voiceStyle";
  * The fields of a style override, each showing the base style's value until it is set.
  */
 export default defineComponent({
-  components: { BField, BSelect, BNumberinput, BSwitch, ColorField },
+  components: { BField, BNumberinput, BSwitch, ColorField, FontField },
   props: {
     override: { type: Object as PropType<VoiceStyleOverride>, required: true },
     base: { type: Object as PropType<KaraokeOptions>, required: true },
-    fonts: { type: Object as PropType<Record<string, string>>, required: true },
     // What the override styles, which names its color fields for screen readers.
     name: { type: String, required: true },
     withSecondary: { type: Boolean, default: true },

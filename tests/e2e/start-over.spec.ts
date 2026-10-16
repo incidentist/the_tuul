@@ -7,6 +7,7 @@ import {
   setupTestEnvironment,
   TabId,
   expectLyricsText,
+  exactFieldFor,
 } from "./utils";
 
 test.describe("Starting over", () => {
@@ -40,24 +41,33 @@ test.describe("Starting over", () => {
     await expect(page.locator('[name="lyrics-file-upload"] .file-name')).toHaveText("lyrics.txt");
   });
 
-  test("discards an uploaded font too, after offering it", async ({ page }) => {
+  test("keeps the uploaded fonts and resets the fonts and colors", async ({ page }) => {
     await page.getByRole("dialog").getByRole("button", { name: "Cancel" }).click();
-    await navigateToTab(page, TabId.Submit);
     await page
-      .locator('[name="custom-font-upload"] input[type="file"]')
-      .setInputFiles(path.join(getFixturesDir(), "../../api/assets/fonts/MetalMania.ttf"));
-    await expect(page.locator(".custom-font-help")).toContainText("Metal Mania");
+      .getByLabel("Font files")
+      .setInputFiles(path.join(getFixturesDir(), "fonts", "NotoSans-Bold.ttf"));
+    await navigateToTab(page, TabId.Submit);
+    await page.getByRole("button", { name: "Fonts and Colors" }).click();
+    const fontSelect = exactFieldFor(page, "Font").first().locator("select");
+    await fontSelect.selectOption("Noto Sans Bold");
+    await page.getByLabel("primary color hex code", { exact: true }).fill("#ff8800");
+    await page.getByLabel("primary color hex code", { exact: true }).press("Enter");
+    await expect(page.getByLabel("primary color hex code", { exact: true })).toHaveValue("#ff8800");
 
     await page.getByRole("navigation").getByRole("button", { name: "Start Over" }).click();
-    await expect(page.locator(".modal-card-body .source-file-links")).toContainText(
-      "MetalMania.ttf",
-    );
     await page.getByRole("dialog").getByRole("button", { name: "Start over" }).click();
 
     await expect(page).toHaveURL(/#song$/);
-    await expect(page.locator(".custom-font-help")).toHaveCount(0);
     await page.reload();
+    await expect(
+      page.getByRole("list", { name: "Uploaded fonts" }).getByRole("listitem"),
+    ).toHaveText([/Noto Sans Bold/]);
     await navigateToTab(page, TabId.Submit);
-    await expect(page.locator(".custom-font-help")).toHaveCount(0);
+    const trigger = page.getByRole("button", { name: "Fonts and Colors" });
+    if ((await trigger.getAttribute("aria-expanded")) !== "true") {
+      await trigger.click();
+    }
+    await expect(fontSelect).toHaveValue("Trebuchet MS");
+    await expect(page.getByLabel("primary color hex code", { exact: true })).toHaveValue("#7957d5");
   });
 });

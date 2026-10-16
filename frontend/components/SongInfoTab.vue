@@ -224,6 +224,10 @@
             @update:model-value="(file: File | null) => onUploadedTrackChange('vocals', file)"
           />
         </div>
+        <div class="box font-files">
+          <h3 class="title is-5">Fonts</h3>
+          <font-files-field />
+        </div>
         <div v-if="advancedStore.isAdvanced" class="box kbp-files">
           <h3 class="title is-5">Karaoke Builder Studio</h3>
           <file-upload
@@ -377,6 +381,7 @@ import { isTimingsText, parseTimingsText, TIMINGS_TEXT_VERSION } from "@/lib/tim
 import { lyricsMatch, lyricsOf } from "@/lib/timingsLyrics";
 import FileUpload from "@/components/FileUpload.vue";
 import FolderUpload from "@/components/FolderUpload.vue";
+import FontFilesField from "@/components/FontFilesField.vue";
 import CircularProgress from "@/components/CircularProgress.vue";
 import SourceFileDownloadLinks from "@/components/SourceFileDownloadLinks.vue";
 import ConfirmModal from "@/components/ConfirmModal.vue";
@@ -406,7 +411,6 @@ interface FolderLosses {
     lyrics?: string;
     timings?: string;
     settings?: string;
-    font?: File;
     tracks?: TrackPair[];
     background?: Blob;
   };
@@ -439,6 +443,7 @@ export default defineComponent({
   components: {
     FileUpload,
     FolderUpload,
+    FontFilesField,
     CircularProgress,
     SourceFileDownloadLinks,
     ConfirmModal,
@@ -522,6 +527,13 @@ export default defineComponent({
     },
   },
   computed: {
+    // The font names an imported style may keep.
+    knownFonts(): string[] {
+      return [
+        ...Object.keys(BUNDLED_FONTS),
+        ...this.settingsStore.fontFaces.map((face) => face.name),
+      ];
+    },
     pendingFolderLosses(): FolderLosses & { description: string } {
       const losses = this.pendingFolder
         ? this.folderLosses(this.pendingFolder.project, true)
@@ -865,7 +877,7 @@ export default defineComponent({
       return this.lyricsLookupStore.whileLoading(async () => {
         try {
           const { warnings, audioName } = await this.applyConvertedProject(
-            kbpToProjectFiles(await file.text(), { fonts: Object.keys(BUNDLED_FONTS) }),
+            kbpToProjectFiles(await file.text(), { fonts: this.knownFonts }),
           );
           this.kbpWarnings = warnings;
           const song = audioName && !this.mediaStore.songFile ? ` Its song is ${audioName}.` : "";
@@ -903,7 +915,7 @@ export default defineComponent({
       return this.lyricsLookupStore.whileLoading(async () => {
         try {
           const { warnings } = await this.applyConvertedProject(
-            assToProjectFiles(await file.text(), { fonts: Object.keys(BUNDLED_FONTS) }),
+            assToProjectFiles(await file.text(), { fonts: this.knownFonts }),
           );
           this.assWarnings = warnings;
           this.$buefy.toast.open({
@@ -1005,10 +1017,6 @@ export default defineComponent({
       }
       if (tracks.length > 0) {
         losses.files.tracks = tracks;
-      }
-      if (project.font && this.settingsStore.customFont) {
-        losses.labels.push("font");
-        losses.files.font = this.settingsStore.customFont;
       }
       if (project.background && this.mediaStore.background) {
         losses.labels.push("background");
@@ -1125,9 +1133,26 @@ export default defineComponent({
             }),
           );
         }
-        if (project.font) {
-          const font = project.font;
-          await apply("the font", font, () => this.settingsStore.setCustomFont(font));
+        if (project.fonts.length > 0) {
+          const { added, failed: unreadable } = await this.settingsStore.addFonts(project.fonts);
+          if (added.length > 0) {
+            loaded.push(added.length === 1 ? "the font" : "the fonts");
+          }
+          failed.push(...unreadable.map(({ file }) => file.name));
+          // A project saved before the font library carried one font,
+          // which overrode the font its settings name.
+          if (project.settings && project.fonts.length === 1 && added.length === 1) {
+            const face = added[0].name.toLowerCase();
+            const { videoOptions, voiceStyles } = this.settingsStore;
+            const named = [
+              videoOptions.font.name,
+              videoOptions.titleStyle.fontName,
+              ...Object.values(voiceStyles).map((style) => style.fontName),
+            ];
+            if (!named.some((name) => name?.toLowerCase() === face)) {
+              videoOptions.font.name = added[0].name;
+            }
+          }
         }
 
         // The folder brings a song and settings, which the history doesn't cover.

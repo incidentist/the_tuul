@@ -148,8 +148,9 @@
       @confirm="startOver"
     >
       <p>
-        This will discard the current song, tracks, lyrics, timings and uploaded fonts, and reset
-        the font settings. Other settings will be kept. Save anything you want to keep first.
+        This will discard the current song, tracks, lyrics and timings, and reset the fonts and
+        colors. Uploaded font files and other settings will be kept. Save anything you want to keep
+        first.
       </p>
       <source-file-download-links
         class="mt-4"
@@ -157,8 +158,6 @@
         :song="mediaStore.songFile ?? undefined"
         :lyrics="lyricsStore.lyricText"
         :timings="timingsStore.hasAnyTimings ? timingsStore.timingsText : undefined"
-        :font="settingsStore.customFont ?? undefined"
-        :fonts="extraFonts"
         :tracks="mediaStore.trackPairs ?? []"
       />
     </confirm-modal>
@@ -289,12 +288,6 @@ export default defineComponent({
   },
 
   computed: {
-    extraFonts(): File[] {
-      return [
-        this.settingsStore.titleFont?.file,
-        ...this.lyricsStore.voices.map((voice) => this.settingsStore.getVoiceFont(voice)?.file),
-      ].filter((file): file is File => file !== undefined);
-    },
     hasTabSettings(): boolean {
       return SETTINGS_TABS.includes(this.activeTab);
     },
@@ -527,7 +520,7 @@ export default defineComponent({
       this.historyStore.clear();
       this.lyricsLookupStore.reset();
       await this.mediaStore.clearSession();
-      await this.settingsStore.resetFonts();
+      this.settingsStore.resetStyling();
       this.setActiveTab("song");
     },
   },

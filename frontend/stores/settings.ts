@@ -26,7 +26,7 @@ import {
   shadowDrawn,
 } from "@/lib/voiceStyle";
 import { VoiceId } from "@/lib/voices";
-import { persistBlobRef } from "@/lib/persistence";
+import { persistBlobRef, takeLegacyBlob } from "@/lib/persistence";
 import {
   TimingAction,
   TimingKeys,
@@ -38,8 +38,8 @@ import {
   isTapAction,
   sameBinding,
 } from "@/lib/timingKeys";
-import { FontMetrics, readFont } from "@/lib/fontFile";
-import { BUNDLED_METRICS, GlyphCoverage } from "@/lib/fonts";
+import { FontFaceInfo, FontMetrics, readFont } from "@/lib/fontFile";
+import { BUNDLED_FONTS, BUNDLED_METRICS, GlyphCoverage } from "@/lib/fonts";
 import { FontLibrary } from "@/lib/textWidth";
 import {
   serializeSettingsYaml,
@@ -65,6 +65,13 @@ import {
 } from "@/constants";
 
 const VOICE_STYLES_STORAGE_KEY = "voiceStyles";
+const FONT_LIBRARY_STORAGE_KEY = "settings.fontLibrary";
+// Where uploaded fonts were kept before the library, one per style. They are dropped, not moved.
+const LEGACY_FONT_STORAGE_KEYS = [
+  "settings.customFont",
+  "settings.titleFont",
+  "settings.voiceFonts",
+];
 const TIMING_KEYS_STORAGE_KEY = "timingKeys";
 // Where bindings saved as key positions kept what each key typed. Read once to migrate them.
 const LEGACY_KEY_LABELS_STORAGE_KEY = "timingKeyLabels";
@@ -276,6 +283,19 @@ const DEFAULT_SETTINGS: VideoSettings = {
   },
 };
 
+// The settings of the Fonts and Colors card, which Start Over puts back. Keep in sync with the card.
+const STYLING_SETTINGS = [
+  "font",
+  "color",
+  "outlineWidth",
+  "shadowX",
+  "shadowY",
+  "verticalAlignment",
+  "lineSpacing",
+  "topMargin",
+  "titleStyle",
+] as const;
+
 // The settings Mix mode tunes, which its reset puts back. The Restore Gaps switch is a choice, not
 // a tuning, so it stays as the user left it.
 const MIX_SETTINGS = [
@@ -298,11 +318,20 @@ function defaultSettings(): VideoSettings {
   };
 }
 
-interface LoadedFont {
-  family: string;
+// An uploaded font file, with what it says about its face.
+export interface LoadedFont extends FontFaceInfo {
+  file: File;
+  // libass takes URLs, not blobs. Revoked only once the face leaves the library, because
+  // the preview and FFmpeg read the file when they need it.
   url: string;
-  coverage: ReadonlySet<number>;
-  metrics: FontMetrics;
+}
+
+/**
+ * The bundled family a name stands for, ignoring case as libass does.
+ */
+function bundledFontName(name: string): string | undefined {
+  const lower = name.toLowerCase();
+  return Object.keys(BUNDLED_FONTS).find((bundled) => bundled.toLowerCase() === lower);
 }
 
 export const useSettingsStore = defineStore("settings", () => {
@@ -316,18 +345,10 @@ export const useSettingsStore = defineStore("settings", () => {
   // are about how the tapping tab is driven, not about the video.
   const timingKeys = ref<TimingKeys>(loadTimingKeys());
 
-  // Kept out of `videoOptions`, which is JSON-serialized to localStorage wholesale. The
-  // file goes to IndexedDB instead.
-  const customFont = ref<File | null>(null);
-  // The name the font declares for itself, which is what an ASS style row must carry.
-  // Null means the picked font stands.
-  const customFontFamily = ref<string | null>(null);
-  // libass takes URLs, not blobs. Not revoked while the font is in use: the preview's
-  // worker and FFmpeg read it lazily, and revoking mid-read fails the read.
-  const customFontUrl = ref<string | null>(null);
-  // Which of the characters the fallback fonts stand in for the uploaded font can draw.
-  const customFontCoverage = shallowRef<ReadonlySet<number>>(new Set());
-  const customFontMetrics = shallowRef<FontMetrics | null>(null);
+  // The uploaded fonts, which styles pick by face name. Kept out of `videoOptions`, which
+  // settings.yaml describes. The files go to IndexedDB, and the rest is read back from them.
+  const fontFiles = shallowRef<File[] | null>(null);
+  const fontFaces = shallowRef<LoadedFont[]>([]);
 
   // Load saved settings when the store is initialized
   loadSettings();
@@ -393,105 +414,102 @@ export const useSettingsStore = defineStore("settings", () => {
     { deep: true },
   );
 
-  // The family name is re-derived on load rather than stored, so a file that has gone
-  // unreadable is dropped instead of naming a font libass can't find.
-  persistBlobRef("settings.customFont", customFont).then(async () => {
-    const file = customFont.value;
-    if (!file || customFontFamily.value) {
-      return;
-    }
-    try {
-      const { family, coverage, metrics } = await readFont(file);
-      customFontFamily.value = family;
-      customFontCoverage.value = coverage;
-      customFontMetrics.value = metrics;
-      customFontUrl.value = URL.createObjectURL(file);
-    } catch (e) {
-      console.error("Could not read the saved custom font; ignoring it", e);
-      customFont.value = null;
-    }
-  });
-
-  // Per-voice uploaded fonts, kept out of `voiceStyles`, which settings.yaml describes and which holds no files.
-  // Only the files are stored. The family names and URLs are re-derived, as for the base font.
-  const voiceFontFiles = shallowRef<Record<VoiceId, File> | null>(null);
-  const voiceFonts = shallowRef<Record<VoiceId, LoadedFont>>({});
-
-  persistBlobRef("settings.voiceFonts", voiceFontFiles).then(async () => {
-    const loaded: Record<VoiceId, LoadedFont> = {};
-    const readable: Record<VoiceId, File> = {};
-    for (const [voice, file] of Object.entries(voiceFontFiles.value ?? {})) {
-      try {
-        loaded[voice] = { ...(await readFont(file)), url: URL.createObjectURL(file) };
-        readable[voice] = file;
-      } catch (e) {
-        console.error(`Could not read the saved font for ${voice}; ignoring it`, e);
+  /**
+   * Adds faces to the library, a face replacing any of the same name.
+   */
+  function mergeFaces(added: LoadedFont[]): void {
+    const names = new Set(added.map((face) => face.name.toLowerCase()));
+    for (const face of fontFaces.value) {
+      if (names.has(face.name.toLowerCase())) {
+        URL.revokeObjectURL(face.url);
       }
     }
-    voiceFonts.value = { ...loaded, ...voiceFonts.value };
-    if (Object.keys(readable).length !== Object.keys(voiceFontFiles.value ?? {}).length) {
-      voiceFontFiles.value = readable;
-    }
-  });
+    // The menus list the faces in this order.
+    fontFaces.value = [
+      ...fontFaces.value.filter((face) => !names.has(face.name.toLowerCase())),
+      ...added,
+    ].sort(
+      (a, b) =>
+        a.family.localeCompare(b.family) ||
+        a.weight - b.weight ||
+        Number(a.italic) - Number(b.italic) ||
+        a.name.localeCompare(b.name),
+    );
+    fontFiles.value = fontFaces.value.length > 0 ? fontFaces.value.map((face) => face.file) : null;
+  }
 
-  function getVoiceFont(voice: VoiceId): (LoadedFont & { file: File }) | undefined {
-    const file = voiceFontFiles.value?.[voice];
-    const font = voiceFonts.value[voice];
-    return file && font ? { file, ...font } : undefined;
+  async function loadFont(file: File): Promise<LoadedFont> {
+    return { ...(await readFont(file)), file, url: URL.createObjectURL(file) };
+  }
+
+  // The faces are re-read from the files on load rather than stored, so a file that has gone
+  // unreadable is dropped instead of naming a font libass can't find.
+  persistBlobRef(FONT_LIBRARY_STORAGE_KEY, fontFiles).then(async () => {
+    const added = fontFaces.value;
+    fontFaces.value = [];
+    const stored: LoadedFont[] = [];
+    for (const file of fontFiles.value ?? []) {
+      try {
+        stored.push(await loadFont(file));
+      } catch (e) {
+        console.error(`Could not read the saved font ${file.name}; dropping it`, e);
+      }
+    }
+    // A face added while the library loaded wins over a stored one of the same name.
+    mergeFaces(stored);
+    mergeFaces(added);
+  });
+  for (const key of LEGACY_FONT_STORAGE_KEYS) {
+    void takeLegacyBlob(key);
   }
 
   /**
-   * Clears the voice's font when given null. Parses the family name before storing anything,
-   * so on UnreadableFontError the font already in use still stands.
+   * Reads the files and adds their faces to the library, a face replacing any of the same name.
+   * A file that isn't a readable font is left out and returned with its error,
+   * without stopping the others.
    */
-  async function setVoiceFont(voice: VoiceId, file: File | null): Promise<void> {
-    const { [voice]: _file, ...files } = voiceFontFiles.value ?? {};
-    const { [voice]: _font, ...fonts } = voiceFonts.value;
-    if (file) {
-      const font = await readFont(file);
-      files[voice] = file;
-      fonts[voice] = { ...font, url: URL.createObjectURL(file) };
+  async function addFonts(
+    files: File[],
+  ): Promise<{ added: LoadedFont[]; failed: { file: File; error: Error }[] }> {
+    const added: LoadedFont[] = [];
+    const failed: { file: File; error: Error }[] = [];
+    for (const file of files) {
+      try {
+        added.push(await loadFont(file));
+      } catch (e) {
+        failed.push({ file, error: e as Error });
+      }
     }
-    voiceFontFiles.value = Object.keys(files).length > 0 ? files : null;
-    voiceFonts.value = fonts;
+    mergeFaces(added);
+    return { added, failed };
   }
 
-  // The title's uploaded font, kept out of `videoOptions.titleStyle` like the voices' fonts.
-  const titleFontFile = ref<File | null>(null);
-  const titleFontLoaded = shallowRef<LoadedFont | null>(null);
-
-  persistBlobRef("settings.titleFont", titleFontFile).then(async () => {
-    const file = titleFontFile.value;
-    if (!file || titleFontLoaded.value) {
-      return;
+  function removeFont(name: string): void {
+    const lower = name.toLowerCase();
+    for (const face of fontFaces.value) {
+      if (face.name.toLowerCase() === lower) {
+        URL.revokeObjectURL(face.url);
+      }
     }
-    try {
-      titleFontLoaded.value = { ...(await readFont(file)), url: URL.createObjectURL(file) };
-    } catch (e) {
-      console.error("Could not read the saved title font; ignoring it", e);
-      titleFontFile.value = null;
-    }
-  });
-
-  const titleFont = computed((): (LoadedFont & { file: File }) | undefined =>
-    titleFontFile.value && titleFontLoaded.value
-      ? { file: titleFontFile.value, ...titleFontLoaded.value }
-      : undefined,
-  );
+    fontFaces.value = fontFaces.value.filter((face) => face.name.toLowerCase() !== lower);
+    fontFiles.value = fontFaces.value.length > 0 ? fontFaces.value.map((face) => face.file) : null;
+  }
 
   /**
-   * Clears the title's font when given null. Parses the family name before storing anything,
-   * so on UnreadableFontError the font already in use still stands.
+   * The uploaded face a style's font name picks, ignoring case as libass does.
    */
-  async function setTitleFont(file: File | null): Promise<void> {
-    if (!file) {
-      titleFontFile.value = null;
-      titleFontLoaded.value = null;
-      return;
-    }
-    const font = await readFont(file);
-    titleFontFile.value = file;
-    titleFontLoaded.value = { ...font, url: URL.createObjectURL(file) };
+  function fontFace(name: string): LoadedFont | undefined {
+    const lower = name.toLowerCase();
+    return fontFaces.value.find((face) => face.name.toLowerCase() === lower);
+  }
+
+  /**
+   * The name to draw a style's font in: the bundled or uploaded font it names, spelled as that
+   * font spells it, or the default font when it names neither.
+   * The renderers need this, because given a name they have no file for, FFmpeg draws nothing.
+   */
+  function resolveFontName(name: string): string {
+    return fontFace(name)?.name ?? bundledFontName(name) ?? DEFAULT_SETTINGS.font.name;
   }
 
   function setTitleStyleField<K extends keyof VoiceStyleOverride>(
@@ -503,39 +521,19 @@ export const useSettingsStore = defineStore("settings", () => {
 
   function clearTitleStyle() {
     videoOptions.titleStyle = {};
-    void setTitleFont(null);
   }
 
   /**
-   * The voice's override as the renderer should use it, with an uploaded font standing in for the picked one.
+   * The voice's override as the renderer should use it, with its font name resolved.
    */
   function renderVoiceStyle(voice: VoiceId): VoiceStyleOverride | undefined {
-    const font = voiceFonts.value[voice];
     const style = voiceStyles.value[voice];
-    return font ? { ...style, fontName: font.family } : style;
-  }
-
-  // Clears the font when given null. Parses the family name before storing anything, so
-  // on UnreadableFontError the previously active font still stands.
-  async function setCustomFont(file: File | null): Promise<void> {
-    if (!file) {
-      customFont.value = null;
-      customFontFamily.value = null;
-      customFontCoverage.value = new Set();
-      customFontMetrics.value = null;
-      customFontUrl.value = null;
-      return;
+    if (style?.fontName === undefined) {
+      return style;
     }
-    const { family, coverage, metrics } = await readFont(file);
-    customFont.value = file;
-    customFontFamily.value = family;
-    customFontCoverage.value = coverage;
-    customFontMetrics.value = metrics;
-    customFontUrl.value = URL.createObjectURL(file);
+    return { ...style, fontName: resolveFontName(style.fontName) };
   }
 
-  // Built from the picked font, not the uploaded one:
-  // a settings file naming a font it can't carry would no longer load back.
   const settingsSource = computed((): SettingsFileSource => {
     const media = useMediaStore();
     return {
@@ -557,46 +555,31 @@ export const useSettingsStore = defineStore("settings", () => {
   // What the exported subtitles carry of the settings, which is only what they can't show.
   const subtitleSettings = computed(() => serializeSubtitleSettings(settingsSource.value));
 
-  // What everything that renders lyrics should use: `videoOptions` is raw UI state, where
-  // the font picker keeps its own value even while an uploaded font overrides it.
+  // What everything that renders lyrics should use. `videoOptions` keeps a font name that is
+  // neither bundled nor uploaded, so that the font comes back once it is uploaded.
   const renderOptions = computed<VideoSettings>(() => {
-    const titleFamily = titleFontLoaded.value?.family;
-    if (!customFontFamily.value && !titleFamily) {
+    const fontName = resolveFontName(videoOptions.font.name);
+    const titleName = videoOptions.titleStyle.fontName;
+    const titleFontName = titleName === undefined ? undefined : resolveFontName(titleName);
+    if (fontName === videoOptions.font.name && titleFontName === titleName) {
       return videoOptions;
     }
     return {
       ...videoOptions,
-      font: { ...videoOptions.font, name: customFontFamily.value ?? videoOptions.font.name },
-      titleStyle: titleFamily
-        ? { ...videoOptions.titleStyle, fontName: titleFamily }
-        : videoOptions.titleStyle,
+      font: { ...videoOptions.font, name: fontName },
+      titleStyle: { ...videoOptions.titleStyle, fontName: titleFontName },
     };
   });
 
-  const glyphCoverage = computed<GlyphCoverage>(() => {
-    const coverage: Record<string, ReadonlySet<number>> = {};
-    for (const font of Object.values(voiceFonts.value)) {
-      coverage[font.family] = font.coverage;
-    }
-    if (titleFontLoaded.value) {
-      coverage[titleFontLoaded.value.family] = titleFontLoaded.value.coverage;
-    }
-    if (customFontFamily.value) {
-      coverage[customFontFamily.value] = customFontCoverage.value;
-    }
-    return coverage;
-  });
+  const glyphCoverage = computed<GlyphCoverage>(() =>
+    Object.fromEntries(fontFaces.value.map((face) => [face.name, face.coverage])),
+  );
 
   // What everything that lays lyrics out measures them with.
   const fonts = computed(() => {
     const metrics: Record<string, FontMetrics> = { ...BUNDLED_METRICS };
-    for (const font of [...Object.values(voiceFonts.value), titleFontLoaded.value]) {
-      if (font) {
-        metrics[font.family] = font.metrics;
-      }
-    }
-    if (customFontFamily.value && customFontMetrics.value) {
-      metrics[customFontFamily.value] = customFontMetrics.value;
+    for (const face of fontFaces.value) {
+      metrics[face.name] = face.metrics;
     }
     return new FontLibrary(glyphCoverage.value, metrics);
   });
@@ -645,7 +628,6 @@ export const useSettingsStore = defineStore("settings", () => {
   function clearVoiceStyle(voice: VoiceId) {
     const { [voice]: _removed, ...rest } = voiceStyles.value;
     voiceStyles.value = rest;
-    void setVoiceFont(voice, null);
   }
 
   // Move a style override onto another voice id. Used when a lyric tag edit renames a voice,
@@ -657,39 +639,18 @@ export const useSettingsStore = defineStore("settings", () => {
       const { [from]: _removed, ...rest } = voiceStyles.value;
       voiceStyles.value = { ...rest, [to]: style };
     }
-    const file = voiceFontFiles.value?.[from];
-    const font = voiceFonts.value[from];
-    if (file && font && !voiceFontFiles.value?.[to]) {
-      const { [from]: _file, ...files } = voiceFontFiles.value ?? {};
-      const { [from]: _font, ...fonts } = voiceFonts.value;
-      voiceFontFiles.value = { ...files, [to]: file };
-      voiceFonts.value = { ...fonts, [to]: font };
-    }
   }
 
   /**
-   * Puts the base, title and voice fonts back to their defaults, and drops every uploaded font.
+   * Puts every setting of the Fonts and Colors card back to its default, the title and voice styles
+   * included. The uploaded fonts stay in the library.
    */
-  async function resetFonts(): Promise<void> {
-    videoOptions.font = { ...DEFAULT_SETTINGS.font };
-    const {
-      fontName: _name,
-      fontSize: _size,
-      bold: _bold,
-      italic: _italic,
-      ...titleRest
-    } = videoOptions.titleStyle;
-    videoOptions.titleStyle = { ...titleRest, fontSize: DEFAULT_SETTINGS.titleStyle.fontSize };
-    const styles: Record<VoiceId, VoiceStyleOverride> = {};
-    for (const [voice, style] of Object.entries(voiceStyles.value)) {
-      const { fontName: _n, fontSize: _s, bold: _b, italic: _i, ...rest } = style;
-      if (Object.keys(rest).length > 0) styles[voice] = rest;
+  function resetStyling(): void {
+    const defaults = defaultSettings();
+    for (const key of STYLING_SETTINGS) {
+      Object.assign(videoOptions, { [key]: defaults[key] });
     }
-    voiceStyles.value = styles;
-    await setCustomFont(null);
-    await setTitleFont(null);
-    voiceFontFiles.value = null;
-    voiceFonts.value = {};
+    voiceStyles.value = {};
   }
 
   // Merge a partial set of options over the current ones, e.g. from a loaded settings.yaml.
@@ -804,7 +765,6 @@ export const useSettingsStore = defineStore("settings", () => {
     Object.assign(videoOptions, defaultSettings());
     voiceStyles.value = {};
     resetTimingKeys();
-    void resetFonts();
   }
 
   return {
@@ -814,20 +774,17 @@ export const useSettingsStore = defineStore("settings", () => {
     subtitleSettings,
     voiceStyles,
     timingKeys,
-    customFont,
-    customFontFamily,
-    customFontUrl,
-    setCustomFont,
-    getVoiceFont,
-    setVoiceFont,
+    fontFaces,
+    addFonts,
+    removeFont,
+    fontFace,
+    resolveFontName,
     renderVoiceStyle,
-    titleFont,
-    setTitleFont,
     setTitleStyleField,
     clearTitleStyle,
     glyphCoverage,
     fonts,
-    resetFonts,
+    resetStyling,
     setTimingKey,
     resetTimingKeys,
     getVoiceStyle,

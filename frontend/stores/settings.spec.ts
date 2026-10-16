@@ -10,11 +10,23 @@ import { nextTick } from "vue";
 import { applyVoiceStyle } from "@/lib/voiceStyle";
 import { DEFAULT_TIMING_KEYS } from "@/lib/timingKeys";
 import { UnreadableFontError } from "@/lib/fontFile";
+import { takeLegacyBlob } from "@/lib/persistence";
+import { DEFAULT_LINE_SPACING, DEFAULT_OUTLINE_WIDTH, DEFAULT_TOP_MARGIN } from "@/constants";
 
-function fontFile(name: string, as = name): File {
-  const data = readFileSync(path.resolve(__dirname, "../../api/assets/fonts", name));
+function fontFile(name: string, as = name, dir = "../../api/assets/fonts"): File {
+  const data = readFileSync(path.resolve(__dirname, dir, name));
   return new File([new Uint8Array(data)], as);
 }
+
+// Faces of one family, which the bundled fonts don't have.
+function fixtureFont(name: string): File {
+  return fontFile(name, name, "../../tests/fixtures/fonts");
+}
+
+vi.mock("@/lib/persistence", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/persistence")>()),
+  takeLegacyBlob: vi.fn().mockResolvedValue(undefined),
+}));
 
 describe("Settings Store", () => {
   beforeEach(() => {
@@ -362,186 +374,165 @@ describe("Settings Store", () => {
     });
   });
 
-  describe("custom font", () => {
+  describe("font library", () => {
     // Earlier tests leave settings in localStorage, which a new store would load. These
-    // cases are about the defaults and the uploaded font.
+    // cases are about the defaults and the uploaded fonts.
     beforeEach(() => {
       window.localStorage.clear();
       setActivePinia(createPinia());
     });
 
-    test("renderOptions matches videoOptions when no font is uploaded", () => {
+    test("renderOptions is videoOptions while every font name is known", () => {
       const store = useSettingsStore();
 
-      expect(store.customFontFamily).toBeNull();
-      expect(store.renderOptions.font.name).toBe(store.videoOptions.font.name);
+      expect(store.fontFaces).toEqual([]);
+      expect(store.renderOptions).toBe(store.videoOptions);
     });
 
-    test("an uploaded font overrides the picked one for rendering", async () => {
+    test("adds every face of several files, sorted by family, weight and slant", async () => {
       const store = useSettingsStore();
-      store.videoOptions.font.name = "Arial";
 
-      await store.setCustomFont(fontFile("MetalMania.ttf", "my-font.ttf"));
+      const { added, failed } = await store.addFonts([
+        fixtureFont("NotoSans-Italic.ttf"),
+        fixtureFont("NotoSans-Bold.ttf"),
+        fontFile("MetalMania.ttf", "my-font.ttf"),
+        fixtureFont("NotoSans-Regular.ttf"),
+      ]);
 
-      // The family name the font declares, not the file name, is what libass matches on.
-      expect(store.customFontFamily).toBe("Metal Mania");
-      expect(store.renderOptions.font.name).toBe("Metal Mania");
-      // The picker keeps its own value, so clearing the upload restores it.
-      expect(store.videoOptions.font.name).toBe("Arial");
-      expect(store.customFontUrl).toBeTruthy();
+      expect(added).toHaveLength(4);
+      expect(failed).toEqual([]);
+      // The name inside each file, not the file name, is what libass matches on.
+      expect(store.fontFaces.map((face) => face.name)).toEqual([
+        "Metal Mania",
+        "Noto Sans Regular",
+        "Noto Sans Italic",
+        "Noto Sans Bold",
+      ]);
+      expect(store.fontFaces.every((face) => face.url)).toBe(true);
     });
 
-    test("other render options are untouched by an uploaded font", async () => {
+    test("a file that is not a font is returned with its error, and the others still added", async () => {
       const store = useSettingsStore();
+      const fake = new File(["nope"], "fake.ttf");
+
+      const { added, failed } = await store.addFonts([fake, fontFile("Impact.ttf")]);
+
+      expect(added.map((face) => face.name)).toEqual(["Impact"]);
+      expect(failed).toHaveLength(1);
+      expect(failed[0].file).toBe(fake);
+      expect(failed[0].error).toBeInstanceOf(UnreadableFontError);
+    });
+
+    test("a face replaces one of the same name, whatever the case", async () => {
+      const store = useSettingsStore();
+      await store.addFonts([fontFile("Impact.ttf", "old.ttf")]);
+
+      await store.addFonts([fontFile("Impact.ttf", "new.ttf")]);
+
+      expect(store.fontFaces.map((face) => face.file.name)).toEqual(["new.ttf"]);
+    });
+
+    test("removeFont takes the face out of the library", async () => {
+      const store = useSettingsStore();
+      await store.addFonts([fontFile("Impact.ttf"), fontFile("MetalMania.ttf")]);
+
+      store.removeFont("metal mania");
+
+      expect(store.fontFaces.map((face) => face.name)).toEqual(["Impact"]);
+    });
+
+    test("a style picks an uploaded face by name, for rendering and for measuring", async () => {
+      const store = useSettingsStore();
+      await store.addFonts([fixtureFont("NotoSans-Bold.ttf")]);
+
+      store.videoOptions.font.name = "Noto Sans Bold";
+
+      expect(store.renderOptions.font.name).toBe("Noto Sans Bold");
+      expect(store.fonts.covered("Noto Sans Bold")).toBeDefined();
+    });
+
+    test("a font that is neither bundled nor uploaded renders in the default font", async () => {
+      const store = useSettingsStore();
+      store.videoOptions.font.name = "Noto Sans Bold";
       store.videoOptions.font.size = 42;
 
-      await store.setCustomFont(fontFile("Impact.ttf"));
-
-      expect(store.renderOptions.font.size).toBe(42);
-      expect(store.renderOptions.color.primary.toString()).toBe("#7957d5");
-    });
-
-    test("clearing the font falls back to the picked one", async () => {
-      const store = useSettingsStore();
-      store.videoOptions.font.name = "Arial";
-      await store.setCustomFont(fontFile("Impact.ttf"));
-
-      await store.setCustomFont(null);
-
-      expect(store.customFont).toBeNull();
-      expect(store.customFontFamily).toBeNull();
-      expect(store.customFontUrl).toBeNull();
-      expect(store.renderOptions.font.name).toBe("Arial");
-    });
-
-    test("a file that is not a font is rejected and does not become active", async () => {
-      const store = useSettingsStore();
-
-      await expect(store.setCustomFont(new File(["nope"], "fake.ttf"))).rejects.toThrow(
-        UnreadableFontError,
-      );
-      expect(store.customFont).toBeNull();
-      expect(store.customFontFamily).toBeNull();
       expect(store.renderOptions.font.name).toBe("Trebuchet MS");
+      expect(store.renderOptions.font.size).toBe(42);
+      // The setting keeps the name, so the font comes back once it is uploaded.
+      expect(store.videoOptions.font.name).toBe("Noto Sans Bold");
+
+      await store.addFonts([fixtureFont("NotoSans-Bold.ttf")]);
+
+      expect(store.renderOptions.font.name).toBe("Noto Sans Bold");
     });
 
-    test("a voice with its own font keeps it over the uploaded one", async () => {
+    test("the title and the voices fall back to the default font too", () => {
       const store = useSettingsStore();
-      store.setVoiceStyleField("Anna", "fontName", "Impact");
-      await store.setCustomFont(fontFile("MetalMania.ttf"));
+      store.setTitleStyleField("fontName", "Missing Title Font");
+      store.setVoiceStyleField("Anna", "fontName", "Missing Voice Font");
+      store.setVoiceStyleField("Ben", "fontName", "Impact");
 
-      const anna = applyVoiceStyle(store.renderOptions, store.getVoiceStyle("Anna"));
-      const ben = applyVoiceStyle(store.renderOptions, store.getVoiceStyle("Ben"));
-
-      expect(anna.font.name).toBe("Impact");
-      expect(ben.font.name).toBe("Metal Mania");
+      expect(store.renderOptions.titleStyle.fontName).toBe("Trebuchet MS");
+      expect(store.videoOptions.titleStyle.fontName).toBe("Missing Title Font");
+      expect(store.renderVoiceStyle("Anna")?.fontName).toBe("Trebuchet MS");
+      expect(store.renderVoiceStyle("Ben")?.fontName).toBe("Impact");
+      expect(store.getVoiceStyle("Anna")?.fontName).toBe("Missing Voice Font");
     });
 
-    test("the fallback characters uploaded fonts draw are known by family", async () => {
+    test("resolveFontName ignores case and spells the name as the font does", async () => {
       const store = useSettingsStore();
+      await store.addFonts([fixtureFont("NotoSans-Bold.ttf")]);
 
-      await store.setCustomFont(fontFile("NotoSansCJKjp-Regular.otf"));
-      await store.setVoiceFont("Anna", fontFile("Impact.ttf"));
-
-      expect(store.glyphCoverage["Noto Sans CJK JP"].has("坂".codePointAt(0)!)).toBe(true);
-      expect(store.glyphCoverage["Impact"].has("坂".codePointAt(0)!)).toBe(false);
-      expect(store.glyphCoverage["Impact"].has("♥".codePointAt(0)!)).toBe(true);
-
-      await store.setCustomFont(null);
-      expect(store.glyphCoverage).not.toHaveProperty("Noto Sans CJK JP");
+      expect(store.resolveFontName("noto sans bold")).toBe("Noto Sans Bold");
+      expect(store.resolveFontName("IMPACT")).toBe("Impact");
     });
 
-    test("a voice's uploaded font overrides its picked one for rendering only", async () => {
-      const store = useSettingsStore();
-      store.setVoiceStyleField("Anna", "fontName", "Impact");
+    test("the fonts saved before the library are dropped", () => {
+      useSettingsStore();
 
-      await store.setVoiceFont("Anna", fontFile("MetalMania.ttf", "anna.ttf"));
-
-      expect(store.getVoiceFont("Anna")).toMatchObject({ family: "Metal Mania" });
-      expect(store.renderVoiceStyle("Anna")?.fontName).toBe("Metal Mania");
-      // What settings.yaml describes keeps the picked font, which it can load back.
-      expect(store.getVoiceStyle("Anna")?.fontName).toBe("Impact");
-      expect(store.renderVoiceStyle("Ben")).toBeUndefined();
+      for (const key of ["settings.customFont", "settings.titleFont", "settings.voiceFonts"]) {
+        expect(takeLegacyBlob).toHaveBeenCalledWith(key);
+      }
     });
 
-    test("a voice's font needs no other override to take effect", async () => {
+    test("resetStyling puts back the fonts and colors, title and voice styles included", async () => {
       const store = useSettingsStore();
-
-      await store.setVoiceFont("Anna", fontFile("MetalMania.ttf"));
-
-      expect(applyVoiceStyle(store.renderOptions, store.renderVoiceStyle("Anna")).font.name).toBe(
-        "Metal Mania",
-      );
-    });
-
-    test("a file that is not a font leaves the voice's font as it was", async () => {
-      const store = useSettingsStore();
-      await store.setVoiceFont("Anna", fontFile("Impact.ttf"));
-
-      await expect(store.setVoiceFont("Anna", new File(["nope"], "fake.ttf"))).rejects.toThrow(
-        UnreadableFontError,
-      );
-      expect(store.getVoiceFont("Anna")?.family).toBe("Impact");
-    });
-
-    test("a voice's font follows a rename, and goes with its custom style", async () => {
-      const store = useSettingsStore();
-      await store.setVoiceFont("Anna", fontFile("Impact.ttf"));
-
-      store.renameVoiceStyle("Anna", "Annie");
-      expect(store.getVoiceFont("Anna")).toBeUndefined();
-      expect(store.getVoiceFont("Annie")?.family).toBe("Impact");
-
-      store.clearVoiceStyle("Annie");
-      await nextTick();
-      expect(store.getVoiceFont("Annie")).toBeUndefined();
-    });
-
-    test("resetFonts drops the base font and every voice's", async () => {
-      const store = useSettingsStore();
-      await store.setCustomFont(fontFile("Impact.ttf"));
-      await store.setVoiceFont("Anna", fontFile("MetalMania.ttf"));
-
-      await store.resetFonts();
-
-      expect(store.customFont).toBeNull();
-      expect(store.getVoiceFont("Anna")).toBeUndefined();
-      expect(store.renderVoiceStyle("Anna")).toBeUndefined();
-    });
-
-    test("resetFonts puts the picked fonts back and keeps the colors", async () => {
-      const store = useSettingsStore();
-      Object.assign(store.videoOptions.font, {
-        name: "Impact",
-        size: 50,
-        bold: false,
-        italic: true,
-      });
+      await store.addFonts([fontFile("Impact.ttf")]);
+      Object.assign(store.videoOptions.font, { name: "Impact", size: 50, bold: false });
+      store.videoOptions.color.primary = Color.parse("#123456");
+      store.videoOptions.outlineWidth = 4;
+      store.videoOptions.shadowX = 2;
+      store.videoOptions.verticalAlignment = VerticalAlignment.Top;
+      store.videoOptions.lineSpacing = 2;
+      store.videoOptions.topMargin = 1;
       store.setTitleStyleField("fontName", "Impact");
-      store.setTitleStyleField("fontSize", 60);
-      store.setTitleStyleField("outlineWidth", 3);
-      store.setVoiceStyleField("Anna", "fontName", "Impact");
       store.setVoiceStyleField("Anna", "outlineWidth", 2);
-      store.setVoiceStyleField("Bob", "italic", true);
+      store.videoOptions.countInMode = "none";
 
-      await store.resetFonts();
+      store.resetStyling();
 
       expect(store.videoOptions.font).toEqual({ name: "Trebuchet MS", size: 30, bold: true });
+      expect(store.videoOptions.color.primary.toString()).toBe("#7957d5");
+      expect(store.videoOptions.outlineWidth).toBe(DEFAULT_OUTLINE_WIDTH);
+      expect(store.videoOptions.shadowX).toBe(0);
+      expect(store.videoOptions.verticalAlignment).toBe(VerticalAlignment.Middle);
+      expect(store.videoOptions.lineSpacing).toBe(DEFAULT_LINE_SPACING);
+      expect(store.videoOptions.topMargin).toBe(DEFAULT_TOP_MARGIN);
       expect(store.videoOptions.titleStyle.fontName).toBeUndefined();
       expect(store.videoOptions.titleStyle.fontSize).toBe(45);
-      expect(store.videoOptions.titleStyle.outlineWidth).toBe(3);
-      expect(store.voiceStyles).toEqual({ Anna: { outlineWidth: 2 } });
+      expect(store.voiceStyles).toEqual({});
+      // Other settings and the library stay.
+      expect(store.videoOptions.countInMode).toBe("none");
+      expect(store.fontFaces.map((face) => face.name)).toEqual(["Impact"]);
     });
 
-    test("resetSettings drops the uploaded font", async () => {
+    test("resetSettings keeps the library", async () => {
       const store = useSettingsStore();
-      await store.setCustomFont(fontFile("Impact.ttf"));
+      await store.addFonts([fontFile("Impact.ttf")]);
 
       store.resetSettings();
 
-      expect(store.customFont).toBeNull();
-      expect(store.customFontFamily).toBeNull();
-      expect(store.renderOptions.font.name).toBe("Trebuchet MS");
+      expect(store.fontFaces.map((face) => face.name)).toEqual(["Impact"]);
     });
   });
 

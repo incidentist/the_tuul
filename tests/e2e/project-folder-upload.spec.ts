@@ -10,6 +10,8 @@ import {
   loadFixtureFile,
   expectVideoCreationToBeEnabled,
   expectLyricsText,
+  exactFieldFor,
+  getFixturesDir,
 } from "./utils";
 
 // The title the folder's settings.yaml carries. Deliberately not the one in the song's own tags,
@@ -61,6 +63,18 @@ function silentWav(seconds: number): Buffer {
   header.write("data", 36);
   header.writeUInt32LE(dataSize, 40);
   return Buffer.concat([header, Buffer.alloc(dataSize)]);
+}
+
+async function openFontSettings(page: Page): Promise<void> {
+  await navigateToTab(page, TabId.Submit);
+  const trigger = page.getByRole("button", { name: "Fonts and Colors" });
+  if ((await trigger.getAttribute("aria-expanded")) !== "true") {
+    await trigger.click();
+  }
+}
+
+function uploadedFonts(page: Page) {
+  return page.getByRole("list", { name: "Uploaded fonts" }).getByRole("listitem");
 }
 
 async function loadProjectFolder(page: Page, folder: string): Promise<void> {
@@ -133,6 +147,46 @@ test.describe("Project Folder Upload", () => {
       "No file chosen",
     );
     await expect(page.locator('[name="song-file-upload"] .file-name')).toHaveText("No file chosen");
+  });
+
+  test("a folder's fonts join the library, the ones its settings name picked", async ({ page }) => {
+    const folder = await makeFolder("fonts");
+    await fs.writeFile(
+      path.join(folder, "settings.yaml"),
+      (await loadFixtureFile("settings.yaml")).replace("name: Impact", "name: Noto Sans Bold"),
+    );
+    for (const font of ["NotoSans-Regular.ttf", "NotoSans-Bold.ttf"]) {
+      await fs.copyFile(path.join(getFixturesDir(), "fonts", font), path.join(folder, font));
+    }
+
+    await loadProjectFolder(page, folder);
+
+    await expect(page.locator('.toast:has-text("Loaded settings and the fonts.")')).toBeVisible();
+    await expect(uploadedFonts(page)).toHaveText([/Noto Sans Regular/, /Noto Sans Bold/]);
+    await openFontSettings(page);
+    await expect(exactFieldFor(page, "Font").first().locator("select")).toHaveValue(
+      "Noto Sans Bold",
+    );
+  });
+
+  test("the one font of a project saved before the font library draws its lyrics", async ({
+    page,
+  }) => {
+    // Such a project's settings name a bundled font, which its font file overrode.
+    const folder = await makeFolder("older-project");
+    await fs.copyFile(getFixturePath("settings.yaml"), path.join(folder, "settings.yaml"));
+    await fs.copyFile(
+      path.join(getFixturesDir(), "fonts", "NotoSans-Bold.ttf"),
+      path.join(folder, "NotoSans-Bold.ttf"),
+    );
+
+    await loadProjectFolder(page, folder);
+
+    await expect(page.locator('.toast:has-text("Loaded settings and the font.")')).toBeVisible();
+    await openFontSettings(page);
+    await expect(exactFieldFor(page, "Font").first().locator("select")).toHaveValue(
+      "Noto Sans Bold",
+    );
   });
 
   test("a folder with nothing to load says so", async ({ page }) => {

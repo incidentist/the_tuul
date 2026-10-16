@@ -20,6 +20,19 @@ export const BUNDLED_FONTS = {
   "DejaVu Sans": "/static/fonts/DejaVuSans.ttf",
 };
 
+// libass draws synthetic bold, when Bold is on, on a face lighter than this.
+const SYNTHETIC_BOLD_BELOW = 550;
+
+/**
+ * The Bold and Italic switches that draw an uploaded face as it is, with no synthetic bold or slant.
+ */
+export function faceSwitches(face: { weight: number; italic: boolean }): {
+  bold: boolean;
+  italic: boolean;
+} {
+  return { bold: face.weight >= SYNTHETIC_BOLD_BELOW, italic: face.italic };
+}
+
 // The only bundled font with Chinese, Japanese and Korean glyphs.
 // It draws the characters those languages share in their Japanese forms.
 export const CJK_FONT = "Noto Sans CJK JP";

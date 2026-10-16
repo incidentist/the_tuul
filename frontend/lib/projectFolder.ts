@@ -23,13 +23,15 @@ export interface ProjectFolder {
   lyrics?: File;
   timings?: File;
   settings?: File;
-  font?: File;
+  fonts: File[];
   background?: File;
   // Paths of the other files that matched nothing, or a slot already taken.
   ignored: string[];
 }
 
-type Slot = Exclude<keyof ProjectFolder, "ignored" | "modelTracks" | "uploadedTracks">;
+type Slot = Exclude<keyof ProjectFolder, "ignored" | "modelTracks" | "uploadedTracks" | "fonts">;
+
+const FONT_EXTENSIONS = ["ttf", "otf", "ttc"];
 
 const SONG_STEM = "song";
 const BACKGROUND_STEM = "background";
@@ -64,9 +66,6 @@ const DERIVED_NAMES = ["subtitles.ass", TITLE_FRAME_ENTRY_NAME];
 const EXTENSION_SLOTS: Record<string, Slot> = {
   yaml: "settings",
   yml: "settings",
-  ttf: "font",
-  otf: "font",
-  ttc: "font",
   mp3: "song",
   wav: "song",
   m4a: "song",
@@ -176,6 +175,7 @@ export function classifyProjectFolder(files: File[]): ProjectFolder {
   const project: ProjectFolder = {
     modelTracks: {},
     uploadedTracks: { backing: [], vocals: [] },
+    fonts: [],
     ignored: [],
   };
   // A directory picker hands its files over in whatever order it walked them.
@@ -196,6 +196,10 @@ export function classifyProjectFolder(files: File[]): ProjectFolder {
     const modelTrack = MODEL_TRACK_STEMS[stemOf(name)];
     if (modelTrack && !project.modelTracks[modelTrack.model]?.[modelTrack.kind]) {
       (project.modelTracks[modelTrack.model] ??= {})[modelTrack.kind] = file;
+      continue;
+    }
+    if (FONT_EXTENSIONS.includes(extensionOf(name))) {
+      project.fonts.push(file);
       continue;
     }
     const kind = trackKindOf(stemOf(name));

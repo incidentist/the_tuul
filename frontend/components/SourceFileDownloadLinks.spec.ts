@@ -8,7 +8,7 @@ const stubIcons = { stubs: { "b-icon": true } };
 describe("SourceFileDownloadLinks", () => {
   it("lists an uploaded font under its own file name", () => {
     const font = new File(["font bytes"], "MyFont.ttf");
-    const wrapper = mount(SourceFileDownloadLinks, { props: { font }, global: stubIcons });
+    const wrapper = mount(SourceFileDownloadLinks, { props: { fonts: [font] }, global: stubIcons });
 
     expect(wrapper.text()).toContain("MyFont.ttf");
   });
@@ -50,7 +50,7 @@ describe("SourceFileDownloadLinks", () => {
     ) {
       expect(this.download).toBe("MyFont.ttf");
     });
-    const wrapper = mount(SourceFileDownloadLinks, { props: { font }, global: stubIcons });
+    const wrapper = mount(SourceFileDownloadLinks, { props: { fonts: [font] }, global: stubIcons });
 
     await wrapper.find(".file-item button").trigger("click");
 

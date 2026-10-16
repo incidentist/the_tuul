@@ -23,22 +23,19 @@ export default defineComponent({
     timings: String,
     subtitles: String,
     settings: String,
-    font: File,
-    // More fonts, such as the ones uploaded for single voices.
     fonts: { type: Array as PropType<File[]>, default: () => [] },
     tracks: { type: Array as PropType<TrackPair[]>, default: () => [] },
     background: Blob,
   },
   computed: {
     files(): { name: string; data: Blob | string }[] {
-      const allFonts = this.font ? [this.font, ...this.fonts] : this.fonts;
       return [
         ...(this.song ? [{ name: this.song.name, data: this.song }] : []),
         ...(this.lyrics ? [{ name: "lyrics.txt", data: this.lyrics }] : []),
         ...(this.timings ? [{ name: "timings.txt", data: this.timings }] : []),
         ...(this.subtitles ? [{ name: "subtitles.ass", data: this.subtitles }] : []),
         ...(this.settings ? [{ name: "settings.yaml", data: this.settings }] : []),
-        ...allFonts.map((font) => ({ name: font.name, data: font })),
+        ...this.fonts.map((font) => ({ name: font.name, data: font })),
         ...trackEntries(this.tracks).map((track) => ({ name: track.name, data: track.blob })),
         ...(this.background
           ? [{ name: projectBackgroundEntryName(this.background), data: this.background }]

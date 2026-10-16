@@ -43,7 +43,7 @@ describe("classifyProjectFolder", () => {
     expect(project.lyrics?.name).toBe("lyrics.txt");
     expect(project.timings?.name).toBe("timings.txt");
     expect(project.settings?.name).toBe("settings.yaml");
-    expect(project.font?.name).toBe("MetalMania.ttf");
+    expect(project.fonts.map((font) => font.name)).toEqual(["MetalMania.ttf"]);
     expect(project.background?.name).toBe("background.mp4");
   });
 
@@ -90,7 +90,22 @@ describe("classifyProjectFolder", () => {
 
     expect(project.song?.name).toBe("Bohemian Rhapsody.mp3");
     expect(project.settings?.name).toBe("settings.yml");
-    expect(project.font?.name).toBe("Impact.otf");
+    expect(project.fonts.map((font) => font.name)).toEqual(["Impact.otf"]);
+  });
+
+  test("keeps every font file", () => {
+    const project = classifyProjectFolder([
+      file("NotoSans-Regular.ttf"),
+      file("NotoSans-Bold.ttf"),
+      file("Collection.ttc"),
+    ]);
+
+    expect(project.fonts.map((font) => font.name)).toEqual([
+      "Collection.ttc",
+      "NotoSans-Bold.ttf",
+      "NotoSans-Regular.ttf",
+    ]);
+    expect(project.ignored).toEqual([]);
   });
 
   test("matches lyrics and timings by name only", () => {

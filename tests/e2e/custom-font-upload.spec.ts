@@ -1,4 +1,5 @@
 import { test, expect, Page } from "@playwright/test";
+import { readFileSync } from "fs";
 import path from "path";
 import {
   setupTestEnvironment,
@@ -9,10 +10,10 @@ import {
   setupBasicInputs,
   uploadTimingsFile,
   exactFieldFor,
+  switchFor,
   mockSeparateTrackApi,
 } from "./utils";
 
-const FONT_UPLOAD = '[name="custom-font-upload"] input[type="file"]';
 // The Adjust tab mounts a subtitle display of its own, so stay inside the Submit tab.
 const SUBTITLE_CANVAS = ".submit-tab canvas.subtitle-canvas";
 
@@ -21,10 +22,19 @@ function fontSelect(page: Page) {
   return exactFieldFor(page, "Font").first().locator("select");
 }
 
-// A bundled font stands in for the user's own file. Its family name ("Metal Mania")
-// deliberately differs from the file name.
-function bundledFontPath(): string {
-  return path.join(getFixturesDir(), "../../api/assets/fonts/MetalMania.ttf");
+function uploadedFonts(page: Page) {
+  return page.getByRole("list", { name: "Uploaded fonts" }).getByRole("listitem");
+}
+
+// Faces of one family, which the bundled fonts don't have.
+function fixtureFont(name: string): string {
+  return path.join(getFixturesDir(), "fonts", name);
+}
+
+// The upload and the list of uploaded fonts are on the Files tab.
+async function uploadFonts(page: Page, ...names: string[]): Promise<void> {
+  await navigateToTab(page, TabId.SongInfo);
+  await page.getByLabel("Font files").setInputFiles(names.map(fixtureFont));
 }
 
 // The canvas belongs to the renderer's worker, so only a screenshot can read it.
@@ -58,43 +68,74 @@ async function openFontSettings(page: Page): Promise<void> {
   await expect(fontSelect(page)).toBeVisible();
 }
 
-test.describe("Custom Font Upload", () => {
+test.describe("Font Library", () => {
   test.beforeEach(async ({ page }) => {
     await setupTestEnvironment(page);
   });
 
-  test("an uploaded font overrides the picked one and survives a reload", async ({ page }) => {
+  test("several faces upload at once, each a choice that sets Bold and Italic to match", async ({
+    page,
+  }) => {
+    await uploadFonts(page, "NotoSans-Regular.ttf", "NotoSans-Bold.ttf", "NotoSans-Italic.ttf");
+
+    await expect(page.locator('.toast:has-text("Added 3 fonts")')).toBeVisible();
+    await expect(uploadedFonts(page)).toHaveText([
+      /Noto Sans Regular/,
+      /Noto Sans Italic/,
+      /Noto Sans Bold/,
+    ]);
+
     await openFontSettings(page);
-    await expect(fontSelect(page)).toHaveValue("Trebuchet MS");
+    await fontSelect(page).selectOption("Noto Sans Italic");
+    await expect(switchFor(page, "Bold").first()).not.toBeChecked();
+    await expect(switchFor(page, "Italic").first()).toBeChecked();
 
-    await page.locator(FONT_UPLOAD).setInputFiles(bundledFontPath());
-
-    await expect(page.locator('.toast:has-text("Metal Mania")')).toBeVisible();
-    await expect(page.locator(".custom-font-help")).toContainText("Metal Mania");
-    // The picker keeps its own value, so removing the font restores it.
-    await expect(fontSelect(page)).toHaveValue("Trebuchet MS");
-
-    await expect(page.locator(".source-file-links")).toContainText("MetalMania.ttf");
+    await fontSelect(page).selectOption("Noto Sans Bold");
+    await expect(switchFor(page, "Bold").first()).toBeChecked();
+    await expect(switchFor(page, "Italic").first()).not.toBeChecked();
+    // Only the face the video uses goes with the project.
+    await expect(page.locator(".download-links .source-file-links")).toContainText(
+      "NotoSans-Bold.ttf",
+    );
+    await expect(page.locator(".download-links .source-file-links")).not.toContainText(
+      "NotoSans-Regular.ttf",
+    );
 
     await page.reload();
     await openFontSettings(page);
-
-    await expect(page.locator(".custom-font-help")).toContainText("Metal Mania");
+    await expect(fontSelect(page)).toHaveValue("Noto Sans Bold");
+    await navigateToTab(page, TabId.SongInfo);
+    await expect(uploadedFonts(page)).toHaveCount(3);
   });
 
-  test("removing the font falls back to the picked one", async ({ page }) => {
+  test("a removed face stays picked, marked as not uploaded, until it is uploaded again", async ({
+    page,
+  }) => {
+    await uploadFonts(page, "NotoSans-Bold.ttf");
     await openFontSettings(page);
-    await fontSelect(page).selectOption("Impact");
-    await page.locator(FONT_UPLOAD).setInputFiles(bundledFontPath());
-    await expect(page.locator(".custom-font-help")).toContainText("Metal Mania");
+    await fontSelect(page).selectOption("Noto Sans Bold");
 
-    await page.locator('[name="custom-font-upload"] button.is-danger').click();
+    await navigateToTab(page, TabId.SongInfo);
+    await page.getByRole("button", { name: "Remove Noto Sans Bold" }).click();
 
-    await expect(page.locator(".custom-font-help")).toHaveCount(0);
-    await expect(fontSelect(page)).toHaveValue("Impact");
+    await expect(uploadedFonts(page)).toHaveCount(0);
+    await openFontSettings(page);
+    await expect(fontSelect(page)).toHaveValue("Noto Sans Bold");
+    await expect(fontSelect(page).locator("option:checked")).toHaveText(
+      "Noto Sans Bold (not uploaded)",
+    );
+    await expect(exactFieldFor(page, "Font").first()).toContainText(
+      "“Trebuchet MS” is drawn instead",
+    );
+
+    await uploadFonts(page, "NotoSans-Bold.ttf");
+    await openFontSettings(page);
+
+    await expect(fontSelect(page).locator("option:checked")).toHaveText("Noto Sans Bold");
+    await expect(exactFieldFor(page, "Font").first()).not.toContainText("is drawn instead");
   });
 
-  test("the preview redraws the lyrics in the uploaded font", async ({ page }) => {
+  test("the preview redraws the lyrics in a picked face", async ({ page }) => {
     await setupBasicInputs(
       page,
       defaultTestConfig.audioFile,
@@ -103,6 +144,7 @@ test.describe("Custom Font Upload", () => {
       defaultTestConfig.title,
     );
     await uploadTimingsFile(page, defaultTestConfig.timingsFile);
+    await uploadFonts(page, "NotoSans-Bold.ttf");
     await openFontSettings(page);
     // Seeking paints the frame at that moment, since libass only draws on a time update.
     await page.locator(".submit-tab .preview-container audio").evaluate((el: HTMLAudioElement) => {
@@ -112,22 +154,19 @@ test.describe("Custom Font Upload", () => {
     // The title fades in from nothing at 0 seconds,
     // so only the frame after the seek can be non-blank.
     await expect.poll(() => isCanvasBlank(page)).toBe(false);
-    const beforeUpload = await canvasPixels(page);
-    // The frame at a fixed time is stable, so a difference after the upload can only come
+    const beforePick = await canvasPixels(page);
+    // The frame at a fixed time is stable, so a difference after the pick can only come
     // from the font libass drew with.
-    expect(await canvasPixels(page)).toBe(beforeUpload);
+    expect(await canvasPixels(page)).toBe(beforePick);
 
-    await page.locator(FONT_UPLOAD).setInputFiles(bundledFontPath());
+    await fontSelect(page).selectOption("Noto Sans Bold");
 
-    await expect(page.locator(".custom-font-help")).toContainText("Metal Mania");
     // The font loads before the preview redraws, so give it until it has drawn something different.
-    await expect.poll(() => canvasPixels(page), { timeout: 15000 }).not.toBe(beforeUpload);
+    await expect.poll(() => canvasPixels(page), { timeout: 15000 }).not.toBe(beforePick);
     await expect.poll(() => isCanvasBlank(page)).toBe(false);
   });
 
-  test("the preview shows the frame at a seek made while an uploaded font loads", async ({
-    page,
-  }) => {
+  test("the preview shows the frame at a seek made while a picked face loads", async ({ page }) => {
     // A finished separation swaps the preview's audio source, which resets the time to 0
     // and then restores it, so the seek can arrive among several time changes.
     await mockSeparateTrackApi(page.context());
@@ -139,9 +178,10 @@ test.describe("Custom Font Upload", () => {
       defaultTestConfig.title,
     );
     await uploadTimingsFile(page, defaultTestConfig.timingsFile);
+    await uploadFonts(page, "NotoSans-Bold.ttf");
     await openFontSettings(page);
 
-    await page.locator(FONT_UPLOAD).setInputFiles(bundledFontPath());
+    await fontSelect(page).selectOption("Noto Sans Bold");
     await page.locator(".submit-tab .preview-container audio").evaluate((el: HTMLAudioElement) => {
       el.muted = true;
       el.currentTime = 2.5;
@@ -151,79 +191,47 @@ test.describe("Custom Font Upload", () => {
     await expect.poll(() => isCanvasBlank(page)).toBe(false);
   });
 
-  test("a file that is not a font is reported and ignored", async ({ page }) => {
+  test("a file that is not a font is reported, and the others in the drop still added", async ({
+    page,
+  }) => {
+    await navigateToTab(page, TabId.SongInfo);
+
+    await page.getByLabel("Font files").setInputFiles([
+      { name: "not-really.ttf", mimeType: "font/ttf", buffer: Buffer.from("just some text") },
+      {
+        name: "NotoSans-Bold.ttf",
+        mimeType: "font/ttf",
+        buffer: readFileSync(fixtureFont("NotoSans-Bold.ttf")),
+      },
+    ]);
+
+    await expect(page.locator('.toast.is-danger:has-text("not-really.ttf")')).toBeVisible();
+    await expect(uploadedFonts(page)).toHaveText([/Noto Sans Bold/]);
     await openFontSettings(page);
-
-    await page.locator(FONT_UPLOAD).setInputFiles({
-      name: "not-really.ttf",
-      mimeType: "font/ttf",
-      buffer: Buffer.from("just some text"),
-    });
-
-    await expect(page.locator(".toast.is-danger")).toBeVisible();
-    await expect(page.locator(".custom-font-help")).toHaveCount(0);
     await expect(fontSelect(page)).toHaveValue("Trebuchet MS");
   });
 
-  test("a voice takes its own uploaded font, kept across a reload and dropped on Start over", async ({
-    page,
-  }) => {
+  test("a voice and the title pick from the same uploaded faces", async ({ page }) => {
     await navigateToTab(page, TabId.SongInfo);
     await page.locator('[name="lyrics-file-upload"] input[type="file"]').setInputFiles({
       name: "duet.txt",
       mimeType: "text/plain",
       buffer: Buffer.from("[Anna] la_la\n[Ben] hm_hm"),
     });
+    await uploadFonts(page, "NotoSans-Regular.ttf", "NotoSans-Bold.ttf");
     await openFontSettings(page);
 
     const ben = page.locator(".style-override-row").filter({ hasText: "Ben" });
-    await ben.locator(".switch").click();
-    await ben.locator('.style-font-upload input[type="file"]').setInputFiles(bundledFontPath());
-
-    await expect(ben.locator(".style-font-help")).toContainText("Rendering Ben in “Metal Mania”");
-    await expect(
-      page.locator(".style-override-row").filter({ hasText: "Anna" }).locator(".style-font-help"),
-    ).toHaveCount(0);
-
-    await page.reload();
-    await navigateToTab(page, TabId.Submit);
-    await expect(ben.locator(".style-font-help")).toContainText("Metal Mania");
-
-    await page.getByRole("navigation").getByRole("button", { name: "Start Over" }).click();
-    await expect(page.locator(".modal-card-body .source-file-links")).toContainText(
-      "MetalMania.ttf",
-    );
-    await page.getByRole("dialog").getByRole("button", { name: "Start over" }).click();
-
-    await navigateToTab(page, TabId.SongInfo);
-    await page.locator('[name="lyrics-file-upload"] input[type="file"]').setInputFiles({
-      name: "duet.txt",
-      mimeType: "text/plain",
-      buffer: Buffer.from("[Anna] la_la\n[Ben] hm_hm"),
-    });
-    await navigateToTab(page, TabId.Submit);
-    await expect(page.locator(".style-font-help")).toHaveCount(0);
-  });
-
-  test("the title takes its own uploaded font, kept across a reload and dropped with its style", async ({
-    page,
-  }) => {
-    await openFontSettings(page);
-
+    await ben.getByText("Custom style").click();
+    await ben.getByRole("combobox").first().selectOption("Noto Sans Regular");
     const title = page.locator(".style-override-row").filter({ hasText: "Title" });
-    await title.locator('.style-font-upload input[type="file"]').setInputFiles(bundledFontPath());
-    await expect(title.locator(".style-font-help")).toContainText(
-      "Rendering the title in “Metal Mania”",
-    );
+    await title.getByRole("combobox").first().selectOption("Noto Sans Bold");
 
     await page.reload();
     await openFontSettings(page);
-    await expect(title.locator(".style-font-help")).toContainText("Metal Mania");
 
-    await title.getByText("Custom style").click();
-    await expect(title.locator(".style-font-help")).toHaveCount(0);
-    await title.getByText("Custom style").click();
-    await expect(title.locator(".style-font-upload")).toBeVisible();
-    await expect(title.locator(".style-font-help")).toHaveCount(0);
+    await expect(ben.getByRole("combobox").first()).toHaveValue("Noto Sans Regular");
+    await expect(title.getByRole("combobox").first()).toHaveValue("Noto Sans Bold");
+    await expect(fontSelect(page)).toHaveValue("Trebuchet MS");
   });
 });

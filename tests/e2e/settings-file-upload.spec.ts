@@ -53,6 +53,24 @@ test.describe("Settings File Upload", () => {
     );
   });
 
+  test("a font the settings name that isn't uploaded is drawn in the default font", async ({
+    page,
+  }) => {
+    await uploadSettingsFile(page, {
+      name: "settings.yaml",
+      mimeType: "application/yaml",
+      buffer: Buffer.from("videoOptions:\n  font:\n    name: Not Uploaded Sans\n"),
+    });
+    await expect(page.locator('.toast:has-text("Settings loaded!")')).toBeVisible();
+
+    await navigateToTab(page, TabId.Submit);
+    await page.getByRole("button", { name: "Fonts and Colors" }).click();
+
+    const font = exactFieldFor(page, "Font").first();
+    await expect(font.locator("select")).toHaveValue("Not Uploaded Sans");
+    await expect(font).toContainText("“Trebuchet MS” is drawn instead");
+  });
+
   test("a malformed settings file is reported and changes nothing", async ({ page }) => {
     await uploadSettingsFile(page, {
       name: "settings.yaml",

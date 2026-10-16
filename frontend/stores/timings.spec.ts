@@ -1107,7 +1107,7 @@ describe("Timings Store", () => {
     );
   });
 
-  test("subtitles should use an uploaded font over the picked one", async () => {
+  test("subtitles draw in the uploaded face a style picks, and in the default font without it", async () => {
     const timingsStore = useTimingsStore();
     const lyricsStore = useLyricsStore();
     const settingsStore = useSettingsStore();
@@ -1117,14 +1117,17 @@ describe("Timings Store", () => {
       [1.0, LYRIC_MARKERS.SEGMENT_START],
       [2.0, LYRIC_MARKERS.SEGMENT_END],
     ]);
-    settingsStore.videoOptions.font.name = "Impact";
-    const fontData = readFileSync(path.resolve(__dirname, "../../api/assets/fonts/MetalMania.ttf"));
-    await settingsStore.setCustomFont(new File([new Uint8Array(fontData)], "uploaded.ttf"));
+    settingsStore.videoOptions.font.name = "Noto Sans Bold";
 
     timingsStore.subtitles();
+    expect(vi.mocked(createAssFile).mock.lastCall?.[4]?.font.name).toBe("Trebuchet MS");
 
-    // The family name the uploaded file declares, not the picked font.
-    const options = vi.mocked(createAssFile).mock.lastCall?.[4];
-    expect(options?.font.name).toBe("Metal Mania");
+    const fontData = readFileSync(
+      path.resolve(__dirname, "../../tests/fixtures/fonts/NotoSans-Bold.ttf"),
+    );
+    await settingsStore.addFonts([new File([new Uint8Array(fontData)], "uploaded.ttf")]);
+    timingsStore.subtitles();
+
+    expect(vi.mocked(createAssFile).mock.lastCall?.[4]?.font.name).toBe("Noto Sans Bold");
   });
 });

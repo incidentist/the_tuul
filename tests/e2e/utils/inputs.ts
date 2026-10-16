@@ -193,8 +193,8 @@ export function fieldFor(page: Page, label: string) {
 }
 
 /**
- * The same, for a label a substring match would over-match: "Font" is also inside "Custom
- * Font" and "Fonts and Colors".
+ * The same, for a label a substring match would over-match: "Font" is also inside "Font Files"
+ * and "Fonts and Colors".
  */
 export function exactFieldFor(page: Page, label: string) {
   return page.locator(`.settings-column .field:has(label:text-is("${label}"))`);

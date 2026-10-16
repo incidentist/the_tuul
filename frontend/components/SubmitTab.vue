@@ -392,42 +392,10 @@
           </template>
         </settings-section>
         <settings-section title="Fonts and Colors" id="fonts-and-colors">
-          <b-field horizontal label="Font">
-            <b-select expanded v-model="videoOptions.font.name">
-              <option
-                v-for="(path, name) in fonts"
-                :key="path"
-                :value="name"
-                :selected="name == videoOptions.font.name"
-              >
-                {{ name }}
-              </option>
-            </b-select>
-          </b-field>
-          <b-field horizontal>
-            <template #label>
-              Custom Font
-              <viewport-tooltip
-                wide
-                label="Upload your own .ttf or .otf font file. It overrides the font picked above."
-              >
-                <b-icon size="is-small" icon="circle-question"></b-icon>
-              </viewport-tooltip>
-            </template>
-            <file-upload
-              expanded
-              name="custom-font-upload"
-              :accept="['.ttf', '.otf', '.ttc']"
-              :model-value="(settingsStore.customFont as File | undefined) ?? undefined"
-              @update:modelValue="onCustomFontChange"
-            />
-          </b-field>
-          <b-field horizontal v-if="settingsStore.customFontFamily">
-            <p class="help custom-font-help">
-              Rendering lyrics in &ldquo;{{ settingsStore.customFontFamily }}&rdquo;, overriding the
-              font above.
-            </p>
-          </b-field>
+          <font-field
+            v-model="videoOptions.font.name"
+            @face-switches="(switches) => Object.assign(videoOptions.font, switches)"
+          />
           <b-field horizontal label="Font Size"
             ><b-numberinput
               expanded
@@ -601,17 +569,13 @@
               controls-position="compact"
             ></b-numberinput>
           </b-field>
-          <voice-style-settings v-if="voices.length > 1" :fonts="fonts" />
+          <voice-style-settings v-if="voices.length > 1" />
           <style-override-row
             v-if="videoOptions.addTitleScreen && videoOptions.showTitle"
             label="Title"
-            subject="the title"
             tooltip="Draw the title on the title screen with a font and colors of its own. When this is off, the title is drawn like the lyrics."
             :override="videoOptions.titleStyle"
             :base="titleBase"
-            :fonts="fonts"
-            :custom-font="settingsStore.titleFont"
-            :set-custom-font="settingsStore.setTitleFont"
             :with-secondary="false"
             @set="settingsStore.setTitleStyleField"
             @clear="settingsStore.clearTitleStyle()"
@@ -685,7 +649,7 @@
           :timings="timingsText"
           :subtitles="allVoicesSubtitles()"
           :settings="settingsYaml"
-          :font="customFont ?? undefined"
+          :fonts="usedFontFiles"
           :tracks="mediaStore.trackPairs ?? []"
           :background="background ?? undefined"
         />
@@ -771,7 +735,8 @@ import {
   isBackgroundFile,
 } from "@/lib/background";
 import BackgroundReplacementModal from "@/components/BackgroundReplacementModal.vue";
-import { BUNDLED_FONTS as fonts, COUNT_IN_SYMBOLS, fontFamiliesIn } from "@/lib/fonts";
+import FontField from "@/components/FontField.vue";
+import { COUNT_IN_SYMBOLS, fontFamiliesIn } from "@/lib/fonts";
 import { projectFilesToKbp } from "@/lib/kbpConvert";
 import { applyVoiceStyle } from "@/lib/voiceStyle";
 import { restoredBacking } from "@/lib/gapMix";
@@ -795,6 +760,7 @@ export default defineComponent({
     VoiceStyleSettings,
     ColorField,
     FileUpload,
+    FontField,
     BackgroundReplacementModal,
     SymbolPicker,
     TrackSelect,
@@ -826,7 +792,6 @@ export default defineComponent({
     return {
       // What the last KBP download couldn't carry over.
       kbpExportWarnings: [] as string[],
-      fonts,
       countInSymbols: COUNT_IN_SYMBOLS,
       qualityLabels,
       resolutions: Object.keys(RESOLUTIONS),
@@ -903,23 +868,15 @@ export default defineComponent({
     renderOptions() {
       return this.settingsStore.renderOptions;
     },
-    // Keyed by the family name an ASS style row references, not by file name.
+    // Keyed by the name an ASS style row references, not by file name.
     fontMap(): Record<string, string> {
-      const { customFontFamily, customFontUrl } = this.settingsStore;
-      const map: Record<string, string> = { ...this.fallbackFontsStore.fontUrls };
-      if (customFontFamily && customFontUrl) {
-        map[customFontFamily] = customFontUrl;
-      }
-      const uploaded = [
-        this.settingsStore.titleFont,
-        ...this.voices.map((voice) => this.settingsStore.getVoiceFont(voice)),
-      ];
-      for (const font of uploaded) {
-        if (font) {
-          map[font.family] = font.url;
-        }
-      }
-      return map;
+      const faces = this.settingsStore.fontFaces;
+      const uploaded = new Set(faces.map((face) => face.name.toLowerCase()));
+      // An uploaded face named like a bundled font takes its place.
+      const bundled = Object.entries(this.fallbackFontsStore.fontUrls).filter(
+        ([family]) => !uploaded.has(family.toLowerCase()),
+      );
+      return Object.fromEntries([...bundled, ...faces.map((face) => [face.name, face.url])]);
     },
     // Only these are written for FFmpeg's libass, which has no fonts of its own to fall back on.
     renderFontMap(): Record<string, string> {
@@ -940,8 +897,18 @@ export default defineComponent({
     songFile(): File | null {
       return this.mediaStore.songFile as File | null;
     },
-    customFont(): File | null {
-      return (this.settingsStore.customFont as File | null) ?? null;
+    // The uploaded font files the settings name, which the project download carries.
+    usedFontFiles(): File[] {
+      const { videoOptions, voiceStyles } = this.settingsStore;
+      const named = [
+        videoOptions.font.name,
+        videoOptions.titleStyle.fontName,
+        ...Object.values(voiceStyles).map((style) => style.fontName),
+      ];
+      const used = new Set(named.map((name) => name?.toLowerCase()));
+      return this.settingsStore.fontFaces
+        .filter((face) => used.has(face.name.toLowerCase()))
+        .map((face) => face.file);
     },
     rendersFullTrack(): boolean {
       return this.advancedStore.isAdvanced && this.mediaStore.renderTrackSource === "full";
@@ -1040,25 +1007,6 @@ export default defineComponent({
       const el = this.$refs.settingsColumn as HTMLElement | undefined;
       // Sub-pixel leftovers are rounding, not content.
       this.scrollHints.above = !!el && el.scrollTop > 1;
-    },
-    async onCustomFontChange(file: File | null) {
-      try {
-        await this.settingsStore.setCustomFont(file);
-        if (file) {
-          this.$buefy.toast.open({
-            message: `Using "${this.settingsStore.customFontFamily}" for the lyrics.`,
-            type: "is-success",
-            duration: 2000,
-          });
-        }
-      } catch (e) {
-        console.error(e);
-        this.$buefy.toast.open({
-          message: (e as Error).message,
-          type: "is-danger",
-          duration: 5000,
-        });
-      }
     },
     // Stops whatever the submission is doing.
     // A separation that was already running when the video was requested keeps going:
@@ -1242,8 +1190,8 @@ export default defineComponent({
       zip.file("lyrics.txt", this.lyricText);
       zip.file("timings.txt", this.timingsText);
       zip.file("settings.yaml", this.settingsYaml);
-      if (this.customFont) {
-        zip.file(this.customFont.name, this.customFont);
+      for (const font of this.usedFontFiles) {
+        zip.file(font.name, font);
       }
 
       // Named after its role rather than kept as uploaded,
