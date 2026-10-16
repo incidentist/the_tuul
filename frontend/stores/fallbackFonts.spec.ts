@@ -60,6 +60,18 @@ describe("Fallback fonts store", () => {
     expect(fetchMock).toHaveBeenCalledExactlyOnceWith(BUNDLED_FONTS[SYMBOL_FONT]);
   });
 
+  test("gives the in-memory URL of a font it is downloading once the download ends", async () => {
+    const store = useFallbackFontsStore();
+    expect(store.inMemoryUrl(CJK_FONT)).toBeUndefined();
+
+    useLyricsStore().setLyrics("残");
+    const url = store.inMemoryUrl(CJK_FONT);
+    expect(url).toBeDefined();
+
+    expect(await url).toBe("blob:1");
+    expect(store.inMemoryUrl(SYMBOL_FONT)).toBeUndefined();
+  });
+
   test("downloads a font only once however often the text changes", async () => {
     useFallbackFontsStore();
     const lyrics = useLyricsStore();

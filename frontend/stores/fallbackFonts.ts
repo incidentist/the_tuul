@@ -7,10 +7,8 @@ import { useSettingsStore } from "./settings";
 
 type FontFamily = keyof typeof BUNDLED_FONTS;
 
-// libass fetches a font from a URL range by range as it draws,
-// which stalls the first frame with characters it hasn't fetched yet.
-// From a blob: URL it reads the whole file up front,
-// so the fallback fonts are downloaded as soon as the text needs them.
+// The fallback fonts are downloaded into memory as soon as the text needs them,
+// so the preview and the render read them without going back to the network.
 export const useFallbackFontsStore = defineStore("fallbackFonts", () => {
   const lyricsStore = useLyricsStore();
   const mediaStore = useMediaStore();
@@ -19,7 +17,8 @@ export const useFallbackFontsStore = defineStore("fallbackFonts", () => {
   // These URLs are never revoked,
   // since every preview worker and every render reads them for the rest of the session.
   const downloaded = shallowRef<Partial<Record<FontFamily, string>>>({});
-  const requested = new Set<FontFamily>();
+  // Settles with the in-memory URL, or with undefined when the download fails.
+  const downloads = new Map<FontFamily, Promise<string | undefined>>();
 
   const neededFamilies = computed(() => {
     const text = [
@@ -37,25 +36,44 @@ export const useFallbackFontsStore = defineStore("fallbackFonts", () => {
    * Download a bundled font into memory, once per session.
    * A failed download is retried the next time the text changes.
    */
-  async function download(family: FontFamily): Promise<void> {
-    if (requested.has(family)) {
+  function download(family: FontFamily): void {
+    if (downloads.has(family)) {
       return;
     }
-    requested.add(family);
-    try {
-      const response = await fetch(BUNDLED_FONTS[family]);
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-      const url = URL.createObjectURL(await response.blob());
-      downloaded.value = { ...downloaded.value, [family]: url };
-    } catch (e) {
-      console.error(`Could not download the ${family} font`, e);
-      requested.delete(family);
-    }
+    downloads.set(
+      family,
+      (async () => {
+        try {
+          const response = await fetch(BUNDLED_FONTS[family]);
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+          }
+          const url = URL.createObjectURL(await response.blob());
+          downloaded.value = { ...downloaded.value, [family]: url };
+          return url;
+        } catch (e) {
+          console.error(`Could not download the ${family} font`, e);
+          downloads.delete(family);
+          return undefined;
+        }
+      })(),
+    );
   }
 
-  watch(neededFamilies, (families) => families.forEach(download), { immediate: true });
+  /**
+   * The in-memory URL of a bundled font this store is downloading or has downloaded, once it is
+   * ready. Undefined when the store hasn't started on the font. The promise settles with
+   * undefined when the download fails.
+   */
+  function inMemoryUrl(family: string): Promise<string | undefined> | undefined {
+    return downloads.get(family as FontFamily);
+  }
+
+  // Sync, so that a font is already downloading when whatever renders the new text asks for it.
+  watch(neededFamilies, (families) => families.forEach(download), {
+    immediate: true,
+    flush: "sync",
+  });
 
   // Every bundled font by family name, with the downloaded ones pointing at their in-memory copy.
   const fontUrls = computed<Record<string, string>>(() => ({
@@ -63,5 +81,5 @@ export const useFallbackFontsStore = defineStore("fallbackFonts", () => {
     ...downloaded.value,
   }));
 
-  return { fontUrls };
+  return { fontUrls, inMemoryUrl };
 });
