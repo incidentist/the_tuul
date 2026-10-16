@@ -771,7 +771,7 @@ import {
   isBackgroundFile,
 } from "@/lib/background";
 import BackgroundReplacementModal from "@/components/BackgroundReplacementModal.vue";
-import { BUNDLED_FONTS as fonts, COUNT_IN_SYMBOLS } from "@/lib/fonts";
+import { BUNDLED_FONTS as fonts, COUNT_IN_SYMBOLS, fontFamiliesIn } from "@/lib/fonts";
 import { projectFilesToKbp } from "@/lib/kbpConvert";
 import { applyVoiceStyle } from "@/lib/voiceStyle";
 import { restoredBacking } from "@/lib/gapMix";
@@ -923,20 +923,12 @@ export default defineComponent({
     },
     // Only these are written for FFmpeg's libass, which has no fonts of its own to fall back on.
     renderFontMap(): Record<string, string> {
-      const families = new Set([
-        this.renderOptions.font.name,
-        this.renderOptions.titleStyle.fontName ?? this.renderOptions.font.name,
-        ...this.voices.map(
-          (voice) =>
-            applyVoiceStyle(this.renderOptions, this.settingsStore.renderVoiceStyle(voice)).font
-              .name,
-        ),
-      ]);
-      for (const [, family] of this.allVoicesSubtitles().matchAll(/\\fn([^\\}]+)/g)) {
-        families.add(family);
-      }
+      // libass matches family names case-insensitively.
+      const families = new Set(
+        [...fontFamiliesIn(this.allVoicesSubtitles())].map((family) => family.toLowerCase()),
+      );
       return Object.fromEntries(
-        Object.entries(this.fontMap).filter(([family]) => families.has(family)),
+        Object.entries(this.fontMap).filter(([family]) => families.has(family.toLowerCase())),
       );
     },
     // The title is drawn on the first voice's style.
