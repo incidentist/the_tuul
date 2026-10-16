@@ -364,8 +364,6 @@ export default defineComponent({
       this.setPlayhead(currentTime);
       this.$emit("timeupdate", currentTime);
     },
-    // These listeners call some internal libass-wasm functions
-    // that dramatically improve rendering performance
     onAudioPlaying() {
       this.subtitleDisplayRef()?.play();
       this.$emit("playing");

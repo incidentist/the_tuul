@@ -13,6 +13,7 @@ WORKDIR /app
 
 # Copy frontend source files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY patches/ ./patches/
 RUN corepack enable && pnpm install --frozen-lockfile
 
 # Copy the rest of the frontend source

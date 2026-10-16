@@ -85,7 +85,17 @@ const commonConfig: UserConfig = {
   resolve: {
     alias: {
       "@": resolve(__dirname, "./frontend"),
+      // rvfc-polyfill is GPL-3.0. JASSUB imports it only for its video element mode,
+      // which the app doesn't use.
+      "rvfc-polyfill": resolve(__dirname, "./frontend/stubs/empty.ts"),
     },
+  },
+  optimizeDeps: {
+    // JASSUB loads its workers and wasm by URLs relative to its own files,
+    // which pre-bundling would break.
+    exclude: ["jassub"],
+    // Its CommonJS dependency is then left unconverted unless named here.
+    include: ["jassub > throughput"],
   },
   build: {
     outDir: "../api/assets/bundles",

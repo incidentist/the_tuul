@@ -914,7 +914,7 @@ export default defineComponent({
       restoredScroll: 0,
       // Debounced copy of `adjustmentSubtitles` fed to the SubtitleDisplay.
       // Regenerating the ASS file and re-rendering it is expensive
-      // (SubtitlesOctopus.setTrack is a WASM re-parse),
+      // (the renderer re-parses the whole track),
       // so we defer it until dragging settles.
       debouncedSubtitles: "",
       _subtitleDebounceTimer: null as ReturnType<typeof setTimeout> | null,

@@ -1,0 +1,13 @@
+diff --git a/dist/worker/util.js b/dist/worker/util.js
+index 792eec16dd994a9a256a60113ecfd2e254158711..7505dbec0d768ebd11f4a101e68706ee0523a0ce 100644
+--- a/dist/worker/util.js
++++ b/dist/worker/util.js
+@@ -24,7 +24,7 @@ export async function fetchtext(url) {
+     const res = await _fetch(url);
+     return await res.text();
+ }
+-export const THREAD_COUNT = self.crossOriginIsolated ? Math.min(Math.max(1, navigator.hardwareConcurrency - 2), 8) : 1;
++export const THREAD_COUNT = 1;
+ export const SUPPORTS_GROWTH = !!WebAssembly.Memory.prototype.toResizableBuffer;
+ // HACK: 3 memory hacks to support here:
+ // 1. Chrome WASM Growable memory which can use a reference to the buffer to fix visual artifacts, which happen both with multithreading or without [fastest]

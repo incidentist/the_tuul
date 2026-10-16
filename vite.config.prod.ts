@@ -8,10 +8,10 @@ import commonConfig from "./vite.config.common";
 
 // The files under /static/ that the page needs to start, outside the Vite build.
 const STATIC_PRECACHE = [
-  "subtitles-octopus-worker.js",
-  "subtitles-octopus-worker.wasm",
-  "default.woff2",
   "favicon.ico",
+  // The preview's default font, so that it can draw offline. Keep in sync with DEFAULT_FONT in
+  // SubtitleDisplay.vue.
+  "fonts/LiberationSans.ttf",
   "ffmpeg/worker.js",
   "ffmpeg/const.js",
   "ffmpeg/errors.js",
@@ -63,7 +63,10 @@ export default mergeConfig(
         injectRegister: false,
         manifest: false,
         injectManifest: {
-          globPatterns: ["**/*.{js,css}"],
+          // JASSUB's two wasm builds are both precached, since the browser's SIMD support picks one.
+          // Each is over Workbox's 2 MiB default.
+          globPatterns: ["**/*.{js,css,wasm}"],
+          maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
           manifestTransforms: [precacheEntries],
           rollupFormat: "iife",
         },

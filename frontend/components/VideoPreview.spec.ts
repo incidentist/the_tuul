@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { mount, shallowMount } from "@vue/test-utils";
+import { createPinia, setActivePinia } from "pinia";
 import VideoPreview from "@/components/VideoPreview.vue";
 
 describe("VideoPreview", () => {
@@ -16,6 +17,7 @@ describe("VideoPreview", () => {
   let props: Props;
 
   beforeEach(() => {
+    setActivePinia(createPinia());
     props = {
       songFile: new Blob(["dummy audio data"], { type: "audio/mp3" }),
       subtitles:

@@ -17,30 +17,32 @@
       loop
       playsinline
     />
-    <canvas
-      class="subtitle-canvas"
-      ref="subtitleCanvas"
+    <!-- The renderer's canvas goes in here, created and removed outside Vue. -->
+    <div
+      ref="canvasHost"
+      class="subtitle-layer"
       :style="{
         backgroundColor: background ? 'transparent' : backgroundColor,
       }"
-    >
-    </canvas>
+    />
   </div>
 </template>
 
 <script lang="ts">
 /* A component that displays an .ass file */
 
-import { throttle, mapKeys, isEqual } from "lodash-es";
+import { throttle, isEqual } from "lodash-es";
 import { defineComponent, markRaw, PropType } from "vue";
-import SubtitlesOctopus from "libass-wasm";
+import JASSUB from "jassub";
+import { SUBTITLE_CANVAS } from "@/constants";
 import { syncBackgroundVideo } from "@/lib/backgroundVideo";
 import { BackgroundKind, backgroundKind } from "@/lib/background";
+import { BUNDLED_FONTS, fontFamiliesIn } from "@/lib/fonts";
 import type { BackgroundFit } from "@/lib/timing";
+import { useFallbackFontsStore } from "@/stores/fallbackFonts";
 
 // Minimal valid ASS file, used when there are no subtitles yet (e.g. the
-// preview is shown before timings exist). SubtitlesOctopus can't handle an
-// empty string.
+// preview is shown before timings exist).
 const EMPTY_ASS = `[Script Info]
 ScriptType: v4.00+
 
@@ -52,14 +54,34 @@ Style: Default,Arial,20,&H00FFFFFF,&H00FFFFFF,&H00000000,&H00000000,0,0,0,0,100,
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 `;
 
+// libass draws in this font when a style or `\fn` names a font it wasn't given.
+const DEFAULT_FONT = "Liberation Sans";
+
+// libass matches family names case-insensitively, so fonts are tracked by lowercase family.
+const BUNDLED_FAMILIES = new Map(
+  (Object.keys(BUNDLED_FONTS) as (keyof typeof BUNDLED_FONTS)[]).map((family) => [
+    family.toLowerCase(),
+    family,
+  ]),
+);
+
+// A font file the renderer has been given.
+interface LoadedFont {
+  url: string;
+  // Settles once the renderer holds the font.
+  loaded: Promise<unknown>;
+}
+
 export default defineComponent({
   props: {
     subtitles: {
       type: String,
       required: true,
     },
+    // Font URLs by family name. Only the families the subtitles name are loaded.
     fonts: {
-      type: Object,
+      type: Object as PropType<Record<string, string>>,
+      default: () => ({}),
     },
     backgroundColor: {
       type: String,
@@ -86,8 +108,7 @@ export default defineComponent({
   },
   data() {
     return {
-      subtitleManager: null as SubtitlesOctopus | null,
-      currentTime: null as number | null,
+      currentTime: 0,
       isPlaying: false,
       // The display stays mounted when its tab is hidden, but the subtitles keep changing (every
       // timing tap regenerates them). While hidden we only remember the latest version and hand it to
@@ -96,7 +117,12 @@ export default defineComponent({
         isDisplayed: true,
         pendingSubtitles: null as string | null,
         visibilityObserver: null as IntersectionObserver | null,
-        resizeObserver: null as ResizeObserver | null,
+        renderer: null as JASSUB | null,
+        loadedFonts: new Map<string, LoadedFont>(),
+        // The latest track asked for. An older one still waiting on its fonts is then dropped.
+        track: "",
+        // The track the renderer holds.
+        rendererTrack: "",
       }),
     };
   },
@@ -120,24 +146,13 @@ export default defineComponent({
     effectiveSubtitles(): string {
       return this.subtitles || EMPTY_ASS;
     },
-    // The families named by inline \fn tags, as one comparable string.
-    inlineFontFamilies(): string {
-      const families = [...this.effectiveSubtitles.matchAll(/\\fn([^\\}]+)/g)].map((m) => m[1]);
-      return [...new Set(families)].sort().join("\n");
-    },
   },
   created() {
     // Scrubbing seeks the video, and Chrome stutters when it seeks more often than this.
     this.syncVideo = throttle(this.syncVideo, 1000 / 15);
   },
   mounted() {
-    // The worker renders at the canvas's bitmap size, fixed when it starts,
-    // so size the canvas before creating the renderer.
-    this.syncCanvasSize();
-    this.createRenderer();
-    this.currentTime = 0.0;
-    this.view.resizeObserver = new ResizeObserver(() => this.syncCanvasSize());
-    this.view.resizeObserver.observe(this.$el);
+    this.createRenderer(this.effectiveSubtitles);
     this.view.visibilityObserver = new IntersectionObserver((entries) => {
       this.view.isDisplayed = entries[entries.length - 1].isIntersecting;
       if (this.view.isDisplayed && this.view.pendingSubtitles !== null) {
@@ -149,7 +164,6 @@ export default defineComponent({
   },
   beforeUnmount() {
     this.view.visibilityObserver?.disconnect();
-    this.view.resizeObserver?.disconnect();
     this.destroyRenderer();
   },
   watch: {
@@ -160,94 +174,171 @@ export default defineComponent({
       }
       this.setTrack(newSubs);
     },
-    currentTime(newTime: number) {
-      this.subtitleManager?.setCurrentTime(newTime);
+    currentTime() {
+      this.render();
     },
     // A paused video would otherwise keep showing the frame from before the change.
     videoOffset() {
-      this.syncVideo(this.currentTime ?? 0);
+      this.syncVideo(this.currentTime);
     },
     fonts(newFonts, oldFonts) {
-      // libass loads fonts when the worker starts, with no way to add one later, so a
-      // new font only takes effect on a fresh renderer.
       if (isEqual(newFonts, oldFonts)) {
         return;
       }
-      this.destroyRenderer();
-      this.createRenderer();
-    },
-    // The worker loads an \fn font only from the track it starts with, not from a later setTrack.
-    inlineFontFamilies() {
-      this.destroyRenderer();
-      this.createRenderer();
+      this.setTrack(this.view.track);
     },
   },
   methods: {
-    syncCanvasSize() {
-      const canvas = this.$refs.subtitleCanvas as HTMLCanvasElement | undefined;
-      if (!canvas) {
-        return;
+    /**
+     * The font URLs a track needs, by lowercase family name.
+     */
+    fontsFor(subtitles: string): Map<string, string> {
+      const urls = new Map(
+        Object.entries({ [DEFAULT_FONT]: BUNDLED_FONTS[DEFAULT_FONT], ...this.fonts }).map(
+          ([family, url]) => [family.toLowerCase(), url],
+        ),
+      );
+      const needed = new Map<string, string>();
+      for (const family of [DEFAULT_FONT, ...fontFamiliesIn(subtitles)]) {
+        const url = urls.get(family.toLowerCase());
+        if (url) {
+          needed.set(family.toLowerCase(), url);
+        }
       }
-      const ratio = window.devicePixelRatio || 1;
-      const width = Math.round(canvas.clientWidth * ratio);
-      const height = Math.round(canvas.clientHeight * ratio);
-      // Zero while the tab is hidden. The observer fires again when it is shown.
-      if (!width || !height) {
-        return;
-      }
-      if (canvas.width === width && canvas.height === height) {
-        return;
-      }
-      if (this.subtitleManager) {
-        this.subtitleManager.resize(width, height);
-      } else {
-        canvas.width = width;
-        canvas.height = height;
-      }
+      return needed;
     },
-    createRenderer() {
-      const canvas = this.$refs.subtitleCanvas as HTMLCanvasElement;
-      // SubtitleOctopus expects font names to be lowercase
-      const fontMap = mapKeys(this.fonts, (_, key) => key.toLowerCase());
-      // Create a subtitle renderer and tie it to our player and canvas
-      const options = {
-        debug: false,
-        canvas: canvas,
-        subContent: this.effectiveSubtitles,
-        lazyFileLoading: true,
-        availableFonts: fontMap,
-        // workerUrl: require("!!file-loader?name=[name].[ext]!libass-wasm/dist/subtitles-octopus-worker.js"),
-        // workerUrl: workerUrl,
-        workerUrl: "/static/subtitles-octopus-worker.js", // Link to WebAssembly-based file "libassjs-worker.js"
-        legacyWorkerUrl: "/static/subtitles-octopus-worker-legacy.js", // Link to non-WebAssembly worker
-      };
-      this.subtitleManager = new SubtitlesOctopus(options);
-      // A replacement renderer starts at zero, so put it back where playback is.
-      if (this.currentTime) {
-        this.subtitleManager.setCurrentTime(this.currentTime);
+    /**
+     * True when a family the renderer holds now comes from another file.
+     * The renderer can't drop a font, so it has to be replaced.
+     */
+    hasReplacedFont(fonts: Map<string, string>): boolean {
+      const inMemory = useFallbackFontsStore().fontUrls;
+      return [...fonts].some(([family, url]) => {
+        const loaded = this.view.loadedFonts.get(family);
+        const bundled = BUNDLED_FAMILIES.get(family);
+        // A bundled font moves to an in-memory copy of the same file once it has been downloaded.
+        const sameFile =
+          bundled !== undefined &&
+          loaded?.url === BUNDLED_FONTS[bundled] &&
+          url === inMemory[bundled];
+        return loaded !== undefined && loaded.url !== url && !sameFile;
+      });
+    },
+    /**
+     * Where to read a font file from, or a promise of it while it is being downloaded.
+     * A bundled font that fallbackFontsStore is downloading is read from its in-memory copy,
+     * so that the file is downloaded once.
+     */
+    fontSource(family: string, url: string): string | Promise<string> {
+      const bundled = BUNDLED_FAMILIES.get(family);
+      const inMemory =
+        bundled && url === BUNDLED_FONTS[bundled]
+          ? useFallbackFontsStore().inMemoryUrl(bundled)
+          : undefined;
+      return inMemory ? inMemory.then((inMemoryUrl) => inMemoryUrl ?? url) : url;
+    },
+    /**
+     * Give the renderer a font, recording it so that it is given once.
+     */
+    addFont(renderer: JASSUB, family: string, url: string): Promise<unknown> {
+      const loaded = Promise.all([renderer.ready, this.fontSource(family, url)]).then(
+        ([, source]) => renderer.renderer.addFonts([source]),
+      );
+      this.view.loadedFonts.set(family, { url, loaded });
+      return loaded;
+    },
+    createRenderer(subtitles: string) {
+      const canvas = document.createElement("canvas");
+      canvas.className = "subtitle-canvas";
+      (this.$refs.canvasHost as HTMLElement).appendChild(canvas);
+      const fonts = [...this.fontsFor(subtitles)];
+      const ready = fonts.filter(
+        ([family, url]) => typeof this.fontSource(family, url) === "string",
+      );
+      const renderer = new JASSUB({
+        canvas,
+        subContent: subtitles,
+        fonts: ready.map(([, url]) => url),
+        defaultFont: DEFAULT_FONT,
+        // Lazy lookups strip weight words from family names and don't redraw once a font arrives,
+        // so every font is given explicitly.
+        availableFonts: {},
+        queryFonts: false,
+      });
+      this.view.renderer = renderer;
+      this.view.loadedFonts = new Map(
+        ready.map(([family, url]) => [family, { url, loaded: renderer.ready }]),
+      );
+      this.view.track = subtitles;
+      this.view.rendererTrack = subtitles;
+      this.render(true);
+      // A font still downloading is added once it is in memory, and the frame drawn again.
+      const pending = fonts.filter(([family]) => !this.view.loadedFonts.has(family));
+      if (pending.length) {
+        this.setTrack(subtitles);
       }
     },
     destroyRenderer() {
-      this.subtitleManager?.dispose?.();
-      this.subtitleManager = null;
-      // dispose() leaves its last frame on the canvas until the replacement draws.
-      this.clearCanvas();
+      // This also removes the canvas.
+      this.view.renderer?.destroy();
+      this.view.renderer = null;
+      this.view.loadedFonts = new Map();
     },
     /**
-     * Replace the subtitles the renderer draws.
+     * Draw the frame at the current time.
+     * `repaint` is true when the frame can differ at an unchanged time: a new renderer, track or
+     * font. It is false for a new time, where libass redraws only a frame that has changed.
      */
-    setTrack(subtitles: string) {
-      if (!this.subtitleManager) {
+    async render(repaint = false) {
+      const renderer = this.view.renderer;
+      if (!renderer) {
         return;
       }
-      // After a new track, the renderer sends no frame when nothing is shown,
-      // so the old one would stay on the canvas.
-      this.clearCanvas();
-      this.subtitleManager.setTrack(subtitles);
+      await renderer.ready;
+      if (renderer !== this.view.renderer) {
+        return;
+      }
+      await renderer.manualRender(
+        {
+          mediaTime: this.currentTime,
+          // Only the aspect ratio counts. The renderer fits it to the canvas.
+          width: SUBTITLE_CANVAS.width,
+          height: SUBTITLE_CANVAS.height,
+          expectedDisplayTime: performance.now(),
+        },
+        repaint,
+      );
     },
-    clearCanvas() {
-      const canvas = this.$refs.subtitleCanvas as HTMLCanvasElement | undefined;
-      canvas?.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+    /**
+     * Replace the subtitles the renderer draws, once it holds every font they name.
+     */
+    async setTrack(subtitles: string) {
+      const renderer = this.view.renderer;
+      if (!renderer) {
+        return;
+      }
+      this.view.track = subtitles;
+      const fonts = this.fontsFor(subtitles);
+      if (this.hasReplacedFont(fonts)) {
+        this.destroyRenderer();
+        this.createRenderer(subtitles);
+        return;
+      }
+      await Promise.all(
+        [...fonts].map(
+          ([family, url]) =>
+            this.view.loadedFonts.get(family)?.loaded ?? this.addFont(renderer, family, url),
+        ),
+      );
+      if (renderer !== this.view.renderer || subtitles !== this.view.track) {
+        return;
+      }
+      if (subtitles !== this.view.rendererTrack) {
+        this.view.rendererTrack = subtitles;
+        await renderer.renderer.setTrack(subtitles);
+      }
+      // The renderer doesn't redraw for a font that has arrived.
+      this.render(true);
     },
     setPlayhead(playhead: number) {
       this.currentTime = playhead;
@@ -264,14 +355,12 @@ export default defineComponent({
       }
     },
     pause() {
-      this.subtitleManager?.setIsPaused(true, this.currentTime);
       this.isPlaying = false;
-      this.syncVideo(this.currentTime ?? 0);
+      this.syncVideo(this.currentTime);
     },
     play() {
-      this.subtitleManager?.setIsPaused(false, this.currentTime);
       this.isPlaying = true;
-      this.syncVideo(this.currentTime ?? 0);
+      this.syncVideo(this.currentTime);
     },
   },
 });
@@ -285,20 +374,17 @@ export default defineComponent({
   aspect-ratio: 16 / 9;
 }
 
-.background {
+.background,
+.subtitle-layer,
+.subtitle-layer :deep(.subtitle-canvas) {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
 }
 
-.subtitle-canvas {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+.background {
+  object-fit: cover;
 }
 </style>

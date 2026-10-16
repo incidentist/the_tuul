@@ -1,15 +1,18 @@
 import { vi } from "vitest";
 
 // Global mocks for web APIs can go here
-vi.mock("libass-wasm", () => {
+vi.mock("jassub", () => {
   return {
     __esModule: true,
-    default: vi.fn(function (options) {
+    default: vi.fn(function () {
       return {
-        setTrack: vi.fn(),
-        setCurrentTime: vi.fn(),
-        setIsPaused: vi.fn(),
-        dispose: vi.fn(),
+        ready: Promise.resolve(),
+        manualRender: vi.fn(() => Promise.resolve()),
+        destroy: vi.fn(() => Promise.resolve()),
+        renderer: {
+          setTrack: vi.fn(() => Promise.resolve()),
+          addFonts: vi.fn(() => Promise.resolve(true)),
+        },
       };
     }),
   };
