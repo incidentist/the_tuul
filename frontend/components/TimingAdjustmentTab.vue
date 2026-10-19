@@ -11,7 +11,7 @@
     </div>
     <subtitle-display class="subtitle-display" v-if="songFile && adjustmentSubtitles" ref="subtitleDisplay" :subtitles="adjustmentSubtitles"
       :fonts="{}" :backgroundColor="settingsStore.videoOptions.color.background.toString()" />
-    <timing-adjuster v-if="songFile && adjustmentSubtitles" ref="timing-adjuster" :lyrics="lyricText"
+    <timing-adjuster v-if="songFile && adjustmentSubtitles" ref="timing-adjuster" :lyrics="timedLyricText"
       :timings="timingsStore.rawTimings" :audioData="songFile" :vocalTrack="vocalTrack" @timingschange="onTimingsChange"
       @timeupdate="onPlayheadUpdate" @seeking="onPlayheadUpdate" />
   </b-tab-item>
@@ -35,13 +35,13 @@ export default defineComponent({
     const timingsStore = useTimingsStore();
     const lyricsStore = useLyricsStore();
     const settingsStore = useSettingsStore();
-    const { lyricText } = storeToRefs(lyricsStore);
+    const { timedLyricText } = storeToRefs(lyricsStore);
     const { subtitles } = storeToRefs(timingsStore);
     return {
       mediaStore,
       timingsStore,
       settingsStore,
-      lyricText,
+      timedLyricText,
       subtitles,
     };
   },
