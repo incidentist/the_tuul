@@ -81,7 +81,7 @@ export const useTimingsStore = defineStore('timings', {
           };
           
           return createAssFile(
-            lyricsStore.lyricText,
+            lyricsStore.timedLyricText,
             this.rawTimings,
             mediaStore.songDuration,
             mediaStore.songTitle ?? "",

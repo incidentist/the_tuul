@@ -88,7 +88,7 @@
           Create Video
         </b-button>
       </div>
-      <source-file-download-links :lyrics="lyricText" :timings="timings" :subtitles="subtitles()" />
+      <source-file-download-links :lyrics="timedLyricText" :timings="timings" :subtitles="subtitles()" />
     </div>
   </b-tab-item>
 </template>
@@ -123,13 +123,14 @@ export default defineComponent({
     const settingsStore = useSettingsStore();
     const timingsStore = useTimingsStore();
     const lyricsStore = useLyricsStore();
-    const { lyricText } = storeToRefs(lyricsStore);
+    const { lyricText, timedLyricText } = storeToRefs(lyricsStore);
     const { subtitles } = storeToRefs(timingsStore);
     return {
       mediaStore,
       settingsStore,
       timingsStore,
       lyricText,
+      timedLyricText,
       subtitles,
     };
   },
@@ -182,7 +183,7 @@ export default defineComponent({
         return 0;
       }
       const screens = createScreens(
-        this.lyricText,
+        this.timedLyricText,
         this.timings,
         this.mediaStore.songDuration,
         this.mediaStore.songTitle,
@@ -314,7 +315,7 @@ export default defineComponent({
       var zip = new jszip();
       zip.file(this.videoFileName, videoBlob);
       zip.file("subtitles.ass", this.subtitles());
-      zip.file("lyrics.txt", this.lyricText);
+      zip.file("lyrics.txt", this.timedLyricText);
       zip.file("timings.json", JSON.stringify(this.timings));
 
       const zipBlob = await zip.generateAsync({ type: "blob" });

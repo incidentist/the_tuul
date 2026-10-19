@@ -2,7 +2,7 @@
   <div class="lyric-display-wrapper">
     <div class="lyric-display box">
       <span class="completed-lyrics">{{ completedLyrics }}</span
-      ><span ref="currentLyrics" class="current-lyrics">{{
+      ><span ref="currentLyrics" class="current-lyrics" :class="{ 'is-in-progress': segmentInProgress }">{{
         currentLyrics
       }}</span
       ><span class="upcoming-lyrics">{{ upcomingLyrics }}</span>
@@ -17,6 +17,11 @@ export default defineComponent({
   props: {
     lyricSegments: Array,
     currentSegment: Number,
+    // True when the current segment's start was marked and its end is still pending
+    segmentInProgress: {
+      type: Boolean,
+      default: false,
+    },
   },
   watch: {
     currentSegment: "onCurrentLyricsChange",
@@ -70,7 +75,9 @@ export default defineComponent({
   white-space: pre;
   flex-shrink: 1;
   flex-grow: 1;
-  overflow: hidden;
+  overflow-x: hidden;
+  /* Let long lyrics be scrolled by hand as well as auto-centred on the current segment */
+  overflow-y: auto;
 }
 
 .completed-lyrics {
@@ -79,6 +86,11 @@ export default defineComponent({
 
 .current-lyrics {
   color: magenta;
+}
+
+.current-lyrics.is-in-progress {
+  color: darkorange;
+  text-decoration: underline;
 }
 
 span.upcoming-lyrics {

@@ -1,7 +1,7 @@
 <template>
   <div class="buttons">
     <b-button @mousedown="fireSpacebar">Spacebar</b-button>
-    <b-button @mousedown="fireEnter">Enter</b-button>
+    <b-button v-if="showEnter" @mousedown="fireEnter">Enter</b-button>
   </div>
 </template>
 
@@ -12,6 +12,12 @@ import { KEY_CODES } from "@/constants";
 import { defineComponent } from "vue";
 
 export default defineComponent({
+  props: {
+    showEnter: {
+      type: Boolean,
+      default: true,
+    },
+  },
   methods: {
     fireSpacebar() {
       this.$emit(

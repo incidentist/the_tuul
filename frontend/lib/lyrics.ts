@@ -26,6 +26,16 @@ export function convertSpacesToUnderscores(text: string): string {
     return text.replace(/ /g, "_");
 }
 
+export function splitLinesIntoWords(text: string): string {
+    // Mark every word as its own timing segment by turning runs of whitespace
+    // (and any existing underscores) between words into a single underscore.
+    // Leading/trailing whitespace on a line is dropped so it can't create empty segments.
+    return text
+        .split("\n")
+        .map(line => line.replace(/^[ \t]+|[ \t]+$/g, "").replace(/[ \t_]*_[ \t_]*|[ \t]+/g, "_"))
+        .join("\n");
+}
+
 function addSlashes(word: string, template: string): string {
     // Add slashes to [word] in the same positions as in [template]
     let result = word.replace(/\//g, "");

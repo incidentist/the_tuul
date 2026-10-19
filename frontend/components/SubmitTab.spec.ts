@@ -13,6 +13,7 @@ vi.mock('@/lib/video', () => ({
   },
 }));
 
+import jszip from 'jszip';
 import SubmitTab from './SubmitTab.vue';
 import video from '@/lib/video';
 import { separateTrack } from '@/lib/audioSeparation';
@@ -139,5 +140,28 @@ describe('SubmitTab', () => {
     expect(wrapper.vm.submitError).toBe('model failed to load');
     expect(wrapper.vm.isSubmitting).toBe(false);
     expect(video.createVideo).not.toHaveBeenCalled();
+  });
+
+  // The zipped lyrics must match the segments the timings were recorded
+  // against, so in word mode they need the word markup applied.
+  test('zips the word-split lyrics when syncing by word', async () => {
+    const lyricsStore = useLyricsStore();
+    const timingsStore = useTimingsStore();
+    useMediaStore().songDuration = 10;
+    lyricsStore.setLyrics('Hello world');
+    lyricsStore.setSyncByWord(true);
+    timingsStore.add(0, KEY_CODES.SPACEBAR, 1.0);
+    timingsStore.add(0, KEY_CODES.ENTER, 1.5);
+    timingsStore.add(1, KEY_CODES.SPACEBAR, 2.0);
+    timingsStore.add(1, KEY_CODES.ENTER, 2.5);
+
+    const wrapper = mountTab();
+    vi.spyOn(wrapper.vm, 'sendZipFile').mockResolvedValue(undefined as never);
+    const fileSpy = vi.spyOn(jszip.prototype, 'file');
+
+    await wrapper.vm.zipAndSendFiles(new Uint8Array());
+
+    expect(fileSpy).toHaveBeenCalledWith('lyrics.txt', 'Hello_world');
+    fileSpy.mockRestore();
   });
 });

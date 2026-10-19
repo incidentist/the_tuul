@@ -187,4 +187,20 @@ describe('Timings Store', () => {
       { test: 'options' }
     );
   });
+
+  test('subtitles should use word-split lyrics when syncing by word', () => {
+    const timingsStore = useTimingsStore();
+    const lyricsStore = useLyricsStore();
+    const mediaStore = useMediaStore();
+    vi.mocked(createAssFile).mockClear();
+
+    lyricsStore.setLyrics('Test lyrics');
+    lyricsStore.setSyncByWord(true);
+    // @ts-ignore - Mocking private property
+    timingsStore._timings = [[1.0, LYRIC_MARKERS.SEGMENT_START], [2.0, LYRIC_MARKERS.SEGMENT_START]];
+    mediaStore.songDuration = 10;
+
+    timingsStore.subtitles();
+    expect(vi.mocked(createAssFile).mock.calls[0][0]).toBe('Test_lyrics');
+  });
 });

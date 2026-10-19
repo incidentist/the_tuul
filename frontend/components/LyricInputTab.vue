@@ -6,7 +6,8 @@
         Paste 'em from the Internet! A blank line indicates a new screen. By
         default, you'll enter the timing of each line. Use <kbd>_</kbd> to enter
         a timing of a word or <kbd>/</kbd> to enter a timing of a syllable.
-        Example:
+        To time every word without adding underscores yourself, check
+        <em>Sync Each Word</em> on the Song Timing tab. Example:
       </p>
       <p>
         <code>Hell/o_from_the_oth/er_side<br />I_must_have_called_a_thou/sand_times</code>

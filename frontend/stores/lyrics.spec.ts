@@ -95,4 +95,26 @@ describe('Lyrics Store', () => {
       { text: 'Hello world' }
     ]);
   });
+
+  test('should split lines into word segments when syncing by word', () => {
+    const lyricsStore = useLyricsStore();
+    lyricsStore.setLyrics('Hello  big world\nNew line\n\nNext screen');
+    lyricsStore.setSyncByWord(true);
+
+    expect(lyricsStore.lyricText).toBe('Hello  big world\nNew line\n\nNext screen');
+    expect(lyricsStore.timedLyricText).toBe('Hello_big_world\nNew_line\n\nNext_screen');
+    expect(lyricsStore.lyricSegments).toEqual([
+      { text: 'Hello_' },
+      { text: 'big_' },
+      { text: 'world\n' },
+      { text: 'New_' },
+      { text: 'line\n\n' },
+      { text: 'Next_' },
+      { text: 'screen' }
+    ]);
+
+    lyricsStore.setSyncByWord(false);
+    expect(lyricsStore.timedLyricText).toBe(lyricsStore.lyricText);
+    expect(lyricsStore.lyricSegments).toHaveLength(3);
+  });
 });
