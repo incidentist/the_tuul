@@ -209,13 +209,6 @@ export default defineComponent({
       }
       this.updateAudio(audioData, silence);
     },
-    setPlayhead(playhead: number) {
-      const player = this.playerRef();
-      if (player && playhead != player.currentTime) {
-        player.currentTime = playhead;
-      }
-      this.subtitleDisplayRef()?.setPlayhead(playhead);
-    },
     async updateAudio(source: Blob, silence: number) {
       const request = ++this.view.audioRequest;
       let audioData = source;
@@ -361,7 +354,9 @@ export default defineComponent({
 
     onAudioTimeUpdate(e: Event) {
       const currentTime = (e.target as HTMLAudioElement).currentTime;
-      this.setPlayhead(currentTime);
+      // Never seek the audio here: Safari's currentTime moves between two reads, so a
+      // read-compare-seek seeks on nearly every frame and the audio stutters.
+      this.subtitleDisplayRef()?.setPlayhead(currentTime);
       this.$emit("timeupdate", currentTime);
     },
     onAudioPlaying() {
@@ -379,13 +374,10 @@ export default defineComponent({
       this.$emit("pause");
     },
     onAudioSeeking() {
-      this.playerRef()?.removeEventListener("timeupdate", this.onAudioTimeUpdate, false);
       this.$emit("seeking");
     },
 
     onAudioSeeked(e: Event) {
-      this.playerRef()?.addEventListener("timeupdate", this.onAudioTimeUpdate, false);
-
       var currentTime = (e.target as HTMLAudioElement).currentTime;
       this.subtitleDisplayRef()?.setPlayhead(currentTime);
 

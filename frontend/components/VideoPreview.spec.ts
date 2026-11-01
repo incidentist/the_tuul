@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { mount, shallowMount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import VideoPreview from "@/components/VideoPreview.vue";
+import SmoothAudioPlayer from "@/components/SmoothAudioPlayer.vue";
 
 describe("VideoPreview", () => {
   interface Props {
@@ -50,5 +51,29 @@ describe("VideoPreview", () => {
     expect(wrapper.find(".preview-container").exists()).toBe(true);
     expect(wrapper.find(".subtitle-canvas").exists()).toBe(true);
     expect(wrapper.find("audio").exists()).toBe(true);
+  });
+
+  it("does not seek the audio on a time update", () => {
+    const wrapper = mount(VideoPreview, {
+      props,
+      stubs: {
+        "b-message": true,
+      },
+    });
+    const audio = wrapper.find("audio").element as HTMLAudioElement;
+    // Like Safari's, this clock moves on between two reads in the same task.
+    let clock = 10;
+    const seeks: number[] = [];
+    Object.defineProperty(audio, "currentTime", {
+      get: () => (clock += 0.001),
+      set: (time: number) => seeks.push(time),
+    });
+    const timeUpdate = new Event("timeupdate");
+    Object.defineProperty(timeUpdate, "target", { value: audio });
+
+    wrapper.findComponent(SmoothAudioPlayer).vm.$emit("timeupdate", timeUpdate);
+
+    expect(seeks).toEqual([]);
+    expect(wrapper.emitted("timeupdate")).toHaveLength(1);
   });
 });
