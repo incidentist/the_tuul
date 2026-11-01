@@ -1,10 +1,8 @@
-# Le Toul - An Improved Karaoke Video Maker Thing
+# The Tüül - A Karaoke Video Maker Thing
 
 Making a decent karaoke video can take a long time.  
 You need to separate the music from the vocals, and painstakingly adjust the timing of every syllable.  
 This projects lets you create videos that are 80% perfect in 20% of the time.
-
-This is a fork of https://github.com/incidentist/the_tuul with various improvements.
 
 ## Quick start
 
@@ -15,8 +13,8 @@ Requirements: Docker
 3. Open http://localhost:8080/ in your browser.
 
 ```
-git clone https://github.com/vctls/le_toul.git
-cd le_toul
+git clone https://github.com/vctls/the_tuul.git
+cd the_tuul
 docker compose up
 ```
 
@@ -255,13 +253,13 @@ To build the Docker image:
 
 ## Credits
 
-Original project https://github.com/incidentist/the_tuul by [Dan Kurtz](https://github.com/incidentist)
+@incidentist made the first version of The Tüül. @vctls made so many improvements on his [Le Toul fork](https://github.com/vctls/le_toul) that @incidentist went ahead and just made his fork the new Tüül. So now they are both basically mirrors of eachother.
 
 Lyrics lookup uses [LRCLIB](https://lrclib.net), a free, open lyrics database.
 
 Vocal/instrumental separation is performed by [python-audio-separator](https://github.com/nomadkaraoke/python-audio-separator), which wraps a number of pretrained models
 from the [Ultimate Vocal Remover](https://github.com/Anjok07/ultimatevocalremovergui) (UVR) community.
-Le Toul does not redistribute the model weights. They are auto-downloaded by `audio-separator` on first use.
+The Tüül does not redistribute the model weights. They are auto-downloaded by `audio-separator` on first use.
 
 Models currently exposed in the UI:
 
@@ -270,4 +268,4 @@ Models currently exposed in the UI:
 - **BS-Roformer**. Original architecture by [lucidrains](https://github.com/lucidrains/BS-RoFormer); weights by [viperx](https://huggingface.co/viperx)
 
 The UVR GUI is MIT-licensed and its maintainers ask third-party tools that use these models to credit UVR and the model authors.
-If you use Le Toul to publish karaoke content, please pass that attribution along.
+If you use The Tüül to publish karaoke content, please pass that attribution along.
