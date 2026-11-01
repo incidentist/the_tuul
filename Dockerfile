@@ -1,5 +1,6 @@
 # Stage 1: Frontend builder
-FROM node:22-slim AS frontend-builder
+# Its output is plain JS and CSS, so it runs natively on the build machine, not under emulation.
+FROM --platform=$BUILDPLATFORM node:22-slim AS frontend-builder
 
 ARG TUUL_API_HOSTNAME=""
 ARG TUUL_DONATE_URL=""
@@ -14,7 +15,9 @@ WORKDIR /app
 # Copy frontend source files
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY patches/ ./patches/
-RUN corepack enable && pnpm install --frozen-lockfile
+# The store lives in a cache mount, so a lockfile change refetches only what changed.
+RUN --mount=type=cache,id=pnpm-store,target=/pnpm/store \
+    corepack enable && pnpm install --frozen-lockfile --store-dir /pnpm/store
 
 # Copy the rest of the frontend source
 COPY frontend/ ./frontend/
@@ -51,10 +54,12 @@ COPY ./uv.lock ./pyproject.toml ./
 # runs in this container. A deployment that runs both elsewhere leaves this false.
 ARG INSTALL_ML=false
 
-RUN if [ "$INSTALL_ML" = "true" ]; then \
-        uv sync --frozen --no-dev --group ml --no-cache; \
+# uv's cache lives in a cache mount, outside the image. UV_LINK_MODE=copy lets it.
+RUN --mount=type=cache,id=uv-cache,target=/root/.cache/uv \
+    if [ "$INSTALL_ML" = "true" ]; then \
+        uv sync --frozen --no-dev --group ml; \
     else \
-        uv sync --frozen --no-dev --no-cache; \
+        uv sync --frozen --no-dev; \
     fi
 
 # The lock pins the CPU builds. `cuda` swaps them for the CUDA builds of the same
@@ -62,12 +67,13 @@ RUN if [ "$INSTALL_ML" = "true" ]; then \
 # the CUDA and cuDNN libraries that the torch wheels bring.
 ARG SEPARATION_DEVICE=cpu
 
-RUN if [ "$INSTALL_ML" = "true" ] && [ "$SEPARATION_DEVICE" = "cuda" ]; then \
-        uv pip install --python .venv/bin/python --no-cache \
+RUN --mount=type=cache,id=uv-cache,target=/root/.cache/uv \
+    if [ "$INSTALL_ML" = "true" ] && [ "$SEPARATION_DEVICE" = "cuda" ]; then \
+        uv pip install --python .venv/bin/python \
             --extra-index-url https://download.pytorch.org/whl/cu128 \
             "torch==2.7.1+cu128" "torchvision==0.22.1+cu128" "torchaudio==2.7.1+cu128" \
         && uv pip uninstall --python .venv/bin/python onnxruntime \
-        && uv pip install --python .venv/bin/python --no-cache "onnxruntime-gpu==1.22.0"; \
+        && uv pip install --python .venv/bin/python "onnxruntime-gpu==1.22.0"; \
     fi
 
 #
