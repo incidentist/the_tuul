@@ -56,4 +56,16 @@ describe("lyricsMatch", () => {
   it("tells another voice apart", () => {
     expect(lyricsMatch("[Anna] ka", timed("ka"))).toBe(false);
   });
+
+  it("ignores a voice the lyrics don't name", () => {
+    expect(lyricsMatch("[Anna] ka", timed("[Anna] ka\n[Ben] lu"))).toBe(true);
+  });
+
+  it("tells a voice the file doesn't hold apart", () => {
+    expect(lyricsMatch("[Anna] ka\n[Ben] lu", timed("[Anna] ka"))).toBe(false);
+  });
+
+  it("doesn't match empty lyrics to a file with voices", () => {
+    expect(lyricsMatch("", timed("ka"))).toBe(false);
+  });
 });

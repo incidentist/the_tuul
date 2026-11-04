@@ -17,16 +17,18 @@ export function lyricsOf(voices: Record<VoiceId, TimedSegment[]>): string {
 }
 
 /**
- * Whether the lyrics cut into the same segments as the voices, whatever their formatting.
+ * Whether the lyrics cut into the same segments as the voices they name, whatever their formatting.
+ * Files once carried voices that had left the lyrics, so a voice the lyrics don't name doesn't count,
+ * unless the lyrics name none at all.
  */
 export function lyricsMatch(lyricText: string, voices: Record<VoiceId, TimedSegment[]>): boolean {
   const { voices: lyricVoices, lyricTextByVoice } = parseAnnotatedLyrics(lyricText);
-  const timedVoices = Object.keys(voices);
-  if (lyricVoices.length !== timedVoices.length) return false;
-  return timedVoices.every((voice) => {
+  if (lyricVoices.length === 0) return Object.keys(voices).length === 0;
+  return lyricVoices.every((voice) => {
     const cut = parseLyrics(lyricTextByVoice[voice] ?? "", true);
-    const segments = voices[voice];
+    const segments = voices[voice] ?? [];
     return (
+      voice in voices &&
       cut.length === segments.length &&
       cut.every(
         (segment, i) =>

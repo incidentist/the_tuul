@@ -8,6 +8,7 @@ import {
   SPACER_MUTE_DROPPED,
   SPACER_PAGE_DROPPED,
   TIMES_WENT_BACKWARDS,
+  VOICE_LEFT_OUT,
 } from "./importWarnings";
 import { parseLyrics } from "./timing";
 import { TimedSegment, fromLyric } from "./timedSegments";
@@ -237,6 +238,29 @@ describe("parseTimingsText", () => {
         { text: "c", start: 2, review: "moved" },
       ]);
       expect(warnings).toEqual([TIMES_WENT_BACKWARDS]);
+    });
+
+    test("reads only the sections asked for, and warns about the others", () => {
+      const text = signed(
+        'voice "Anna"',
+        "-",
+        '"a"  00:01.00',
+        "-",
+        'voice "Gone"',
+        "-",
+        '"b"  00:05.00',
+        '"c"  00:02.00',
+        "-",
+        'voice "Old"',
+        "-",
+        '"d"  00:03.00',
+        "-",
+      );
+
+      const { voices, warnings } = parseTimingsText(text, ["Anna"]);
+
+      expect(Object.keys(voices)).toEqual(["Anna"]);
+      expect(warnings).toEqual([`${VOICE_LEFT_OUT} (×2)`]);
     });
 
     test("leaves an end with no start out of the check", () => {

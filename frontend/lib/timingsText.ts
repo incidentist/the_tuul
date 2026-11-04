@@ -12,6 +12,7 @@ import {
   SPACER_MUTE_DROPPED,
   SPACER_PAGE_DROPPED,
   TIMES_WENT_BACKWARDS,
+  VOICE_LEFT_OUT,
   Warnings,
 } from "./importWarnings";
 import { TimedSegment, clampDisplayPeriods, clampMuteBounds } from "./timedSegments";
@@ -94,11 +95,16 @@ export function isTimingsText(text: string): boolean {
  * A malformed row throws a `TimingsTextError` that names it.
  * Anything the app can't hold but can recover from is dropped or changed, with a warning.
  * Times that go backwards flag their line for review, since a voice can hold such a line.
+ * When `only` is given, any other voice's section is left out, with a warning.
  */
-export function parseTimingsText(input: string): ParsedTimingsText {
+export function parseTimingsText(input: string, only?: VoiceId[]): ParsedTimingsText {
   const warnings = new Warnings();
   const voices: Record<VoiceId, TimedSegment[]> = {};
   for (const [voice, pages] of parseSections(input, true)) {
+    if (only && !only.includes(voice)) {
+      warnings.add(VOICE_LEFT_OUT);
+      continue;
+    }
     forEachBackwardTime(pages, (line) => {
       line.timesGoBackwards = true;
       warnings.add(TIMES_WENT_BACKWARDS);

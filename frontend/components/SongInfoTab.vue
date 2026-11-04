@@ -757,13 +757,14 @@ export default defineComponent({
     },
     writeTimingsFile(text: string): string[] {
       if (isTimingsText(text)) {
-        const { voices, warnings } = parseTimingsText(text);
+        const inFile = parseTimingsText(text).voices;
         // Each syllable in a timings.txt carries its text, so the file brings its lyrics along.
-        if (!lyricsMatch(this.lyricsStore.lyricText, voices)) {
-          this.lyricsStore.setLyrics(lyricsOf(voices));
+        if (!lyricsMatch(this.lyricsStore.lyricText, inFile)) {
+          this.lyricsStore.setLyrics(lyricsOf(inFile));
           // The lyrics input would otherwise go on naming a file that no longer holds these lyrics.
           this.mediaStore.lyricsFile = null;
         }
+        const { voices, warnings } = parseTimingsText(text, this.lyricsStore.voices);
         this.timingsStore.setAllSegments(voices);
         return warnings;
       }

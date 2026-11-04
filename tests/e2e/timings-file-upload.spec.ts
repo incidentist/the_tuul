@@ -84,6 +84,44 @@ test.describe("Telling timings and lyrics files apart", () => {
     );
   });
 
+  test("keeps the lyrics when a timings.txt also holds voices they don't name", async ({
+    page,
+  }) => {
+    await page
+      .locator(LYRICS_INPUT)
+      .setInputFiles(text("lyrics.txt", ["[Anna]", "Went", "[Ben]", "Back"]));
+    await expect(page.locator('[name="lyrics-file-upload"] .file-name')).toHaveText("lyrics.txt");
+
+    await page
+      .locator(TIMINGS_INPUT)
+      .setInputFiles(
+        text("timings.txt", [
+          "Toul timings 3",
+          'voice "Anna"',
+          "-",
+          '"Went"  00:01.00',
+          "-",
+          'voice "Ben"',
+          "-",
+          '"Back"  00:02.00',
+          "-",
+          'voice "Left over"',
+          "-",
+          '"Went"  00:05.00',
+          "-",
+          "-",
+          '"Back"  00:02.00',
+          "-",
+        ]),
+      );
+
+    await expect(page.locator('[name="timings-file-upload"] .file-name')).toHaveText("timings.txt");
+    await expect(page.locator(".existing-files .import-warnings")).toHaveText(
+      /A voice not named in the lyrics was left out/,
+    );
+    await expect(page.locator('[name="lyrics-file-upload"] .file-name')).toHaveText("lyrics.txt");
+  });
+
   test("loads a timings.txt whose times go backwards, and lists that under the input", async ({
     page,
   }) => {
