@@ -1,13 +1,25 @@
 // functions to help with lyric markup tools
 
+import { TAG_PATTERN } from "@/lib/voices";
+
 function isBoundaryChar(char: string): boolean {
   return [" ", "\n", "_", "|"].includes(char);
 }
 
+/**
+ * The lyric word around the cursor, without the voice tag it may touch.
+ * It is empty when the cursor is inside a voice tag.
+ */
 export function getCurrentWord(body: string, cursorPosition: number): string {
+  const lineStart = body.slice(0, cursorPosition).lastIndexOf("\n") + 1;
+  const line = body.slice(lineStart).split("\n", 1)[0];
+  const lyricStart = lineStart + voiceTagOf(line).length;
+  if (cursorPosition < lyricStart) {
+    return "";
+  }
   let leftBound = cursorPosition,
     rightBound = cursorPosition;
-  while (leftBound > 0) {
+  while (leftBound > lyricStart) {
     if (isBoundaryChar(body[leftBound - 1])) {
       break;
     }
@@ -25,6 +37,10 @@ export function getCurrentWord(body: string, cursorPosition: number): string {
 
 export function convertSpacesToUnderscores(text: string): string {
   return text.replace(/ /g, "_");
+}
+
+function voiceTagOf(line: string): string {
+  return line.match(TAG_PATTERN)?.[0] ?? "";
 }
 
 function addSlashes(word: string, template: string): string {
@@ -59,6 +75,16 @@ export function slashifyAllOccurences(
   if (normalizeWord(word) == "") {
     return lyrics;
   }
+  return lyrics
+    .split(/(?<=\n)/)
+    .map((line) => {
+      const tag = voiceTagOf(line);
+      return tag + slashifyLine(line.slice(tag.length), word, slashedVersion);
+    })
+    .join("");
+}
+
+function slashifyLine(lyrics: string, word: string, slashedVersion: string): string {
   let result = "";
   let currentWord = "";
   let state = "INWORD";

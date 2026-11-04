@@ -7,6 +7,9 @@ fox jumps over the lazy_dog.`;
   expect(getCurrentWord(text, 2)).toBe("The");
   expect(getCurrentWord(text, 10)).toBe("brown");
   expect(getCurrentWord(text, 43)).toBe("dog.");
+  expect(getCurrentWord("x\n[Ann the] gold", 7)).toBe("");
+  expect(getCurrentWord("x\n[Ann the] gold", 15)).toBe("gold");
+  expect(getCurrentWord("x\n[Ann]go/ld", 10)).toBe("go/ld");
 });
 
 test("slashifyAllOccurences", () => {
@@ -25,6 +28,10 @@ test("slashifyAllOccurences", () => {
   expect(slashifyAllOccurences("ggg_ggg", "ggg", "g/gg/")).toBe("g/gg_g/gg/");
   expect(slashifyAllOccurences("ggg|ggg", "ggg", "gg/g")).toBe("gg/g|gg/g");
   expect(slashifyAllOccurences("ggg|ggg", "ggg", "ggg/")).toBe("ggg|ggg/");
+  expect(slashifyAllOccurences("[ggg] ggg\n[a ggg_ggg] ggg", "ggg", "gg/g")).toBe(
+    "[ggg] gg/g\n[a ggg_ggg] gg/g",
+  );
+  expect(slashifyAllOccurences("[a]ggg\n\n[a]\nggg", "ggg", "gg/g")).toBe("[a]gg/g\n\n[a]\ngg/g");
 });
 
 test("slashifiedPosition", () => {
