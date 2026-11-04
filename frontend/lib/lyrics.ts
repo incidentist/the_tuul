@@ -36,7 +36,13 @@ export function getCurrentWord(body: string, cursorPosition: number): string {
 }
 
 export function convertSpacesToUnderscores(text: string): string {
-  return text.replace(/ /g, "_");
+  return text
+    .split("\n")
+    .map((line) => {
+      const tag = voiceTagOf(line);
+      return tag + line.slice(tag.length).replace(/ /g, "_");
+    })
+    .join("\n");
 }
 
 function voiceTagOf(line: string): string {

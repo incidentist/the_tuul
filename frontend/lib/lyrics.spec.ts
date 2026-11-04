@@ -1,4 +1,9 @@
-import { getCurrentWord, slashifiedPosition, slashifyAllOccurences } from "./lyrics";
+import {
+  convertSpacesToUnderscores,
+  getCurrentWord,
+  slashifiedPosition,
+  slashifyAllOccurences,
+} from "./lyrics";
 
 test("getCurrentWord", () => {
   const text = `The quick brown
@@ -10,6 +15,13 @@ fox jumps over the lazy_dog.`;
   expect(getCurrentWord("x\n[Ann the] gold", 7)).toBe("");
   expect(getCurrentWord("x\n[Ann the] gold", 15)).toBe("gold");
   expect(getCurrentWord("x\n[Ann]go/ld", 10)).toBe("go/ld");
+});
+
+test("convertSpacesToUnderscores", () => {
+  expect(convertSpacesToUnderscores("a b\n\nc d")).toBe("a_b\n\nc_d");
+  expect(convertSpacesToUnderscores("[lead vocal] a b\n [c d]\ne f")).toBe(
+    "[lead vocal] a_b\n [c d]\ne_f",
+  );
 });
 
 test("slashifyAllOccurences", () => {
