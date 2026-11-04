@@ -249,6 +249,7 @@ export function overlappingCountInText(options: KaraokeOptions): string {
  * A mark is only added when the line is already shown by the time it starts,
  * so this runs once the staggered-lines pass has set the display starts.
  * A stored display start counts too, though it is only applied later.
+ * A line shown early automatically may move back by COUNT_IN_SLACK to fit its mark.
  */
 export function addOverlappingCountIns(
   screens: LyricsScreen[],
@@ -267,8 +268,13 @@ export function addOverlappingCountIns(
       if (mayGetOverlappingCountIn(line, index, options)) {
         const mark = countInMarks(options, marks, 1, line.timestamp);
         const start = mark[0].timestamp;
-        if (start >= prevSingStart && start >= countInEarliestStart(line, screen, options)) {
+        const earliest = countInEarliestStart(line, screen, options);
+        const slack = isShownEarlyAutomatically(line, options) ? COUNT_IN_SLACK : 0;
+        if (start >= prevSingStart && start >= earliest - slack) {
           line.addSegmentsToFront(mark);
+          if (start < earliest) {
+            line.customDisplayStartTime = start;
+          }
         }
       }
       prevSingStart = line.singTimestamp;
@@ -276,6 +282,20 @@ export function addOverlappingCountIns(
   }
   return screens;
 }
+
+/**
+ * Whether the staggered-lines pass set the line's display start, and no stored one replaces it.
+ */
+function isShownEarlyAutomatically(line: LyricsLine, options: KaraokeOptions): boolean {
+  return (
+    line.customDisplayStartTime !== undefined &&
+    !(options.useStoredDisplayPeriods && line.storedDisplayStart !== undefined)
+  );
+}
+
+// An early line's display start follows from the length of the line before it,
+// so a mark can miss it by a few milliseconds.
+const COUNT_IN_SLACK: Timestamp = 0.02;
 
 const MAX_EARLY_DISPLAY: Timestamp = 5.0;
 const DEFERRED_LEAD_IN: Timestamp = 1.0;
