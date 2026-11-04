@@ -1103,6 +1103,30 @@ describe("Timings Store", () => {
       });
     });
 
+    test("retagging repeated lines one at a time keeps the export readable", async () => {
+      const timingsStore = useTimingsStore();
+      const lyricsStore = useLyricsStore();
+      lyricsStore.setLyrics("[choir]\noh\noh\noh");
+      timingsStore.setAllSegments({
+        choir: [
+          { text: "oh\n", start: 1 },
+          { text: "oh\n", start: 2 },
+          { text: "oh", start: 3, end: 4 },
+        ],
+      });
+      timingsStore.setupVoiceReconciliation();
+      timingsStore.setupSegmentReconciliation();
+
+      lyricsStore.setLyrics("[choir]\noh\noh\n[backing]\noh");
+      await nextTick();
+      lyricsStore.setLyrics("[backing]\noh\n[choir]\noh\n[backing]\noh");
+      await nextTick();
+
+      const { voices, warnings } = parseTimingsText(timingsStore.timingsText);
+      expect(warnings).toEqual([]);
+      expect(voices.backing.map(({ start }) => start)).toEqual([2, 3]);
+    });
+
     test("does not move timings onto a voice that already has its own", async () => {
       const timingsStore = useTimingsStore();
       const lyricsStore = useLyricsStore();

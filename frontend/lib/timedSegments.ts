@@ -1,7 +1,7 @@
 // This is the stored form of one voice's timings.
 // Every segment carries its own text, so lyrics and timings cannot drift apart.
 
-import { range } from "lodash-es";
+import { range, sortBy } from "lodash-es";
 import { GAP_MAX_LEAD, LYRIC_MARKERS } from "@/constants";
 import { LyricEvent, Segment, parseLyrics, displayText, resolveStarts } from "@/lib/timing";
 import { VoiceId } from "@/lib/voices";
@@ -232,20 +232,33 @@ export function carryMovedLines(
   });
   const taken = new Set<(typeof lost)[number]>();
   const arrivals = new Map<VoiceId, Map<number, TimedSegment[]>>();
-  for (const { voice, current, matches } of diffs) {
-    const kept = new Set(matches.map(([, j]) => j));
+  for (const { voice, stored, current, matches } of diffs) {
+    const storedAt = new Map(matches.map(([i, j]) => [j, i]));
+    let latestStart = -Infinity;
     current.forEach((segments, j) => {
-      const source = kept.has(j)
-        ? undefined
-        : lost.find(
-            (candidate) =>
-              !taken.has(candidate) &&
-              candidate.voice !== voice &&
-              candidate.key === lineKey(segments),
-          );
+      const keptLine = storedAt.get(j);
+      if (keptLine !== undefined) {
+        latestStart = Math.max(latestStart, ...startsOf(stored[keptLine]));
+        return;
+      }
+      const candidates = lost.filter(
+        (candidate) =>
+          !taken.has(candidate) && candidate.voice !== voice && candidate.key === lineKey(segments),
+      );
+      const nextStart = Math.min(
+        ...matches.filter(([, k]) => k > j).flatMap(([i]) => startsOf(stored[i])),
+      );
+      // A repeated line has several candidates, and the one that keeps the voice in time order
+      // is the one that was sung here.
+      const source =
+        candidates.find((candidate) => {
+          const starts = startsOf(candidate.segments);
+          return Math.min(...starts) > latestStart && Math.max(...starts) < nextStart;
+        }) ?? candidates[0];
       if (source) {
         taken.add(source);
         arrivals.set(voice, (arrivals.get(voice) ?? new Map()).set(j, source.segments));
+        latestStart = Math.max(latestStart, ...startsOf(source.segments));
       }
     });
   }
@@ -281,11 +294,35 @@ export function carryMovedLines(
       }
     }
     keepUpTo(stored.length);
+    const ordered = sortRepeatedLines(lines, arrived);
     result[voice] = joinLines(
-      lines.map((line, k) => (arrived.has(k) ? flagIfOutOfOrder(lines, k) : line)),
+      ordered.map((line, k) => (arrived.has(k) ? flagIfOutOfOrder(ordered, k) : line)),
     );
   }
   return result;
+}
+
+function startsOf(segments: TimedSegment[]): number[] {
+  return segments.flatMap(({ start }) => (start === undefined ? [] : [start]));
+}
+
+/**
+ * The lines with each arrived line and its timed repeats in time order.
+ * Lines drawn the same way can swap places, since nothing else tells them apart.
+ */
+function sortRepeatedLines(lines: TimedSegment[][], arrived: Set<number>): TimedSegment[][] {
+  const sorted = [...lines];
+  for (const key of new Set([...arrived].map((k) => lineKey(lines[k])))) {
+    const places = range(lines.length).filter(
+      (k) => lineKey(lines[k]) === key && startsOf(lines[k]).length > 0,
+    );
+    const inTimeOrder = sortBy(
+      places.map((k) => lines[k]),
+      (line) => Math.min(...startsOf(line)),
+    );
+    places.forEach((k, n) => (sorted[k] = inTimeOrder[n]));
+  }
+  return sorted;
 }
 
 /**
@@ -293,12 +330,10 @@ export function carryMovedLines(
  * around it.
  */
 function flagIfOutOfOrder(lines: TimedSegment[][], index: number): TimedSegment[] {
-  const starts = (segments: TimedSegment[]) =>
-    segments.flatMap(({ start }) => (start === undefined ? [] : [start]));
-  const own = starts(lines[index]);
+  const own = startsOf(lines[index]);
   const inOrder =
-    Math.max(...lines.slice(0, index).flatMap(starts)) <= Math.min(...own) &&
-    Math.max(...own) <= Math.min(...lines.slice(index + 1).flatMap(starts));
+    Math.max(...lines.slice(0, index).flatMap(startsOf)) <= Math.min(...own) &&
+    Math.max(...own) <= Math.min(...lines.slice(index + 1).flatMap(startsOf));
   return inOrder
     ? lines[index]
     : lines[index].map((segment) =>

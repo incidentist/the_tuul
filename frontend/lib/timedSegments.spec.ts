@@ -735,6 +735,45 @@ describe("carryMovedLines", () => {
     });
   });
 
+  it("gives a repeated line the timing that keeps its new voice in order", () => {
+    const stored = {
+      backing: [{ text: "verse", start: 5 }],
+      lead: [
+        { text: "oh\n", start: 2 },
+        { text: "bridge\n", start: 4 },
+        { text: "oh", start: 7 },
+      ],
+    };
+
+    const carried = carryMovedLines(stored, {
+      backing: lyrics("verse\noh"),
+      lead: lyrics("bridge"),
+    });
+
+    expect(carried.backing).toEqual([
+      { text: "verse\n", start: 5 },
+      { text: "oh", start: 7 },
+    ]);
+  });
+
+  it("puts a line in time order with a repeat of itself that the voice kept", () => {
+    const stored = {
+      lead: [
+        { text: "oh\n", start: 1 },
+        { text: "oh\n", start: 2 },
+        { text: "oh", start: 3 },
+      ],
+      backing: [{ text: "oh", start: 3 }],
+    };
+
+    const carried = carryMovedLines(stored, { lead: lyrics("oh"), backing: lyrics("oh\noh") });
+
+    expect(carried.backing).toEqual([
+      { text: "oh\n", start: 2 },
+      { text: "oh", start: 3 },
+    ]);
+  });
+
   it("flags a line that lands out of time order", () => {
     const stored = {
       lead: [
