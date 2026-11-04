@@ -546,7 +546,9 @@ describe("writeTimingsText", () => {
     );
   });
 
-  test("writes the lyrics' voices in order, then the timed voices they no longer name", () => {
+  const voiceRows = (text: string) => text.split("\n").filter((row) => row.startsWith("voice"));
+
+  test("writes the lyrics' voices in order, and no others", () => {
     const text = writeTimingsText(
       {
         Old: [{ text: "a", start: 1 }],
@@ -556,11 +558,15 @@ describe("writeTimingsText", () => {
       },
       ["Ben", "Anna", "Cleo"],
     );
-    expect(text.split("\n").filter((row) => row.startsWith("voice"))).toEqual([
-      'voice "Ben"',
-      'voice "Anna"',
-      'voice "Old"',
-    ]);
+    expect(voiceRows(text)).toEqual(['voice "Ben"', 'voice "Anna"']);
+  });
+
+  test("writes every timed voice when there are no lyrics", () => {
+    const text = writeTimingsText(
+      { "Voice 1": [{ text: "", start: 1 }], Untimed: [{ text: "a" }] },
+      [],
+    );
+    expect(voiceRows(text)).toEqual(['voice "Voice 1"']);
   });
 
   test("writes spacers as a header followed directly by its footer", () => {

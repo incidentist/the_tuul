@@ -460,20 +460,18 @@ interface WrittenLine {
 }
 
 /**
- * Write every voice's segments as a `timings.txt`.
- * The lyrics' voices come first, in their order,
- * then the timed voices the lyrics no longer name,
- * which `reconcileVoices` may still carry across a rename.
+ * Write the voices the lyrics name as a `timings.txt`, in their order.
+ * Timings can be tapped before there are lyrics, so without lyrics every timed voice is written.
  */
 export function writeTimingsText(
   byVoice: Record<VoiceId, TimedSegment[]>,
   lyricVoices: VoiceId[],
 ): string {
   const isTimed = (voice: VoiceId) => byVoice[voice].some(({ start }) => start !== undefined);
-  const voices = [
-    ...lyricVoices.filter((voice) => byVoice[voice] !== undefined),
-    ...Object.keys(byVoice).filter((voice) => !lyricVoices.includes(voice) && isTimed(voice)),
-  ];
+  const voices =
+    lyricVoices.length > 0
+      ? lyricVoices.filter((voice) => byVoice[voice] !== undefined)
+      : Object.keys(byVoice).filter(isTimed);
 
   const rows = [`${SIGNATURE} ${TIMINGS_TEXT_VERSION}`];
   for (const voice of voices) {
