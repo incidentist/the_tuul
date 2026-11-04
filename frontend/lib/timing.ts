@@ -1430,7 +1430,17 @@ function screensOverlapInTime(a: LyricsScreen, b: LyricsScreen): boolean {
   if (a.startTimestamp == null || b.startTimestamp == null) {
     return false;
   }
-  return a.startTimestamp < b.endTimestamp && b.startTimestamp < a.endTimestamp;
+  return shownFrom(a) < b.endTimestamp && shownFrom(b) < a.endTimestamp;
+}
+
+/**
+ * When the screen's first line appears, which a line shown early puts before the screen's start.
+ */
+function shownFrom(screen: LyricsScreen): Timestamp {
+  return Math.min(
+    screen.startTimestamp ?? 0,
+    ...screen.lines.flatMap((line) => line.customDisplayStartTime ?? []),
+  );
 }
 
 /**

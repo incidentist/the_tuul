@@ -942,13 +942,14 @@ describe("multi-voice vertical lanes", () => {
       "",
     );
 
-    // Only the third screen overlaps the backing voice.
+    // The third screen overlaps the backing voice, and so do the fourth screen's early lines.
     expect(render.screens.map((screen) => Boolean(screen.verticalZone))).toEqual([
       false,
       false,
       true,
-      false,
+      true,
     ]);
+    expect(render.screens[3].staggered).toBe(true);
   });
 
   function marginVsForStyle(ass: string, style: string): number[] {
@@ -1122,7 +1123,7 @@ describe("multi-voice vertical lanes", () => {
         [
           { voice: "lead", segments, options: { ...plain, addStaggeredLines: true } },
           // One voice joins the second screen, and two others join the third.
-          lone("x", 4.2),
+          lone("x", 3.2),
           lone("y", 6.2),
           lone("z", 6.2),
         ],
