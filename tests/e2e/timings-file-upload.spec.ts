@@ -84,6 +84,29 @@ test.describe("Telling timings and lyrics files apart", () => {
     );
   });
 
+  test("loads a timings.txt whose times go backwards, and lists that under the input", async ({
+    page,
+  }) => {
+    await page
+      .locator(TIMINGS_INPUT)
+      .setInputFiles(
+        text("timings.txt", [
+          "Toul timings 3",
+          "-",
+          '"Went"  00:05.00',
+          "-",
+          "-",
+          '"Back"  00:02.00',
+          "-",
+        ]),
+      );
+
+    await expect(page.locator('[name="timings-file-upload"] .file-name')).toHaveText("timings.txt");
+    await expect(page.locator(".existing-files .import-warnings")).toContainText(
+      "A line's times go backwards",
+    );
+  });
+
   test("refuses a timings file in the lyrics input", async ({ page }) => {
     await page.locator(LYRICS_INPUT).setInputFiles(text("timings.txt", ["Toul timings 1"]));
 
