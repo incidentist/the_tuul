@@ -19,7 +19,12 @@ import {
   layOutVoices,
   displayText,
 } from "./timing";
-import { LYRIC_MARKERS, DEFAULT_COUNT_IN_THRESHOLD, DEFAULT_COUNT_IN_DURATION } from "@/constants";
+import {
+  LYRIC_MARKERS,
+  DEFAULT_COUNT_IN_THRESHOLD,
+  DEFAULT_COUNT_IN_DURATION,
+  SUBTITLE_CANVAS,
+} from "@/constants";
 import { LyricSegment } from "./timing";
 import { songOffset } from "./screenSlots";
 import { parseAss } from "./ass";
@@ -1041,6 +1046,97 @@ describe("multi-voice vertical lanes", () => {
     const v1 = marginVsForStyle(ass, "V1");
     // V0's lane sits entirely above V1's lane.
     expect(Math.max(...v0)).toBeLessThan(Math.min(...v1));
+  });
+
+  describe("with more voices in the song than on the screen", () => {
+    const plain: KaraokeOptions = {
+      ...DEFAULT_OPTIONS,
+      addTitleScreen: false,
+      countInMode: "none",
+      instrumentalThreshold: 0,
+      addStaggeredLines: false,
+    };
+    const sungOnce = (voice: string, start: number) => ({
+      voice,
+      segments: [{ text: voice, start, end: start + 0.5 }],
+      options: plain,
+    });
+    const zones = (render: { screens: { verticalZone?: unknown }[] }) =>
+      render.screens.map((screen) => screen.verticalZone ?? null);
+    const { height } = SUBTITLE_CANVAS;
+
+    it("shares the height between the voices that overlap, not every voice", () => {
+      const [lead, choir, late] = layOutVoices(
+        [sungOnce("lead", 1), sungOnce("choir", 1), sungOnce("late", 50)],
+        60,
+        "",
+        "",
+      );
+
+      expect(zones(lead)).toEqual([{ top: 0, height: height / 2 }]);
+      expect(zones(choir)).toEqual([{ top: height / 2, height: height / 2 }]);
+      expect(zones(late)).toEqual([null]);
+    });
+
+    it("keeps a voice's rank among the overlapping voices when an earlier one is absent", () => {
+      const [, choir, late] = layOutVoices(
+        [sungOnce("lead", 1), sungOnce("choir", 50), sungOnce("late", 50)],
+        60,
+        "",
+        "",
+      );
+
+      expect(zones(choir)).toEqual([{ top: 0, height: height / 2 }]);
+      expect(zones(late)).toEqual([{ top: height / 2, height: height / 2 }]);
+    });
+
+    it("gives voices joined by a chain of overlaps a lane each", () => {
+      // The first voice never overlaps the third, but the second overlaps both.
+      const [lead, choir, late] = layOutVoices(
+        [
+          { voice: "lead", segments: [{ text: "a", start: 1, end: 3 }], options: plain },
+          { voice: "choir", segments: [{ text: "b", start: 2, end: 5 }], options: plain },
+          { voice: "late", segments: [{ text: "c", start: 4, end: 6 }], options: plain },
+        ],
+        60,
+        "",
+        "",
+      );
+
+      expect(zones(lead)).toEqual([{ top: 0, height: height / 3 }]);
+      expect(zones(choir)).toEqual([{ top: height / 3, height: height / 3 }]);
+      expect(zones(late)).toEqual([{ top: (2 * height) / 3, height: height / 3 }]);
+    });
+
+    it("unstaggers screens laid out in lanes of different sizes", () => {
+      // Four screens of two lines, each following the last closely enough to be staggered.
+      const segments = fromEvents(
+        "a1\na2\n\nb1\nb2\n\nc1\nc2\n\nd1\nd2",
+        [1, 2, 3, 4, 5, 6, 7, 8].map((t) => [t, LYRIC_MARKERS.SEGMENT_START] as LyricEvent),
+      );
+      const lone = (voice: string, start: number) => ({
+        ...sungOnce(voice, start),
+        segments: [{ text: voice, start, end: start + 0.6 }],
+      });
+      const [lead] = layOutVoices(
+        [
+          { voice: "lead", segments, options: { ...plain, addStaggeredLines: true } },
+          // One voice joins the second screen, and two others join the third.
+          lone("x", 4.2),
+          lone("y", 6.2),
+          lone("z", 6.2),
+        ],
+        60,
+        "",
+        "",
+      );
+
+      expect(zones(lead).slice(1, 3)).toEqual([
+        { top: 0, height: height / 2 },
+        { top: 0, height: height / 3 },
+      ]);
+      expect(lead.screens[2].staggered).toBe(false);
+    });
   });
 });
 
