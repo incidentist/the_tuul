@@ -1141,6 +1141,154 @@ describe("multi-voice vertical lanes", () => {
   });
 });
 
+describe("multi-voice instrumental breaks", () => {
+  const options: KaraokeOptions = {
+    ...DEFAULT_OPTIONS,
+    addTitleScreen: false,
+    countInMode: "none",
+    instrumentalThreshold: 8,
+    addStaggeredLines: false,
+  };
+  const voice = (
+    name: string,
+    lines: { start: number; end: number; displayStart?: number; displayEnd?: number }[],
+    voiceOptions = options,
+  ) => ({
+    voice: name,
+    segments: lines.map((line, i) => ({
+      ...line,
+      text: i < lines.length - 1 ? `${name}\n\n` : name,
+    })),
+    options: voiceOptions,
+  });
+  const layOut = (...tracks: ReturnType<typeof voice>[]) => layOutVoices(tracks, 100, "", "");
+  const bars = (renders: ReturnType<typeof layOut>) =>
+    renders.flatMap(({ screens }) =>
+      screens
+        .filter((screen) => screen.kind === "instrumental")
+        .map((screen) => [screen.startTimestamp, screen.endTimestamp]),
+    );
+  const fade = 0.15;
+
+  it("shows no bar in a gap of the first voice while another voice sings", () => {
+    const renders = layOut(
+      voice("lead", [
+        { start: 1, end: 2 },
+        { start: 30, end: 31 },
+      ]),
+      voice("choir", [{ start: 5, end: 25 }]),
+    );
+
+    expect(bars(renders)).toEqual([]);
+  });
+
+  it("shows a bar when no voice sings, however the voices' gaps fall", () => {
+    const renders = layOut(
+      voice("lead", [
+        { start: 1, end: 2 },
+        { start: 40, end: 41 },
+      ]),
+      voice("choir", [{ start: 5, end: 6 }]),
+    );
+
+    expect(bars(renders)).toEqual([[6 + fade, 40]]);
+  });
+
+  it("shows a bar after the first voice has ended", () => {
+    const renders = layOut(
+      voice("lead", [{ start: 1, end: 2 }]),
+      voice("choir", [
+        { start: 3, end: 4 },
+        { start: 30, end: 31 },
+      ]),
+    );
+
+    expect(bars(renders)).toEqual([[4 + fade, 30]]);
+  });
+
+  it("ends the intro's bar when the first voice to sing starts", () => {
+    const renders = layOut(
+      voice("lead", [{ start: 25, end: 26 }]),
+      voice("choir", [{ start: 20, end: 21 }]),
+    );
+
+    expect(bars(renders)).toEqual([[0, 20]]);
+  });
+
+  it("shows no line of any voice during a bar", () => {
+    const renders = layOut(
+      voice("lead", [
+        { start: 1, end: 2 },
+        { start: 40, end: 41 },
+      ]),
+      voice("choir", [
+        { start: 5, end: 6 },
+        { start: 39, end: 39.5 },
+      ]),
+    );
+
+    expect(bars(renders)).toEqual([[6 + fade, 39]]);
+    expect(renders.map(({ screens }) => screens.at(-1)?.startTimestamp)).toEqual([39, 39]);
+  });
+
+  it("shortens a bar for another voice's stored display period, or removes it", () => {
+    const lead = voice("lead", [{ start: 1, end: 2 }]);
+    const song = (displayEnd: number) =>
+      layOut(
+        lead,
+        voice("choir", [
+          { start: 5, end: 6, displayEnd },
+          { start: 30, end: 31 },
+        ]),
+      );
+
+    expect(bars(song(20))).toEqual([[20, 30]]);
+    expect(bars(song(30))).toEqual([]);
+  });
+
+  it("shows a voice's next screen shortly before it sings when no bar fills its gap", () => {
+    const [lead] = layOut(
+      voice("lead", [
+        { start: 1, end: 2 },
+        { start: 30, end: 31 },
+      ]),
+      voice("choir", [{ start: 5, end: 25 }]),
+    );
+
+    expect(lead.screens[1].startTimestamp).toBe(29);
+  });
+
+  it("leaves a gap shorter than the threshold shown from the previous screen's end", () => {
+    const [lead] = layOut(
+      voice("lead", [
+        { start: 1, end: 2 },
+        { start: 8, end: 9 },
+      ]),
+      voice("choir", [{ start: 3, end: 4 }]),
+    );
+
+    expect(lead.screens[1].startTimestamp).toBe(2);
+  });
+
+  it("shows no bar and moves no screen when breaks are off", () => {
+    const off = { ...options, instrumentalThreshold: 0 };
+    const renders = layOut(
+      voice(
+        "lead",
+        [
+          { start: 1, end: 2 },
+          { start: 40, end: 41 },
+        ],
+        off,
+      ),
+      voice("choir", [{ start: 5, end: 6 }], off),
+    );
+
+    expect(bars(renders)).toEqual([]);
+    expect(renders[0].screens[1].startTimestamp).toBe(2);
+  });
+});
+
 describe("multi-voice audio delay", () => {
   const plain: KaraokeOptions = {
     ...DEFAULT_OPTIONS,

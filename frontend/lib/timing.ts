@@ -20,6 +20,7 @@ import {
   addOverlappingCountIns,
   addTitleScreen,
   addInstrumentalScreens,
+  addSharedInstrumentalScreens,
   addIntroInstrumentalScreen,
   applyStoredDisplayPeriods,
   displayQuickLinesEarly,
@@ -1299,7 +1300,7 @@ function createAutomaticScreens(
   const introLength = Math.min(...firstStarts(counted));
   const duration = primary.titleScreenDuration ?? TITLE_SCREEN_DURATION;
   const titled = primary.addTitleScreen && duration > 0 && counted[0].length > 0;
-  return counted.map((screens, i) => {
+  const screensByVoice = counted.map((screens, i) => {
     const { options } = tracks[i];
     if (screens.length === 0) {
       return screens;
@@ -1316,12 +1317,15 @@ function createAutomaticScreens(
       screens = displayQuickLinesEarly(screens, options);
     }
     screens = addOverlappingCountIns(screens, options);
-    if (options.instrumentalThreshold > 0) {
+    if (tracks.length === 1 && options.instrumentalThreshold > 0) {
       screens = addIntroInstrumentalScreen(screens, options, titled ? duration : 0);
       screens = addInstrumentalScreens(screens, options);
     }
     return screens;
   });
+  return tracks.length > 1
+    ? addSharedInstrumentalScreens(screensByVoice, primary, titled ? duration : 0)
+    : screensByVoice;
 }
 
 /**
@@ -1423,9 +1427,9 @@ function styleNameForVoice(index: number): string {
 //
 // The title and instrumental-break screens are genuinely global (one song, shown once), so only the FIRST
 // track contributes them, or else every voice would draw its own and they'd stack. Count-ins, by contrast,
-// stay PER VOICE — each voice gets its own "***" lead-in before its lines. Non-first voices have no
-// title/instrumental screens to fill the lead-in, so they also get `deferScreenStarts` to stop their
-// text displaying from 0:00 when their first line is deep into the song.
+// stay PER VOICE — each voice gets its own "***" lead-in before its lines. An instrumental break only
+// fills the time when no voice sings, so `deferScreenStarts` stops a voice's text displaying from the
+// end of its previous line across a long gap while another voice sings.
 function screensOverlapInTime(a: LyricsScreen, b: LyricsScreen): boolean {
   if (a.startTimestamp == null || b.startTimestamp == null) {
     return false;
@@ -1514,23 +1518,26 @@ export function layOutVoices(
   artist: string,
   fonts: FontLibrary = new FontLibrary(),
 ): VoiceTrackRender[] {
-  // The title and instrumental-break screens are global: only the primary voice contributes them.
+  // The title and instrumental-break screens are global: only the primary voice draws them.
   // Count-ins stay per voice.
   const voiceTracks: VoiceTrack[] = tracks.map((track, index) => ({
     ...track,
-    options:
-      index === 0
-        ? track.options
-        : { ...track.options, addTitleScreen: false, instrumentalThreshold: 0 },
+    options: index === 0 ? track.options : { ...track.options, addTitleScreen: false },
   }));
   const screensByVoice =
     tracks.length > 0
       ? createAutomaticScreens(voiceTracks, songDuration, title, artist, fonts)
       : [];
   const renders: VoiceTrackRender[] = voiceTracks.map(({ voice, options }, index) => {
-    // Non-primary voices have no title/instrumental to fill long gaps,
-    // so cap how early their screens display.
-    const screens = index === 0 ? screensByVoice[0] : deferScreenStarts(screensByVoice[index]);
+    // The primary voice shows its next screen from the end of the last one through a gap shorter
+    // than the threshold, and through every gap when breaks are off, as it does on its own.
+    const threshold = options.instrumentalThreshold;
+    const screens =
+      index > 0
+        ? deferScreenStarts(screensByVoice[index])
+        : tracks.length > 1 && threshold > 0
+          ? deferScreenStarts(screensByVoice[0], threshold)
+          : screensByVoice[0];
     const styleName = styleNameForVoice(index);
     return {
       voice,
@@ -1558,7 +1565,10 @@ export function layOutVoices(
   giveWayToStoredPeriods(renders);
   fadeLines(renders, songDuration);
   for (const render of renders) {
-    render.screens = fitInstrumentalScreens(render.screens);
+    render.screens = fitInstrumentalScreens(
+      render.screens,
+      renders.flatMap((other) => (other === render ? [] : other.screens)),
+    );
     fadeInstrumentalScreens(render.screens);
   }
   return renders;
