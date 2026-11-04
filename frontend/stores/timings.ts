@@ -173,11 +173,15 @@ function reconcileByVoice(
   );
   const updated: SegmentsByVoice = {};
   for (const [voice, baseline] of Object.entries(carried)) {
-    // A voice the lyrics no longer mention is parked, not reconciled against nothing:
-    // retyping its tag has to bring the timings back (see reconcileVoices).
-    updated[voice] = voices.includes(voice)
-      ? reconcile(baseline, lyricSegmentsFor(voice))
-      : segmentsByVoice[voice];
+    if (voices.includes(voice)) {
+      updated[voice] = reconcile(baseline, lyricSegmentsFor(voice));
+    } else if (voice in baselineByVoice) {
+      // A voice the lyrics no longer mention is parked, not reconciled against nothing:
+      // retyping its tag has to bring the timings back (see reconcileVoices).
+      updated[voice] = segmentsByVoice[voice];
+    }
+    // A voice with no baseline only ever existed during this edit, such as a half-typed tag.
+    // Its lines are still in the baseline of the voice they came from.
   }
   return updated;
 }

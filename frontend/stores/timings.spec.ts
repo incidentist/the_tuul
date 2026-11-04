@@ -1042,6 +1042,67 @@ describe("Timings Store", () => {
       expect(timingsStore.rawTimings).toStrictEqual(timings);
     });
 
+    describe("typing a tag around timed lines", () => {
+      const lead = (): TimedSegment[] => [
+        { text: "one\n", start: 1 },
+        { text: "two\n", start: 2 },
+        { text: "three", start: 3, end: 4 },
+      ];
+
+      const typeTag = async (tags: string[]) => {
+        const timingsStore = useTimingsStore();
+        const lyricsStore = useLyricsStore();
+        lyricsStore.setLyrics("[lead]\none\ntwo\nthree");
+        timingsStore.setAllSegments({
+          lead: lead(),
+          parked: [{ text: "gone", start: 8 }],
+          "parked too": [{ text: "away", start: 9 }],
+        });
+        timingsStore.setupVoiceReconciliation();
+        timingsStore.setupSegmentReconciliation();
+        for (const tag of tags) {
+          lyricsStore.setLyrics(`[lead]\none\n[${tag}]\ntwo\n[lead]\nthree`);
+          await nextTick();
+        }
+        return { timingsStore, lyricsStore };
+      };
+
+      test("leaves no voice behind for a half-typed tag, despite the parked voices", async () => {
+        const { timingsStore } = await typeTag(["m", "me", "met"]);
+
+        expect(Object.keys(timingsStore.allTimings).sort()).toEqual([
+          "lead",
+          "met",
+          "parked",
+          "parked too",
+        ]);
+        expect(timingsStore.timingsForVoice("met")).toEqual([[2, LYRIC_MARKERS.SEGMENT_START]]);
+      });
+
+      test("gives the lines back when the tag is removed", async () => {
+        const { timingsStore, lyricsStore } = await typeTag(["m", "me"]);
+
+        lyricsStore.setLyrics("[lead]\none\ntwo\nthree");
+        await nextTick();
+
+        expect(Object.keys(timingsStore.allTimings).sort()).toEqual([
+          "lead",
+          "parked",
+          "parked too",
+        ]);
+        expect(timingsStore.segmentsByVoice.lead).toEqual(lead());
+      });
+
+      test("exports only the voices in the lyrics", async () => {
+        const { timingsStore } = await typeTag(["m", "me"]);
+
+        expect(Object.keys(parseTimingsText(timingsStore.timingsText).voices)).toEqual([
+          "lead",
+          "me",
+        ]);
+      });
+    });
+
     test("does not move timings onto a voice that already has its own", async () => {
       const timingsStore = useTimingsStore();
       const lyricsStore = useLyricsStore();
