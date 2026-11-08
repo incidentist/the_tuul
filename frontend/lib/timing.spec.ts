@@ -19,7 +19,12 @@ import {
   layOutVoices,
   displayText,
 } from "./timing";
-import { LYRIC_MARKERS, DEFAULT_COUNT_IN_THRESHOLD, DEFAULT_COUNT_IN_DURATION } from "@/constants";
+import {
+  LYRIC_MARKERS,
+  DEFAULT_COUNT_IN_THRESHOLD,
+  DEFAULT_COUNT_IN_DURATION,
+  SUBTITLE_CANVAS,
+} from "@/constants";
 import { LyricSegment } from "./timing";
 import { songOffset } from "./screenSlots";
 import { parseAss } from "./ass";
@@ -937,13 +942,14 @@ describe("multi-voice vertical lanes", () => {
       "",
     );
 
-    // Only the third screen overlaps the backing voice.
+    // The third screen overlaps the backing voice, and so do the fourth screen's early lines.
     expect(render.screens.map((screen) => Boolean(screen.verticalZone))).toEqual([
       false,
       false,
       true,
-      false,
+      true,
     ]);
+    expect(render.screens[3].staggered).toBe(true);
   });
 
   function marginVsForStyle(ass: string, style: string): number[] {
@@ -1041,6 +1047,245 @@ describe("multi-voice vertical lanes", () => {
     const v1 = marginVsForStyle(ass, "V1");
     // V0's lane sits entirely above V1's lane.
     expect(Math.max(...v0)).toBeLessThan(Math.min(...v1));
+  });
+
+  describe("with more voices in the song than on the screen", () => {
+    const plain: KaraokeOptions = {
+      ...DEFAULT_OPTIONS,
+      addTitleScreen: false,
+      countInMode: "none",
+      instrumentalThreshold: 0,
+      addStaggeredLines: false,
+    };
+    const sungOnce = (voice: string, start: number) => ({
+      voice,
+      segments: [{ text: voice, start, end: start + 0.5 }],
+      options: plain,
+    });
+    const zones = (render: { screens: { verticalZone?: unknown }[] }) =>
+      render.screens.map((screen) => screen.verticalZone ?? null);
+    const { height } = SUBTITLE_CANVAS;
+
+    it("shares the height between the voices that overlap, not every voice", () => {
+      const [lead, choir, late] = layOutVoices(
+        [sungOnce("lead", 1), sungOnce("choir", 1), sungOnce("late", 50)],
+        60,
+        "",
+        "",
+      );
+
+      expect(zones(lead)).toEqual([{ top: 0, height: height / 2 }]);
+      expect(zones(choir)).toEqual([{ top: height / 2, height: height / 2 }]);
+      expect(zones(late)).toEqual([null]);
+    });
+
+    it("keeps a voice's rank among the overlapping voices when an earlier one is absent", () => {
+      const [, choir, late] = layOutVoices(
+        [sungOnce("lead", 1), sungOnce("choir", 50), sungOnce("late", 50)],
+        60,
+        "",
+        "",
+      );
+
+      expect(zones(choir)).toEqual([{ top: 0, height: height / 2 }]);
+      expect(zones(late)).toEqual([{ top: height / 2, height: height / 2 }]);
+    });
+
+    it("gives voices joined by a chain of overlaps a lane each", () => {
+      // The first voice never overlaps the third, but the second overlaps both.
+      const [lead, choir, late] = layOutVoices(
+        [
+          { voice: "lead", segments: [{ text: "a", start: 1, end: 3 }], options: plain },
+          { voice: "choir", segments: [{ text: "b", start: 2, end: 5 }], options: plain },
+          { voice: "late", segments: [{ text: "c", start: 4, end: 6 }], options: plain },
+        ],
+        60,
+        "",
+        "",
+      );
+
+      expect(zones(lead)).toEqual([{ top: 0, height: height / 3 }]);
+      expect(zones(choir)).toEqual([{ top: height / 3, height: height / 3 }]);
+      expect(zones(late)).toEqual([{ top: (2 * height) / 3, height: height / 3 }]);
+    });
+
+    it("unstaggers screens laid out in lanes of different sizes", () => {
+      // Four screens of two lines, each following the last closely enough to be staggered.
+      const segments = fromEvents(
+        "a1\na2\n\nb1\nb2\n\nc1\nc2\n\nd1\nd2",
+        [1, 2, 3, 4, 5, 6, 7, 8].map((t) => [t, LYRIC_MARKERS.SEGMENT_START] as LyricEvent),
+      );
+      const lone = (voice: string, start: number) => ({
+        ...sungOnce(voice, start),
+        segments: [{ text: voice, start, end: start + 0.6 }],
+      });
+      const [lead] = layOutVoices(
+        [
+          { voice: "lead", segments, options: { ...plain, addStaggeredLines: true } },
+          // One voice joins the second screen, and two others join the third.
+          lone("x", 3.2),
+          lone("y", 6.2),
+          lone("z", 6.2),
+        ],
+        60,
+        "",
+        "",
+      );
+
+      expect(zones(lead).slice(1, 3)).toEqual([
+        { top: 0, height: height / 2 },
+        { top: 0, height: height / 3 },
+      ]);
+      expect(lead.screens[2].staggered).toBe(false);
+    });
+  });
+});
+
+describe("multi-voice instrumental breaks", () => {
+  const options: KaraokeOptions = {
+    ...DEFAULT_OPTIONS,
+    addTitleScreen: false,
+    countInMode: "none",
+    instrumentalThreshold: 8,
+    addStaggeredLines: false,
+  };
+  const voice = (
+    name: string,
+    lines: { start: number; end: number; displayStart?: number; displayEnd?: number }[],
+    voiceOptions = options,
+  ) => ({
+    voice: name,
+    segments: lines.map((line, i) => ({
+      ...line,
+      text: i < lines.length - 1 ? `${name}\n\n` : name,
+    })),
+    options: voiceOptions,
+  });
+  const layOut = (...tracks: ReturnType<typeof voice>[]) => layOutVoices(tracks, 100, "", "");
+  const bars = (renders: ReturnType<typeof layOut>) =>
+    renders.flatMap(({ screens }) =>
+      screens
+        .filter((screen) => screen.kind === "instrumental")
+        .map((screen) => [screen.startTimestamp, screen.endTimestamp]),
+    );
+  const fade = 0.15;
+
+  it("shows no bar in a gap of the first voice while another voice sings", () => {
+    const renders = layOut(
+      voice("lead", [
+        { start: 1, end: 2 },
+        { start: 30, end: 31 },
+      ]),
+      voice("choir", [{ start: 5, end: 25 }]),
+    );
+
+    expect(bars(renders)).toEqual([]);
+  });
+
+  it("shows a bar when no voice sings, however the voices' gaps fall", () => {
+    const renders = layOut(
+      voice("lead", [
+        { start: 1, end: 2 },
+        { start: 40, end: 41 },
+      ]),
+      voice("choir", [{ start: 5, end: 6 }]),
+    );
+
+    expect(bars(renders)).toEqual([[6 + fade, 40]]);
+  });
+
+  it("shows a bar after the first voice has ended", () => {
+    const renders = layOut(
+      voice("lead", [{ start: 1, end: 2 }]),
+      voice("choir", [
+        { start: 3, end: 4 },
+        { start: 30, end: 31 },
+      ]),
+    );
+
+    expect(bars(renders)).toEqual([[4 + fade, 30]]);
+  });
+
+  it("ends the intro's bar when the first voice to sing starts", () => {
+    const renders = layOut(
+      voice("lead", [{ start: 25, end: 26 }]),
+      voice("choir", [{ start: 20, end: 21 }]),
+    );
+
+    expect(bars(renders)).toEqual([[0, 20]]);
+  });
+
+  it("shows no line of any voice during a bar", () => {
+    const renders = layOut(
+      voice("lead", [
+        { start: 1, end: 2 },
+        { start: 40, end: 41 },
+      ]),
+      voice("choir", [
+        { start: 5, end: 6 },
+        { start: 39, end: 39.5 },
+      ]),
+    );
+
+    expect(bars(renders)).toEqual([[6 + fade, 39]]);
+    expect(renders.map(({ screens }) => screens.at(-1)?.startTimestamp)).toEqual([39, 39]);
+  });
+
+  it("shortens a bar for another voice's stored display period, or removes it", () => {
+    const lead = voice("lead", [{ start: 1, end: 2 }]);
+    const song = (displayEnd: number) =>
+      layOut(
+        lead,
+        voice("choir", [
+          { start: 5, end: 6, displayEnd },
+          { start: 30, end: 31 },
+        ]),
+      );
+
+    expect(bars(song(20))).toEqual([[20, 30]]);
+    expect(bars(song(30))).toEqual([]);
+  });
+
+  it("shows a voice's next screen shortly before it sings when no bar fills its gap", () => {
+    const [lead] = layOut(
+      voice("lead", [
+        { start: 1, end: 2 },
+        { start: 30, end: 31 },
+      ]),
+      voice("choir", [{ start: 5, end: 25 }]),
+    );
+
+    expect(lead.screens[1].startTimestamp).toBe(29);
+  });
+
+  it("leaves a gap shorter than the threshold shown from the previous screen's end", () => {
+    const [lead] = layOut(
+      voice("lead", [
+        { start: 1, end: 2 },
+        { start: 8, end: 9 },
+      ]),
+      voice("choir", [{ start: 3, end: 4 }]),
+    );
+
+    expect(lead.screens[1].startTimestamp).toBe(2);
+  });
+
+  it("shows no bar and moves no screen when breaks are off", () => {
+    const off = { ...options, instrumentalThreshold: 0 };
+    const renders = layOut(
+      voice(
+        "lead",
+        [
+          { start: 1, end: 2 },
+          { start: 40, end: 41 },
+        ],
+        off,
+      ),
+      voice("choir", [{ start: 5, end: 6 }], off),
+    );
+
+    expect(bars(renders)).toEqual([]);
+    expect(renders[0].screens[1].startTimestamp).toBe(2);
   });
 });
 

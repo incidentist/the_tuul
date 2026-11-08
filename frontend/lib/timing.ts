@@ -20,6 +20,7 @@ import {
   addOverlappingCountIns,
   addTitleScreen,
   addInstrumentalScreens,
+  addSharedInstrumentalScreens,
   addIntroInstrumentalScreen,
   applyStoredDisplayPeriods,
   displayQuickLinesEarly,
@@ -50,7 +51,7 @@ import {
   shadowDrawn,
   VoiceStyleOverride,
 } from "./voiceStyle";
-import { map, method, isNumber, range } from "lodash-es";
+import { isEqual, map, method, isNumber, range, sortBy, uniq } from "lodash-es";
 import { default as BuefyColor } from "buefy/src/utils/color";
 // This import must stay type-only,
 // because timedSegments imports parseLyrics from here at runtime.
@@ -1299,7 +1300,7 @@ function createAutomaticScreens(
   const introLength = Math.min(...firstStarts(counted));
   const duration = primary.titleScreenDuration ?? TITLE_SCREEN_DURATION;
   const titled = primary.addTitleScreen && duration > 0 && counted[0].length > 0;
-  return counted.map((screens, i) => {
+  const screensByVoice = counted.map((screens, i) => {
     const { options } = tracks[i];
     if (screens.length === 0) {
       return screens;
@@ -1316,12 +1317,15 @@ function createAutomaticScreens(
       screens = displayQuickLinesEarly(screens, options);
     }
     screens = addOverlappingCountIns(screens, options);
-    if (options.instrumentalThreshold > 0) {
+    if (tracks.length === 1 && options.instrumentalThreshold > 0) {
       screens = addIntroInstrumentalScreen(screens, options, titled ? duration : 0);
       screens = addInstrumentalScreens(screens, options);
     }
     return screens;
   });
+  return tracks.length > 1
+    ? addSharedInstrumentalScreens(screensByVoice, primary, titled ? duration : 0)
+    : screensByVoice;
 }
 
 /**
@@ -1423,49 +1427,84 @@ function styleNameForVoice(index: number): string {
 //
 // The title and instrumental-break screens are genuinely global (one song, shown once), so only the FIRST
 // track contributes them, or else every voice would draw its own and they'd stack. Count-ins, by contrast,
-// stay PER VOICE — each voice gets its own "***" lead-in before its lines. Non-first voices have no
-// title/instrumental screens to fill the lead-in, so they also get `deferScreenStarts` to stop their
-// text displaying from 0:00 when their first line is deep into the song.
+// stay PER VOICE — each voice gets its own "***" lead-in before its lines. An instrumental break only
+// fills the time when no voice sings, so `deferScreenStarts` stops a voice's text displaying from the
+// end of its previous line across a long gap while another voice sings.
 function screensOverlapInTime(a: LyricsScreen, b: LyricsScreen): boolean {
   if (a.startTimestamp == null || b.startTimestamp == null) {
     return false;
   }
-  return a.startTimestamp < b.endTimestamp && b.startTimestamp < a.endTimestamp;
+  return shownFrom(a) < b.endTimestamp && shownFrom(b) < a.endTimestamp;
 }
 
-// Per-voice vertical lanes (the "centered alone, lanes when overlapping" layout).
-// A screen that is displayed at the same time as any *other* voice's screen is confined to
-// its voice's horizontal band (voice 0 on top, voice 1 below, ...), so simultaneous voices
-// stack as separate blocks instead of letting libass's collision-avoidance interleave them.
-// Screens with no cross-voice overlap keep their default full-height centered layout.
-// This runs on the automatic periods, so a stored period never moves a line to another height.
-function assignVoiceLanes(renders: VoiceTrackRender[]): void {
-  const voiceCount = renders.length;
-  if (voiceCount < 2) {
-    return;
-  }
-  const laneHeight = SUBTITLE_CANVAS.height / voiceCount;
-  renders.forEach((render, index) => {
-    const lane = { top: index * laneHeight, height: laneHeight };
-    for (const screen of render.screens) {
-      const overlapsOtherVoice = renders.some(
-        (other, otherIndex) =>
-          otherIndex !== index && other.screens.some((os) => screensOverlapInTime(screen, os)),
-      );
-      if (overlapsOtherVoice) {
-        screen.verticalZone = lane;
+/**
+ * When the screen's first line appears, which a line shown early puts before the screen's start.
+ */
+function shownFrom(screen: LyricsScreen): Timestamp {
+  return Math.min(
+    screen.startTimestamp ?? 0,
+    ...screen.lines.flatMap((line) => line.customDisplayStartTime ?? []),
+  );
+}
+
+/**
+ * The screens joined by chains of overlaps between different voices, with the index of each
+ * screen's voice. Overlaps within a voice don't join screens, since a voice's staggered screens
+ * would otherwise chain most of a song together.
+ */
+function crossVoiceOverlapGroups(
+  renders: VoiceTrackRender[],
+): { screen: LyricsScreen; voice: number }[][] {
+  const unplaced = new Set(
+    renders.flatMap((render, voice) => render.screens.map((screen) => ({ screen, voice }))),
+  );
+  const groups: { screen: LyricsScreen; voice: number }[][] = [];
+  for (const seed of unplaced) {
+    unplaced.delete(seed);
+    const group = [seed];
+    for (const { screen, voice } of group) {
+      for (const other of unplaced) {
+        if (other.voice !== voice && screensOverlapInTime(screen, other.screen)) {
+          unplaced.delete(other);
+          group.push(other);
+        }
       }
     }
-    // A staggered screen's early lines only fill the slots the previous screen's lines leave
-    // when both screens are in the lane or both are out of it.
-    // Moving the other screen too would move its own staggered neighbour, and so on down the song.
+    groups.push(group);
+  }
+  return groups;
+}
+
+/**
+ * Per-voice vertical lanes (the "centered alone, lanes when overlapping" layout).
+ * Screens joined by overlaps between voices share the height between the voices in that group
+ * (the first voice on top), so simultaneous voices stack as separate blocks instead of letting
+ * libass's collision-avoidance interleave them, and the lanes fill the screen.
+ * Any other screen keeps its default full-height centered layout.
+ * This runs on the automatic periods, so a stored period never moves a line to another height.
+ */
+function assignVoiceLanes(renders: VoiceTrackRender[]): void {
+  for (const group of crossVoiceOverlapGroups(renders)) {
+    const voices = sortBy(uniq(group.map(({ voice }) => voice)));
+    if (voices.length < 2) {
+      continue;
+    }
+    const height = SUBTITLE_CANVAS.height / voices.length;
+    for (const { screen, voice } of group) {
+      screen.verticalZone = { top: voices.indexOf(voice) * height, height };
+    }
+  }
+  // A staggered screen's early lines only fill the slots the previous screen's lines leave
+  // when both screens are laid out in the same lane, or both out of a lane.
+  // Moving the other screen too would move its own staggered neighbour, and so on down the song.
+  for (const render of renders) {
     for (const [i, screen] of render.screens.entries()) {
       const previous = render.screens[i - 1];
-      if (i > 0 && screen.staggered && !previous.verticalZone !== !screen.verticalZone) {
+      if (i > 0 && screen.staggered && !isEqual(previous.verticalZone, screen.verticalZone)) {
         unstagger(previous, screen, render.options);
       }
     }
-  });
+  }
 }
 
 /**
@@ -1479,23 +1518,26 @@ export function layOutVoices(
   artist: string,
   fonts: FontLibrary = new FontLibrary(),
 ): VoiceTrackRender[] {
-  // The title and instrumental-break screens are global: only the primary voice contributes them.
+  // The title and instrumental-break screens are global: only the primary voice draws them.
   // Count-ins stay per voice.
   const voiceTracks: VoiceTrack[] = tracks.map((track, index) => ({
     ...track,
-    options:
-      index === 0
-        ? track.options
-        : { ...track.options, addTitleScreen: false, instrumentalThreshold: 0 },
+    options: index === 0 ? track.options : { ...track.options, addTitleScreen: false },
   }));
   const screensByVoice =
     tracks.length > 0
       ? createAutomaticScreens(voiceTracks, songDuration, title, artist, fonts)
       : [];
   const renders: VoiceTrackRender[] = voiceTracks.map(({ voice, options }, index) => {
-    // Non-primary voices have no title/instrumental to fill long gaps,
-    // so cap how early their screens display.
-    const screens = index === 0 ? screensByVoice[0] : deferScreenStarts(screensByVoice[index]);
+    // The primary voice shows its next screen from the end of the last one through a gap shorter
+    // than the threshold, and through every gap when breaks are off, as it does on its own.
+    const threshold = options.instrumentalThreshold;
+    const screens =
+      index > 0
+        ? deferScreenStarts(screensByVoice[index])
+        : tracks.length > 1 && threshold > 0
+          ? deferScreenStarts(screensByVoice[0], threshold)
+          : screensByVoice[0];
     const styleName = styleNameForVoice(index);
     return {
       voice,
@@ -1523,7 +1565,10 @@ export function layOutVoices(
   giveWayToStoredPeriods(renders);
   fadeLines(renders, songDuration);
   for (const render of renders) {
-    render.screens = fitInstrumentalScreens(render.screens);
+    render.screens = fitInstrumentalScreens(
+      render.screens,
+      renders.flatMap((other) => (other === render ? [] : other.screens)),
+    );
     fadeInstrumentalScreens(render.screens);
   }
   return renders;

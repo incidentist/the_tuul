@@ -24,8 +24,7 @@ logger = structlog.get_logger(__name__)
 # A smaller correction is inaudible, and not worth rewriting the stem for.
 _MIN_GAIN_DB = 0.1
 
-# loudnorm prints its measurement as the last block of its log.
-_STATS_PATTERN = re.compile(r"\{[^{}]*\}\s*$")
+_STATS_PATTERN = re.compile(r'\{\s*"input_i"[^{}]*\}')
 
 
 @dataclass(frozen=True)

@@ -7,6 +7,8 @@ import {
   SPACER_BOUNDS_DROPPED,
   SPACER_MUTE_DROPPED,
   SPACER_PAGE_DROPPED,
+  TIMES_WENT_BACKWARDS,
+  VOICE_LEFT_OUT,
 } from "./importWarnings";
 import { parseLyrics } from "./timing";
 import { TimedSegment, fromLyric } from "./timedSegments";
@@ -219,12 +221,46 @@ describe("parseTimingsText", () => {
       );
     });
 
-    test("refuses times that go backwards, naming the row", () => {
+    test("refuses times that go backwards in one voice's section, naming the row", () => {
       expect(() =>
-        parseTimingsText(signed("-", '"a "  00:02.00', "-", "-", '"b"  00:01.00', "-")),
-      ).toThrow("Row 6: Timecodes must not go backwards: 00:02.00 is followed by 00:01.00.");
-      expect(rowOf(signed("-", '"a"  00:02.00  00:01.00', "-"))).toBe(3);
-      expect(rowOf(signed("-", '"a "  00:01.00  00:03.00', '"b"  00:02.00', "-"))).toBe(4);
+        parseVoiceTimingsText(file("-", '"a "  00:02.00', "-", "-", '"b"  00:01.00', "-")),
+      ).toThrow("Row 5: Timecodes must not go backwards: 00:02.00 is followed by 00:01.00.");
+    });
+
+    test("flags a line whose times go backwards in a file, and warns", () => {
+      const { voices, warnings } = parseTimingsText(
+        signed("-", '"a"  00:05.00', "-", "-", '"b "  00:01.00', '"c"  00:02.00', "-"),
+      );
+
+      expect(voices["Voice 1"]).toEqual([
+        { text: "a\n", start: 5 },
+        { text: "b_", start: 1, review: "moved" },
+        { text: "c", start: 2, review: "moved" },
+      ]);
+      expect(warnings).toEqual([TIMES_WENT_BACKWARDS]);
+    });
+
+    test("reads only the sections asked for, and warns about the others", () => {
+      const text = signed(
+        'voice "Anna"',
+        "-",
+        '"a"  00:01.00',
+        "-",
+        'voice "Gone"',
+        "-",
+        '"b"  00:05.00',
+        '"c"  00:02.00',
+        "-",
+        'voice "Old"',
+        "-",
+        '"d"  00:03.00',
+        "-",
+      );
+
+      const { voices, warnings } = parseTimingsText(text, ["Anna"]);
+
+      expect(Object.keys(voices)).toEqual(["Anna"]);
+      expect(warnings).toEqual([`${VOICE_LEFT_OUT} (×2)`]);
     });
 
     test("leaves an end with no start out of the check", () => {
@@ -546,7 +582,9 @@ describe("writeTimingsText", () => {
     );
   });
 
-  test("writes the lyrics' voices in order, then the timed voices they no longer name", () => {
+  const voiceRows = (text: string) => text.split("\n").filter((row) => row.startsWith("voice"));
+
+  test("writes the lyrics' voices in order, and no others", () => {
     const text = writeTimingsText(
       {
         Old: [{ text: "a", start: 1 }],
@@ -556,11 +594,15 @@ describe("writeTimingsText", () => {
       },
       ["Ben", "Anna", "Cleo"],
     );
-    expect(text.split("\n").filter((row) => row.startsWith("voice"))).toEqual([
-      'voice "Ben"',
-      'voice "Anna"',
-      'voice "Old"',
-    ]);
+    expect(voiceRows(text)).toEqual(['voice "Ben"', 'voice "Anna"']);
+  });
+
+  test("writes every timed voice when there are no lyrics", () => {
+    const text = writeTimingsText(
+      { "Voice 1": [{ text: "", start: 1 }], Untimed: [{ text: "a" }] },
+      [],
+    );
+    expect(voiceRows(text)).toEqual(['voice "Voice 1"']);
   });
 
   test("writes spacers as a header followed directly by its footer", () => {

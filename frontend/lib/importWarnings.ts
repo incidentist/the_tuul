@@ -11,6 +11,8 @@ export const DISPLAY_PERIOD_WIDENED = "A line's display period was widened to co
 export const SPACER_MUTE_DROPPED =
   "A blank spacer line's mute times were dropped, since nobody sings it";
 export const MUTE_PERIOD_WIDENED = "A line's muted period was widened to cover its timings";
+export const TIMES_WENT_BACKWARDS = "A line's times go backwards, so it was flagged for review";
+export const VOICE_LEFT_OUT = "A voice not named in the lyrics was left out";
 
 export function fontLeftOut(fontName: string): string {
   return `The font "${fontName}" isn't bundled with the app, so it was left out`;

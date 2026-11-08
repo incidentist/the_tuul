@@ -12,7 +12,7 @@ import {
   SUBTITLE_CANVAS,
   GLYPH_BLOCK_RATIO,
 } from "../constants";
-import { concat, range } from "lodash-es";
+import { concat, range, sortBy } from "lodash-es";
 import { sameHeight } from "./screenSlots";
 
 const FIRST_SCREEN_QUICK_START_THRESHOLD: Timestamp = 1.0;
@@ -249,6 +249,7 @@ export function overlappingCountInText(options: KaraokeOptions): string {
  * A mark is only added when the line is already shown by the time it starts,
  * so this runs once the staggered-lines pass has set the display starts.
  * A stored display start counts too, though it is only applied later.
+ * A line shown early automatically may move back by COUNT_IN_SLACK to fit its mark.
  */
 export function addOverlappingCountIns(
   screens: LyricsScreen[],
@@ -267,8 +268,13 @@ export function addOverlappingCountIns(
       if (mayGetOverlappingCountIn(line, index, options)) {
         const mark = countInMarks(options, marks, 1, line.timestamp);
         const start = mark[0].timestamp;
-        if (start >= prevSingStart && start >= countInEarliestStart(line, screen, options)) {
+        const earliest = countInEarliestStart(line, screen, options);
+        const slack = isShownEarlyAutomatically(line, options) ? COUNT_IN_SLACK : 0;
+        if (start >= prevSingStart && start >= earliest - slack) {
           line.addSegmentsToFront(mark);
+          if (start < earliest) {
+            line.customDisplayStartTime = start;
+          }
         }
       }
       prevSingStart = line.singTimestamp;
@@ -276,6 +282,20 @@ export function addOverlappingCountIns(
   }
   return screens;
 }
+
+/**
+ * Whether the staggered-lines pass set the line's display start, and no stored one replaces it.
+ */
+function isShownEarlyAutomatically(line: LyricsLine, options: KaraokeOptions): boolean {
+  return (
+    line.customDisplayStartTime !== undefined &&
+    !(options.useStoredDisplayPeriods && line.storedDisplayStart !== undefined)
+  );
+}
+
+// An early line's display start follows from the length of the line before it,
+// so a mark can miss it by a few milliseconds.
+const COUNT_IN_SLACK: Timestamp = 0.02;
 
 const MAX_EARLY_DISPLAY: Timestamp = 5.0;
 const DEFERRED_LEAD_IN: Timestamp = 1.0;
@@ -289,16 +309,16 @@ export function deferScreenStarts(
   // screen's end (which can be the very start of the song), so a voice whose first line
   // is deep into the song would otherwise show its text from 0:00. When a screen would
   // appear more than `maxEarly` seconds before its first line animates, pull its display
-  // start to `leadIn` seconds before that line. Used for non-primary voices, which have
-  // no title/instrumental screens to fill the gap. The (per-voice) count-in still applies.
+  // start to `leadIn` seconds before that line. Used for gaps in a voice that no instrumental
+  // screen fills, since another voice sings during them. The (per-voice) count-in still applies.
   for (const screen of screens) {
-    if (screen.lines.length === 0) {
+    if (screen.kind !== "lyrics" || screen.lines.length === 0) {
       continue;
     }
     const firstAnimation = screen.lines[0].timestamp;
     const start = screen.startTimestamp ?? 0;
     if (start < firstAnimation - maxEarly) {
-      screen.startTimestamp = Math.max(0, firstAnimation - leadIn);
+      screen.startTimestamp = Math.max(start, firstAnimation - leadIn);
     }
   }
   return screens;
@@ -396,6 +416,49 @@ export function addInstrumentalScreens(
       addInstrumentalScreens(adjustedScreens, options),
     );
   }
+}
+
+/**
+ * Add an instrumental screen to the first voice for each stretch at least the threshold long,
+ * from `start` to the last line, when no voice sings. The next screen of every voice waits for it.
+ */
+export function addSharedInstrumentalScreens(
+  screensByVoice: LyricsScreen[][],
+  options: KaraokeOptions,
+  start: Timestamp,
+): LyricsScreen[][] {
+  if (options.instrumentalThreshold <= 0) {
+    return screensByVoice;
+  }
+  const lyrics = screensByVoice.flat().filter(({ kind, lines }) => kind === "lyrics" && lines[0]);
+  const firstSung = (screen: LyricsScreen) => screen.segments[0].timestamp;
+  const breaks: { start: Timestamp; end: Timestamp }[] = [];
+  let silentFrom = start;
+  for (const screen of sortBy(lyrics, firstSung)) {
+    if (firstSung(screen) - silentFrom >= options.instrumentalThreshold) {
+      breaks.push({ start: silentFrom, end: firstSung(screen) });
+    }
+    silentFrom = Math.max(silentFrom, screen.endTimestamp);
+  }
+
+  const [first, ...others] = screensByVoice;
+  const withBreaks = [...first];
+  for (const { start: from, end } of breaks) {
+    for (const screen of lyrics) {
+      if (firstSung(screen) >= end && (screen.startTimestamp ?? 0) < end) {
+        screen.startTimestamp = end;
+      }
+    }
+    const next = withBreaks.findIndex(
+      (screen) => screen.kind === "lyrics" && screen.lines[0] && firstSung(screen) >= end,
+    );
+    withBreaks.splice(
+      next < 0 ? withBreaks.length : next,
+      0,
+      createInstrumentalScreen(from, end - from, options.font.size),
+    );
+  }
+  return [withBreaks, ...others];
 }
 
 /**
@@ -678,21 +741,29 @@ export function endTitleScreenBy(screens: LyricsScreen[], time: Timestamp | unde
 }
 
 /**
- * An instrumental screen only covers the time when no line of its voice is displayed,
+ * An instrumental screen only covers the time when no line of any voice is displayed,
  * so stored display periods that reach into the break shorten it, or remove it.
+ * `otherVoices` holds the screens of the voices other than the one that draws the break.
  */
-export function fitInstrumentalScreens(screens: LyricsScreen[]): LyricsScreen[] {
+export function fitInstrumentalScreens(
+  screens: LyricsScreen[],
+  otherVoices: LyricsScreen[] = [],
+): LyricsScreen[] {
+  const lyrics = (range: LyricsScreen[]) =>
+    range.filter((s) => s.kind === "lyrics" && s.lines.length > 0);
+  const others = lyrics(otherVoices);
   return screens.filter((screen, i) => {
     if (screen.kind !== "instrumental") {
       return true;
     }
-    const lyrics = (range: LyricsScreen[]) => range.filter((s) => s.kind === "lyrics");
-    const endsBefore = lyrics(screens.slice(0, i)).flatMap((s) =>
+    const isBefore = (s: LyricsScreen) => s.singStart < screen.endTimestamp;
+    const endsBefore = lyrics([...screens.slice(0, i), ...others.filter(isBefore)]).flatMap((s) =>
       s.lines.map((line) => displayEndOf(line, s)),
     );
-    const startsAfter = lyrics(screens.slice(i + 1)).flatMap((s) =>
-      s.lines.map((line) => displayStartOf(line, s)),
-    );
+    const startsAfter = lyrics([
+      ...screens.slice(i + 1),
+      ...others.filter((s) => !isBefore(s)),
+    ]).flatMap((s) => s.lines.map((line) => displayStartOf(line, s)));
     const start = Math.max(screen.startTimestamp ?? 0, ...endsBefore);
     const end = Math.min(screen.endTimestamp, ...startsAfter);
     if (end <= start) {

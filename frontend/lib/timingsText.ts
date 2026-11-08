@@ -11,6 +11,8 @@ import {
   SPACER_BOUNDS_DROPPED,
   SPACER_MUTE_DROPPED,
   SPACER_PAGE_DROPPED,
+  TIMES_WENT_BACKWARDS,
+  VOICE_LEFT_OUT,
   Warnings,
 } from "./importWarnings";
 import { TimedSegment, clampDisplayPeriods, clampMuteBounds } from "./timedSegments";
@@ -65,6 +67,7 @@ interface ParsedLine {
   // A line with no syllables is a spacer, and its neighbours count it.
   spacersBefore?: number;
   spacersAfter?: number;
+  timesGoBackwards?: boolean;
 }
 
 type ParsedPage = ParsedLine[];
@@ -91,11 +94,21 @@ export function isTimingsText(text: string): boolean {
  * Parse a `timings.txt` into each voice's segments.
  * A malformed row throws a `TimingsTextError` that names it.
  * Anything the app can't hold but can recover from is dropped or changed, with a warning.
+ * Times that go backwards flag their line for review, since a voice can hold such a line.
+ * When `only` is given, any other voice's section is left out, with a warning.
  */
-export function parseTimingsText(input: string): ParsedTimingsText {
+export function parseTimingsText(input: string, only?: VoiceId[]): ParsedTimingsText {
   const warnings = new Warnings();
   const voices: Record<VoiceId, TimedSegment[]> = {};
   for (const [voice, pages] of parseSections(input, true)) {
+    if (only && !only.includes(voice)) {
+      warnings.add(VOICE_LEFT_OUT);
+      continue;
+    }
+    forEachBackwardTime(pages, (line) => {
+      line.timesGoBackwards = true;
+      warnings.add(TIMES_WENT_BACKWARDS);
+    });
     voices[voice] = voiceSegments(pages, warnings);
   }
   return { voices, warnings: warnings.list() };
@@ -109,12 +122,18 @@ export interface ParsedVoiceTimingsText {
 /**
  * Parse one voice's section of a `timings.txt`, as the Edit tab shows it.
  * A section has no signature or `voice` row, so either one is an error.
+ * Times that go backwards are an error too, since the user is typing them and can correct them.
  */
 export function parseVoiceTimingsText(input: string): ParsedVoiceTimingsText {
   const warnings = new Warnings();
-  const pages = parseSections(input, false).get(DEFAULT_VOICE_ID);
-  const segments = pages ? voiceSegments(pages, warnings) : [];
-  return { segments, warnings: warnings.list() };
+  const pages = parseSections(input, false).get(DEFAULT_VOICE_ID) ?? [];
+  forEachBackwardTime(pages, (_line, row, previous, time) => {
+    throw new TimingsTextError(
+      row,
+      `Timecodes must not go backwards: ${formatTimecode(previous / 100)} is followed by ${formatTimecode(time / 100)}.`,
+    );
+  });
+  return { segments: voiceSegments(pages, warnings), warnings: warnings.list() };
 }
 
 /**
@@ -138,7 +157,6 @@ export function keepReviewFlags(stored: TimedSegment[], parsed: TimedSegment[]):
 }
 
 function voiceSegments(pages: ParsedPage[], warnings: Warnings): TimedSegment[] {
-  validateTimes(pages);
   const displayed = clampDisplayPeriods(toSegments(pages, warnings));
   for (let i = 0; i < displayed.widened; i++) {
     warnings.add(DISPLAY_PERIOD_WIDENED);
@@ -283,28 +301,25 @@ function parseSections(input: string, wholeFile: boolean): Map<VoiceId, ParsedPa
 }
 
 /**
- * Times never go backwards within a voice, reading starts and ends in file order.
+ * Visit every time earlier than the one before it, reading starts and ends in file order.
  * An end with no start takes no part, since the renderer ignores it.
  */
-function validateTimes(pages: ParsedPage[]): void {
+function forEachBackwardTime(
+  pages: ParsedPage[],
+  visit: (line: ParsedLine, row: number, previous: number, time: number) => void,
+): void {
   let previous: number | undefined;
-  const check = (time: number, row: number) => {
-    if (previous !== undefined && time < previous) {
-      throw new TimingsTextError(
-        row,
-        `Timecodes must not go backwards: ${formatTimecode(previous / 100)} is followed by ${formatTimecode(time / 100)}.`,
-      );
-    }
-    previous = time;
-  };
-
-  for (const { start, end, row } of pages.flat().flatMap((line) => line.syllables)) {
-    if (start === undefined) {
-      continue;
-    }
-    check(start, row);
-    if (end !== undefined) {
-      check(end, row);
+  for (const line of pages.flat()) {
+    for (const { start, end, row } of line.syllables) {
+      if (start === undefined) {
+        continue;
+      }
+      for (const time of end === undefined ? [start] : [start, end]) {
+        if (previous !== undefined && time < previous) {
+          visit(line, row, previous, time);
+        }
+        previous = time;
+      }
     }
   }
 }
@@ -385,6 +400,9 @@ function toSegments(pages: ParsedPage[], warnings: Warnings): TimedSegment[] {
     if (syllable.end !== undefined) {
       segment.end = syllable.end / 100;
     }
+    if (syllable.line.timesGoBackwards && (segment.start ?? segment.end) !== undefined) {
+      segment.review = "moved";
+    }
     if (syllable.firstOfLine) {
       const { spacersBefore, spacersAfter } = syllable.line;
       for (const key of ["displayStart", "displayEnd", "muteStart", "muteEnd"] as const) {
@@ -460,20 +478,18 @@ interface WrittenLine {
 }
 
 /**
- * Write every voice's segments as a `timings.txt`.
- * The lyrics' voices come first, in their order,
- * then the timed voices the lyrics no longer name,
- * which `reconcileVoices` may still carry across a rename.
+ * Write the voices the lyrics name as a `timings.txt`, in their order.
+ * Timings can be tapped before there are lyrics, so without lyrics every timed voice is written.
  */
 export function writeTimingsText(
   byVoice: Record<VoiceId, TimedSegment[]>,
   lyricVoices: VoiceId[],
 ): string {
   const isTimed = (voice: VoiceId) => byVoice[voice].some(({ start }) => start !== undefined);
-  const voices = [
-    ...lyricVoices.filter((voice) => byVoice[voice] !== undefined),
-    ...Object.keys(byVoice).filter((voice) => !lyricVoices.includes(voice) && isTimed(voice)),
-  ];
+  const voices =
+    lyricVoices.length > 0
+      ? lyricVoices.filter((voice) => byVoice[voice] !== undefined)
+      : Object.keys(byVoice).filter(isTimed);
 
   const rows = [`${SIGNATURE} ${TIMINGS_TEXT_VERSION}`];
   for (const voice of voices) {

@@ -396,6 +396,47 @@ describe("overlapping count-ins", () => {
     expect(marksOf(next.lines[0])).toEqual([[4.5, 5.5]]);
   });
 
+  describe("when a staggered line is shown just too late for its mark", () => {
+    const song = (start: number, fields: Partial<TimedSegment> = {}): TimedSegment[] => [
+      { text: "one\n", start: 1, end: 2 },
+      { text: "two\n\n", start: 2, end: 5 },
+      { text: "three", start, end: start + 0.5, ...fields },
+    ];
+
+    it("show the line that much earlier to fit the mark", () => {
+      const [, , next] = counted(staggered(song(5.24)), "screen");
+
+      expect(marksOf(next.lines[0])).toHaveLength(1);
+      expect(next.lines[0].customDisplayStartTime).toBeCloseTo(4.24);
+    });
+
+    it("leave a line that misses by more where it is", () => {
+      const [, , next] = counted(staggered(song(5.2)), "screen");
+
+      expect(marksOf(next.lines[0])).toEqual([]);
+      expect(next.lines[0].customDisplayStartTime).toBe(4.25);
+    });
+
+    it("leave a stored display start alone", () => {
+      const [, , next] = counted(staggered(song(5.24, { displayStart: 4.25 })), "screen");
+
+      expect(marksOf(next.lines[0])).toEqual([]);
+    });
+  });
+
+  it("don't move a line that isn't shown early", () => {
+    const [, second] = counted(
+      compiled([
+        { text: "one\n\n", start: 10, end: 10.51 },
+        { text: "two", start: 11.5, end: 12.5 },
+      ]),
+    );
+
+    expect(second.startTimestamp).toBe(10.51);
+    expect(marksOf(second.lines[0])).toEqual([]);
+    expect(second.lines[0].customDisplayStartTime).toBeUndefined();
+  });
+
   it("are dropped when a staggered line is shown at the usual time again", () => {
     const [, previous, next] = counted(
       staggered([

@@ -33,6 +33,8 @@ export default defineConfig({
       name: "chromium",
       use: {
         ...devices["Desktop Chrome"],
+        // Without this, phone specs keep the device's 1920px screen, which isMobile() reads.
+        screen: undefined,
         /* Clipboard permissions are Chromium-only; Firefox relies on
                    the in-memory clipboard stub from setupHelpers. */
         permissions: ["clipboard-read", "clipboard-write"],
