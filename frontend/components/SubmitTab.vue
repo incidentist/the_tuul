@@ -653,11 +653,11 @@
           :tracks="mediaStore.trackPairs ?? []"
           :background="background ?? undefined"
         />
-        <div v-if="advancedStore.isAdvanced && lyricText.trim()" class="kbp-export is-size-7">
+        <div v-if="advancedStore.isAdvanced && lyricText.trim()" class="export-link is-size-7">
           <span>Karaoke Builder Studio</span>
           <viewport-tooltip
             wide
-            label="These lyrics and timings as a Karaoke Builder Studio project. They aren't included in the project download."
+            label="Karaoke Builder Studio project. Not included in the project download."
           >
             <b-icon size="is-small" icon="circle-question"></b-icon>
           </viewport-tooltip>
@@ -665,18 +665,33 @@
             {{ kbpFileName }}
           </button>
         </div>
+        <div
+          v-if="advancedStore.isAdvanced && timingsStore.hasAnyTimings"
+          class="export-link is-size-7"
+        >
+          <span>Synced lyrics</span>
+          <viewport-tooltip
+            wide
+            label="Synced lyrics as an LRC file. Not included in the project download."
+          >
+            <b-icon size="is-small" icon="circle-question"></b-icon>
+          </viewport-tooltip>
+          <button type="button" class="link-button ml-1" @click="downloadLrc">
+            {{ lrcFileName }}
+          </button>
+        </div>
       </div>
       <b-message
-        v-if="advancedStore.isAdvanced && kbpExportWarnings.length"
-        class="kbp-warnings mt-3"
+        v-if="advancedStore.isAdvanced && exportWarnings.length"
+        class="export-warnings mt-3"
         type="is-warning"
         size="is-small"
-        title="Some parts may not look the same in KBS"
+        :title="exportWarningsTitle"
         closable
-        @close="kbpExportWarnings = []"
+        @close="exportWarnings = []"
       >
         <ul>
-          <li v-for="warning in kbpExportWarnings" :key="warning">{{ warning }}</li>
+          <li v-for="warning in exportWarnings" :key="warning">{{ warning }}</li>
         </ul>
       </b-message>
     </div>
@@ -738,6 +753,7 @@ import BackgroundReplacementModal from "@/components/BackgroundReplacementModal.
 import FontField from "@/components/FontField.vue";
 import { COUNT_IN_SYMBOLS, fontFamiliesIn } from "@/lib/fonts";
 import { projectFilesToKbp } from "@/lib/kbpConvert";
+import { projectFilesToLrc } from "@/lib/lrcExport";
 import { applyVoiceStyle } from "@/lib/voiceStyle";
 import { restoredBacking } from "@/lib/gapMix";
 import { HIGHEST_HINT_FREQUENCY, LOWEST_HINT_FREQUENCY, hintFrequency } from "@/lib/notes";
@@ -790,8 +806,9 @@ export default defineComponent({
   },
   data() {
     return {
-      // What the last KBP download couldn't carry over.
-      kbpExportWarnings: [] as string[],
+      // What the last KBP or LRC download couldn't carry over.
+      exportWarnings: [] as string[],
+      exportWarningsTitle: "",
       countInSymbols: COUNT_IN_SYMBOLS,
       qualityLabels,
       resolutions: Object.keys(RESOLUTIONS),
@@ -966,8 +983,10 @@ export default defineComponent({
       return { frequency, seconds: this.videoOptions.titleScreenDuration };
     },
     kbpFileName(): string {
-      const song = this.mediaStore.songFile?.name;
-      return song ? song.replace(/\.[^.]*$/, "") + ".kbp" : "project.kbp";
+      return this.exportFileName("kbp");
+    },
+    lrcFileName(): string {
+      return this.exportFileName("lrc");
     },
     zipFileName(): string {
       return `${this.videoFileName}.zip`;
@@ -1151,6 +1170,18 @@ export default defineComponent({
       }
     },
 
+    exportFileName(extension: string): string {
+      const song = this.mediaStore.songFile?.name;
+      return song ? `${song.replace(/\.[^.]*$/, "")}.${extension}` : `project.${extension}`;
+    },
+    sendTextFile(text: string, filename: string) {
+      const anchor = document.createElement("a");
+      anchor.style.display = "none";
+      anchor.href = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(anchor.href);
+    },
     downloadKbp() {
       const { kbp, warnings } = projectFilesToKbp({
         lyrics: this.lyricText,
@@ -1158,13 +1189,19 @@ export default defineComponent({
         settings: this.settingsYaml,
         audioName: this.mediaStore.songFile?.name ?? null,
       });
-      this.kbpExportWarnings = warnings;
-      const anchor = document.createElement("a");
-      anchor.style.display = "none";
-      anchor.href = URL.createObjectURL(new Blob([kbp], { type: "text/plain;charset=utf-8" }));
-      anchor.download = this.kbpFileName;
-      anchor.click();
-      URL.revokeObjectURL(anchor.href);
+      this.exportWarnings = warnings;
+      this.exportWarningsTitle = "Some parts may not look the same in KBS";
+      this.sendTextFile(kbp, this.kbpFileName);
+    },
+    downloadLrc() {
+      const { lrc, warnings } = projectFilesToLrc({
+        lyrics: this.lyricText,
+        timings: this.timingsStore.segmentsByVoice,
+        settings: this.settingsYaml,
+      });
+      this.exportWarnings = warnings;
+      this.exportWarningsTitle = "Some parts were left out of the LRC file";
+      this.sendTextFile(lrc, this.lrcFileName);
     },
     async sendZipFile(zipFile: Blob) {
       const anchor = document.createElement("a");
@@ -1224,7 +1261,7 @@ export default defineComponent({
 }
 </style>
 <style scoped>
-.kbp-warnings ul {
+.export-warnings ul {
   list-style: disc;
   padding-left: 1.25em;
 }
@@ -1238,16 +1275,18 @@ export default defineComponent({
   margin-top: 0.75rem;
 }
 
-.kbp-export {
+.export-link {
   white-space: nowrap;
   border-left: 1px solid var(--bulma-border);
   margin-left: 0.75rem;
   padding-left: 0.75rem;
 }
 
-/* Narrow screens put the export on a line of its own, where a divider would lead nowhere. */
+/* Narrow screens put each export on a line of its own, where a divider would lead nowhere. */
 @media screen and (max-width: 768px) {
-  .kbp-export {
+  .export-link {
+    flex-basis: 100%;
+    text-align: center;
     border-left: none;
     margin-left: 0;
     padding-left: 0;
