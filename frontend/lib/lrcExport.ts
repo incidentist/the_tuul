@@ -1,4 +1,5 @@
-// Conversion of the app's project to a line-synced LRC file, for music players that show lyrics.
+// Conversion of the app's project to an LRC file, for music players that show lyrics.
+// The plain file times each line, and the enhanced one each syllable as well.
 
 import { appName } from "@/constants";
 import { displayText } from "./timing";
@@ -28,8 +29,10 @@ interface LrcLine {
   start: number;
   // Only known when the line's last word has a release.
   end?: number;
-  text: string;
+  segments: TimedSegment[];
 }
+
+type LineText = (segments: TimedSegment[]) => string;
 
 /**
  * Formats seconds as `mm:ss.xx`.
@@ -44,6 +47,35 @@ function timestamp(seconds: number): string {
   return `${pad(minutes)}:${pad(secs)}.${pad(hundredths)}`;
 }
 
+function segmentText(segment: TimedSegment): string {
+  return displayText(segment.text.replace(/\n+$/, "")).replace(/\s+/g, " ");
+}
+
+function plainText(segments: TimedSegment[]): string {
+  return segments.map(segmentText).join("").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * The line with a `<mm:ss.xx>` tag before each timed syllable, and one after the last when it has
+ * a release. An untimed syllable joins the one before it.
+ */
+function enhancedText(segments: TimedSegment[]): string {
+  const end = segments.findLast((segment) => segment.start !== undefined)?.end;
+  let text = "";
+  for (const segment of segments) {
+    let piece = segmentText(segment);
+    if (text === "" || text.endsWith(" ")) {
+      piece = piece.trimStart();
+    }
+    if (piece.trim() === "") {
+      text += piece;
+    } else {
+      text += (segment.start === undefined ? "" : `<${timestamp(segment.start)}>`) + piece;
+    }
+  }
+  return text.trimEnd() + (end === undefined ? "" : `<${timestamp(end)}>`);
+}
+
 /**
  * A voice's segments as lines. A line is stamped with its first timed word.
  */
@@ -52,19 +84,14 @@ function voiceLines(segments: TimedSegment[], warnings: Warnings): LrcLine[] {
   let line: TimedSegment[] = [];
 
   const closeLine = () => {
-    const text = line
-      .map((segment) => displayText(segment.text.replace(/\n+$/, "")))
-      .join("")
-      .replace(/\s+/g, " ")
-      .trim();
     const timed = line.filter((segment) => segment.start !== undefined);
-    if (text !== "" && timed.length === 0) {
+    if (plainText(line) !== "" && timed.length === 0) {
       warnings.add(UNTIMED_LINES_LEFT_OUT);
-    } else if (text !== "") {
+    } else if (plainText(line) !== "") {
       lines.push({
         start: timed[0].start as number,
         end: timed[timed.length - 1].end,
-        text,
+        segments: line,
       });
     }
     line = [];
@@ -88,7 +115,7 @@ function tag(name: string, value: string | undefined): string[] {
 /**
  * Every voice's lines in one list ordered by time, since LRC has no voices.
  */
-export function projectFilesToLrc(source: LrcExportSource): LrcExport {
+function projectFilesToLrcWith(source: LrcExportSource, lineText: LineText): LrcExport {
   const warnings = new Warnings();
   const { song } = parseSettingsYaml(source.settings);
   const voices = parseAnnotatedLyrics(source.lyrics).voices;
@@ -100,7 +127,7 @@ export function projectFilesToLrc(source: LrcExportSource): LrcExport {
   // A line without a release lasts until the next line starts, so it never needs clearing.
   let lastRelease = -Infinity;
   lines.forEach((line, i) => {
-    body.push(`[${timestamp(line.start)}]${line.text}`);
+    body.push(`[${timestamp(line.start)}]${lineText(line.segments)}`);
     if (line.end === undefined) return;
     lastRelease = Math.max(lastRelease, line.end);
     const next = lines[i + 1];
@@ -116,4 +143,18 @@ export function projectFilesToLrc(source: LrcExportSource): LrcExport {
     ...tag("re", appName()),
   ];
   return { lrc: [...header, ...body].join("\n") + "\n", warnings: warnings.list() };
+}
+
+/**
+ * A line-synced LRC file, which every player that reads LRC shows.
+ */
+export function projectFilesToLrc(source: LrcExportSource): LrcExport {
+  return projectFilesToLrcWith(source, plainText);
+}
+
+/**
+ * An enhanced LRC file, with each syllable's time for players that highlight words.
+ */
+export function projectFilesToEnhancedLrc(source: LrcExportSource): LrcExport {
+  return projectFilesToLrcWith(source, enhancedText);
 }

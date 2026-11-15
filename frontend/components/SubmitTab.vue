@@ -653,8 +653,13 @@
           :tracks="mediaStore.trackPairs ?? []"
           :background="background ?? undefined"
         />
-        <div v-if="advancedStore.isAdvanced && lyricText.trim()" class="export-link is-size-7">
-          <span>Karaoke Builder Studio</span>
+        <div
+          v-if="advancedStore.isAdvanced && lyricText.trim()"
+          class="export-link is-size-7"
+          role="group"
+          aria-labelledby="kbp-export-label"
+        >
+          <span id="kbp-export-label">Karaoke Builder Studio</span>
           <viewport-tooltip
             wide
             label="Karaoke Builder Studio project. Not included in the project download."
@@ -668,8 +673,10 @@
         <div
           v-if="advancedStore.isAdvanced && timingsStore.hasAnyTimings"
           class="export-link is-size-7"
+          role="group"
+          aria-labelledby="lrc-export-label"
         >
-          <span>Synced lyrics</span>
+          <span id="lrc-export-label">Synced lyrics</span>
           <viewport-tooltip
             wide
             label="Synced lyrics as an LRC file. Not included in the project download."
@@ -677,6 +684,23 @@
             <b-icon size="is-small" icon="circle-question"></b-icon>
           </viewport-tooltip>
           <button type="button" class="link-button ml-1" @click="downloadLrc">
+            {{ lrcFileName }}
+          </button>
+        </div>
+        <div
+          v-if="advancedStore.isAdvanced && timingsStore.hasAnyTimings"
+          class="export-link is-size-7"
+          role="group"
+          aria-labelledby="enhanced-lrc-export-label"
+        >
+          <span id="enhanced-lrc-export-label">Word-synced lyrics</span>
+          <viewport-tooltip
+            wide
+            label="Synced lyrics with a time for each syllable, as an enhanced LRC file. Players that only read plain LRC may show the times as text. Not included in the project download."
+          >
+            <b-icon size="is-small" icon="circle-question"></b-icon>
+          </viewport-tooltip>
+          <button type="button" class="link-button ml-1" @click="downloadEnhancedLrc">
             {{ lrcFileName }}
           </button>
         </div>
@@ -753,7 +777,7 @@ import BackgroundReplacementModal from "@/components/BackgroundReplacementModal.
 import FontField from "@/components/FontField.vue";
 import { COUNT_IN_SYMBOLS, fontFamiliesIn } from "@/lib/fonts";
 import { projectFilesToKbp } from "@/lib/kbpConvert";
-import { projectFilesToLrc } from "@/lib/lrcExport";
+import { projectFilesToEnhancedLrc, projectFilesToLrc } from "@/lib/lrcExport";
 import { applyVoiceStyle } from "@/lib/voiceStyle";
 import { restoredBacking } from "@/lib/gapMix";
 import { HIGHEST_HINT_FREQUENCY, LOWEST_HINT_FREQUENCY, hintFrequency } from "@/lib/notes";
@@ -1194,7 +1218,13 @@ export default defineComponent({
       this.sendTextFile(kbp, this.kbpFileName);
     },
     downloadLrc() {
-      const { lrc, warnings } = projectFilesToLrc({
+      this.sendLrc(projectFilesToLrc);
+    },
+    downloadEnhancedLrc() {
+      this.sendLrc(projectFilesToEnhancedLrc);
+    },
+    sendLrc(convert: typeof projectFilesToLrc) {
+      const { lrc, warnings } = convert({
         lyrics: this.lyricText,
         timings: this.timingsStore.segmentsByVoice,
         settings: this.settingsYaml,

@@ -1,5 +1,5 @@
 import yaml from "js-yaml";
-import { projectFilesToLrc, UNTIMED_LINES_LEFT_OUT } from "./lrcExport";
+import { projectFilesToEnhancedLrc, projectFilesToLrc, UNTIMED_LINES_LEFT_OUT } from "./lrcExport";
 
 const settings = yaml.dump({
   song: { title: "Pale Moon", artist: "The Placeholders", duration: 95.4 },
@@ -84,5 +84,45 @@ describe("projectFilesToLrc", () => {
       "[00:40.00]slow",
       "[00:41.00]",
     ]);
+  });
+});
+
+describe("projectFilesToEnhancedLrc", () => {
+  test("tags each timed syllable, and the release that ends a line", () => {
+    const result = projectFilesToEnhancedLrc({
+      lyrics: "Pale_moon\nri/sing|slow/|ly\n\nover",
+      timings: {
+        "Voice 1": [
+          { text: "Pale_", start: 5 },
+          { text: "moon\n", start: 5.5, end: 6 },
+          { text: "ri/", start: 7 },
+          { text: "sing|", start: 7.25 },
+          { text: "slow/|", start: 8 },
+          { text: "ly\n\n", start: 8.5, end: 9 },
+          { text: "over", start: 61.5, end: 63 },
+        ],
+      },
+      settings,
+    });
+
+    expect(result.lrc.split("\n").filter((line) => /^\[\d/.test(line))).toEqual([
+      "[00:05.00]<00:05.00>Pale <00:05.50>moon<00:06.00>",
+      "[00:07.00]<00:07.00>ri<00:07.25>sing <00:08.00>slow<00:08.50>ly<00:09.00>",
+      "[00:09.00]",
+      "[01:01.50]<01:01.50>over<01:03.00>",
+      "[01:03.00]",
+    ]);
+  });
+
+  test("leaves an untimed syllable with the one before it", () => {
+    const result = projectFilesToEnhancedLrc({
+      lyrics: "ri/sing_slow",
+      timings: {
+        "Voice 1": [{ text: "ri/", start: 7 }, { text: "sing_" }, { text: "slow", start: 8 }],
+      },
+      settings,
+    });
+
+    expect(result.lrc).toContain("[00:07.00]<00:07.00>rising <00:08.00>slow\n");
   });
 });
