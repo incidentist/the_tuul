@@ -44,12 +44,36 @@
         />
       </li>
     </ul>
+    <b-button
+      v-if="settingsStore.fontFaces.length > 1"
+      class="mt-2"
+      type="is-danger is-light"
+      size="is-small"
+      icon-left="trash-can"
+      label="Remove all fonts"
+      @click="isConfirmingClear = true"
+    />
+    <confirm-modal
+      v-model="isConfirmingClear"
+      title="Remove all fonts?"
+      type="is-danger"
+      icon="warning"
+      confirm-label="Remove all"
+      cancel-label="Keep them"
+      @confirm="settingsStore.clearFonts()"
+    >
+      <p>
+        All {{ settingsStore.fontFaces.length }} uploaded fonts will be removed. Styles that use one
+        keep its name until you upload it again.
+      </p>
+    </confirm-modal>
   </div>
 </template>
 
 <script lang="ts">
 import { defineComponent } from "vue";
 import { BButton, BField, BIcon, BUpload } from "buefy";
+import ConfirmModal from "@/components/ConfirmModal.vue";
 import ViewportTooltip from "@/components/ViewportTooltip.vue";
 import { useSettingsStore } from "@/stores/settings";
 
@@ -59,7 +83,7 @@ const ACCEPTED_FONT_FILES = ".ttf,.otf,.ttc";
  * The uploaded fonts every font menu offers, with an upload that takes several files at once.
  */
 export default defineComponent({
-  components: { BButton, BField, BIcon, BUpload, ViewportTooltip },
+  components: { BButton, BField, BIcon, BUpload, ConfirmModal, ViewportTooltip },
   setup() {
     return { settingsStore: useSettingsStore(), ACCEPTED_FONT_FILES };
   },
@@ -67,6 +91,7 @@ export default defineComponent({
     return {
       // b-upload appends picked files to its model, so it gets a fresh empty one after each pick.
       picked: [] as File[],
+      isConfirmingClear: false,
     };
   },
   methods: {

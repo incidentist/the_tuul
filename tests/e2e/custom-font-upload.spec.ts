@@ -135,6 +135,23 @@ test.describe("Font Library", () => {
     await expect(exactFieldFor(page, "Font").first()).not.toContainText("is drawn instead");
   });
 
+  test("removing all fonts empties the library once confirmed", async ({ page }) => {
+    await uploadFonts(page, "NotoSans-Regular.ttf", "NotoSans-Bold.ttf");
+    await expect(uploadedFonts(page)).toHaveCount(2);
+
+    await page.getByRole("button", { name: "Remove all fonts" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Keep them" }).click();
+    await expect(uploadedFonts(page)).toHaveCount(2);
+
+    await page.getByRole("button", { name: "Remove all fonts" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Remove all" }).click();
+    await expect(uploadedFonts(page)).toHaveCount(0);
+
+    await page.reload();
+    await navigateToTab(page, TabId.SongInfo);
+    await expect(page.getByRole("list", { name: "Uploaded fonts" })).toHaveCount(0);
+  });
+
   test("the preview redraws the lyrics in a picked face", async ({ page }) => {
     await setupBasicInputs(
       page,

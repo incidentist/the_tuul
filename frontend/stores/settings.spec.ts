@@ -441,6 +441,15 @@ describe("Settings Store", () => {
       expect(store.fontFaces.map((face) => face.name)).toEqual(["Impact"]);
     });
 
+    test("clearFonts empties the library", async () => {
+      const store = useSettingsStore();
+      await store.addFonts([fontFile("Impact.ttf"), fontFile("MetalMania.ttf")]);
+
+      store.clearFonts();
+
+      expect(store.fontFaces).toEqual([]);
+    });
+
     test("a style picks an uploaded face by name, for rendering and for measuring", async () => {
       const store = useSettingsStore();
       await store.addFonts([fixtureFont("NotoSans-Bold.ttf")]);
