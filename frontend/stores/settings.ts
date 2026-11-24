@@ -495,6 +495,14 @@ export const useSettingsStore = defineStore("settings", () => {
     fontFiles.value = fontFaces.value.length > 0 ? fontFaces.value.map((face) => face.file) : null;
   }
 
+  function clearFonts(): void {
+    for (const face of fontFaces.value) {
+      URL.revokeObjectURL(face.url);
+    }
+    fontFaces.value = [];
+    fontFiles.value = null;
+  }
+
   /**
    * The uploaded face a style's font name picks, ignoring case as libass does.
    */
@@ -777,6 +785,7 @@ export const useSettingsStore = defineStore("settings", () => {
     fontFaces,
     addFonts,
     removeFont,
+    clearFonts,
     fontFace,
     resolveFontName,
     renderVoiceStyle,
